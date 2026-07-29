@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Open Signage</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="admin">
+  <header>
+    <div>
+      <span class="eyebrow">Lokaler Bildschirm</span>
+      <h1>Open Signage</h1>
+    </div>
+    <a class="button secondary" href="/player" target="_blank">Player öffnen</a>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Medium hochladen</h2>
+      <form id="upload-form">
+        <label>Datei
+          <input name="file" type="file" accept="image/*,video/mp4,video/webm" required>
+        </label>
+        <label>Dauer in Sekunden
+          <input name="duration_seconds" type="number" min="1" max="86400" value="10" required>
+        </label>
+        <button>Hochladen</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Webseite hinzufügen</h2>
+      <form id="website-form">
+        <label>Name
+          <input name="name" placeholder="Nachrichten" required>
+        </label>
+        <label>Adresse
+          <input name="url" type="url" placeholder="https://example.org" required>
+        </label>
+        <label>Dauer in Sekunden
+          <input name="duration_seconds" type="number" min="1" max="86400" value="30" required>
+        </label>
+        <button>Hinzufügen</button>
+      </form>
+    </section>
+
+    <section class="card stream-card">
+      <h2>Owncast-Livestream hinzufügen</h2>
+      <form id="stream-form">
+        <label>Name
+          <input name="name" placeholder="Live-Übertragung" required>
+        </label>
+        <label>Owncast-Adresse
+          <input name="url" type="url" placeholder="https://stream.example.org" required>
+        </label>
+        <label>Dauer in Sekunden
+          <input name="duration_seconds" type="number" min="1" max="86400" value="3600" required>
+        </label>
+        <label class="inline-check">
+          <input name="muted" type="checkbox" checked>
+          <span>Stumm starten (zuverlässiges Autoplay)</span>
+        </label>
+        <button>Livestream hinzufügen</button>
+      </form>
+    </section>
+
+    <section class="card playlist-card">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Wiedergabereihenfolge</span>
+          <h2>Playlist</h2>
+        </div>
+        <button id="refresh" class="secondary">Aktualisieren</button>
+      </div>
+      <p id="empty" class="empty" hidden>Noch keine Inhalte vorhanden.</p>
+      <div id="playlist" class="playlist"></div>
+    </section>
+  </main>
+  <div id="message" role="status" aria-live="polite"></div>
+  <script src="/static/admin.js"></script>
+</body>
+</html>
