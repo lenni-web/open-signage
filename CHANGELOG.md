@@ -8,9 +8,39 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.4.0] – 2026-07-29
+
 ### Hinzugefügt
 
-- Noch nicht veröffentlichte Änderungen werden zunächst hier gesammelt.
+- Automatische Installation einer minimalen Wayland-/labwc-Umgebung auf
+  Raspberry Pi OS Lite 64 Bit.
+- Dedizierter, automatisch angelegter Kioskbenutzer `signage`.
+- Automatische Konfiguration von Wayland, grafischem Systemstart und
+  Desktop-Autologin.
+- Native Chromium-Wiedergabe über das Wayland-Backend.
+- Minimale Schriftpakete für eine korrekte Darstellung von Webseiten.
+
+### Geändert
+
+- Raspberry Pi OS Lite 64 Bit ist nun die vorgesehene Installationsbasis.
+- Das Installationsskript benötigt keinen vorinstallierten Desktop und keinen
+  bereits vorhandenen Desktop-Benutzer mehr.
+- Projektversion von `0.3.0` auf `0.4.0` erhöht.
+
+## [0.3.0] – 2026-07-29
+
+### Hinzugefügt
+
+- Installationsskript für Raspberry Pi OS 64 Bit.
+- Gehärteter `systemd`-Dienst mit automatischem Neustart bei Fehlern.
+- Automatischer Chromium-Kioskstart unter Raspberry Pi OS Desktop.
+- Kiosk-Autoplay für Livestreams mit Ton.
+- Konfigurierbarer Produktionsport.
+- Prüfskript für Dienst, Verwaltungsoberfläche und Player.
+
+### Geändert
+
+- Projektversion von `0.2.0` auf `0.3.0` erhöht.
 
 ## [0.2.0] – 2026-07-29
 
@@ -41,4 +71,3 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 - Reihenfolge, Aktivierung und Anzeigedauer je Inhalt.
 - Vollbild-Player mit automatischem Inhaltswechsel.
 - Lokale Entwicklungs- und Testumgebung.
-

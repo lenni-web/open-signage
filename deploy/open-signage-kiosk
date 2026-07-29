@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PLAYER_URL="@@PLAYER_URL@@"
+HEALTH_URL="@@HEALTH_URL@@"
+
+until curl --fail --silent --show-error --max-time 2 "${HEALTH_URL}" >/dev/null; do
+  sleep 2
+done
+
+exec chromium \
+  --ozone-platform=wayland \
+  --kiosk \
+  --noerrdialogs \
+  --disable-infobars \
+  --disable-session-crashed-bubble \
+  --disable-features=Translate \
+  --no-first-run \
+  --password-store=basic \
+  --autoplay-policy=no-user-gesture-required \
+  "${PLAYER_URL}"

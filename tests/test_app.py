@@ -112,3 +112,22 @@ def test_existing_playlist_is_migrated_without_data_loss(tmp_path: Path, monkeyp
 def test_current_version_is_documented_in_changelog():
     changelog = (PROJECT_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     assert f"## [{__version__}]" in changelog
+
+
+def test_raspberry_pi_templates_have_expected_placeholders():
+    service = (PROJECT_ROOT / "deploy/open-signage.service").read_text(encoding="utf-8")
+    kiosk = (PROJECT_ROOT / "deploy/open-signage-kiosk").read_text(encoding="utf-8")
+
+    assert "@@PORT@@" in service
+    assert "Restart=on-failure" in service
+    assert "@@PLAYER_URL@@" in kiosk
+    assert "@@HEALTH_URL@@" in kiosk
+    assert "--autoplay-policy=no-user-gesture-required" in kiosk
+    assert "--ozone-platform=wayland" in kiosk
+
+    installer = (PROJECT_ROOT / "scripts/install-raspberry-pi.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "rpd-wayland-core" in installer
+    assert "raspi-config nonint do_boot_behaviour B4" in installer
+    assert 'KIOSK_USER="signage"' in installer

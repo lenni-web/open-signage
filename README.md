@@ -49,13 +49,54 @@ Die Versionshistorie steht im [CHANGELOG.md](CHANGELOG.md).
 pytest
 ```
 
-## Geplante Raspberry-Pi-Installation
+## Raspberry-Pi-Installation
 
-1. Anwendung als eigener `systemd`-Dienst
-2. Chromium automatisch im Kioskmodus mit `/player` starten
-3. MediaMTX für SRT-Eingang und HLS/WebRTC-Ausgabe ergänzen
-4. Netzwerkname wie `open-signage.local` und passwortgeschützte Verwaltung
-5. Installations- und Update-Skript
+Vorgesehene Basis ist **Raspberry Pi OS Lite 64 Bit**. Bei der Einrichtung im
+Raspberry Pi Imager sollten Netzwerk, ein administrativer Benutzer und SSH
+konfiguriert werden. Ein Desktop muss nicht installiert werden.
+
+Im geklonten Projekt:
+
+```bash
+sudo ./scripts/install-raspberry-pi.sh --port 8080
+```
+
+Das Skript:
+
+- installiert nur den Raspberry-Pi-Wayland-Kern mit labwc, Chromium und die
+  Python-Laufzeit;
+- legt den nicht-administrativen Kioskbenutzer `signage` an;
+- aktiviert den grafischen Start und meldet `signage` automatisch an;
+- kopiert Open Signage nach `/opt/open-signage`;
+- speichert Daten und Medien unter `/var/lib/open-signage`;
+- richtet den Dienst `open-signage.service` ein;
+- startet Chromium nativ unter Wayland im Kioskmodus;
+- prüft Server, Verwaltung und Player.
+
+Ein abweichender Kioskbenutzer ist möglich:
+
+```bash
+sudo ./scripts/install-raspberry-pi.sh --kiosk-user display --port 8080
+```
+
+Manuelle Prüfung:
+
+```bash
+sudo ./scripts/verify-installation.sh --port 8080
+systemctl status open-signage.service
+journalctl -u open-signage.service -f
+```
+
+Der Dienst startet nach einem Stromausfall automatisch. Chromium wartet vor
+dem Öffnen des Players, bis der lokale Server erreichbar ist. Nach der ersten
+Installation ist ein Neustart erforderlich:
+
+```bash
+sudo reboot
+```
+
+Noch geplant sind ein Update-Skript, `open-signage.local`, Login-Schutz und
+MediaMTX für zusätzliche direkte SRT-Quellen.
 
 ## Owncast-Livestream
 
