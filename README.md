@@ -38,6 +38,11 @@ Die Datenbank und hochgeladene Medien werden standardmäßig im Ordner `data/`
 angelegt. Mit `OPEN_SIGNAGE_DATA_DIR` kann ein anderer Speicherort gewählt
 werden.
 
+Die installierte Version wird oben rechts in der Verwaltungsoberfläche und
+über `/api/health` angezeigt. Für Releases wird die Versionsnummer zentral in
+`src/open_signage/version.py` nach dem Schema `MAJOR.MINOR.PATCH` gepflegt.
+Die Versionshistorie steht im [CHANGELOG.md](CHANGELOG.md).
+
 ## Tests
 
 ```bash

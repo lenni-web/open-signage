@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "open-signage"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Standalone digital signage for Raspberry Pi"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,7 +23,9 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/open_signage"]
 
+[tool.hatch.version]
+path = "src/open_signage/version.py"
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
-

@@ -5,6 +5,9 @@ from fastapi.testclient import TestClient
 
 from open_signage.database import initialize
 from open_signage.main import app
+from open_signage.version import __version__
+
+PROJECT_ROOT = Path(__file__).parents[1]
 
 
 def test_health_and_website_crud(tmp_path: Path, monkeypatch):
@@ -12,6 +15,7 @@ def test_health_and_website_crud(tmp_path: Path, monkeypatch):
     with TestClient(app) as client:
         response = client.get("/api/health")
         assert response.status_code == 200
+        assert response.json() == {"status": "ok", "version": __version__}
 
         created = client.post(
             "/api/content/website",
@@ -103,3 +107,8 @@ def test_existing_playlist_is_migrated_without_data_loss(tmp_path: Path, monkeyp
             "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_content_playlist'"
         ).fetchone()
         assert index is not None
+
+
+def test_current_version_is_documented_in_changelog():
+    changelog = (PROJECT_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert f"## [{__version__}]" in changelog

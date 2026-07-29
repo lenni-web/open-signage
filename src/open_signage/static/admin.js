@@ -113,6 +113,15 @@ async function load() {
   } catch (error) { notify(error.message, true); }
 }
 
+async function loadVersion() {
+  try {
+    const health = await api("/api/health");
+    document.querySelector("#app-version").textContent = `v${health.version}`;
+  } catch (_) {
+    document.querySelector("#app-version").textContent = "Version unbekannt";
+  }
+}
+
 document.querySelector("#upload-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const button = event.target.querySelector("button");
@@ -170,4 +179,5 @@ document.querySelector("#stream-form").addEventListener("submit", async (event) 
 });
 
 document.querySelector("#refresh").addEventListener("click", load);
+loadVersion();
 load();
