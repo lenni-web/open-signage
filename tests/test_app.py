@@ -445,9 +445,22 @@ def test_text_content_can_be_previewed_by_player_edited_and_deleted(tmp_path: Pa
                 "body": "Die Veranstaltung beginnt um 18 Uhr.",
                 "shadow_box": "true",
                 "shadow_intensity": "dark",
+                "text_align": "center",
+                "vertical_position": "bottom",
+                "text_color": "#eeeeee",
+                "accent_color": "#ffcc00",
+                "font_size": "large",
+                "font_family": "serif",
+                "background_dim": "35",
+                "focus_x": "25",
+                "focus_y": "70",
+                "template_style": "elegant",
                 "duration_seconds": "12",
             },
-            files={"background": ("foyer.jpg", b"image", "image/jpeg")},
+            files={
+                "background": ("foyer.jpg", b"image", "image/jpeg"),
+                "logo": ("logo.png", b"logo", "image/png"),
+            },
         )
         assert created.status_code == 201
         item = created.json()
@@ -455,6 +468,12 @@ def test_text_content_can_be_previewed_by_player_edited_and_deleted(tmp_path: Pa
         assert item["text_config"]["headline"] == "Willkommen"
         assert item["text_config"]["shadow_box"] is True
         assert item["text_config"]["shadow_intensity"] == "dark"
+        assert item["text_config"]["text_align"] == "center"
+        assert item["text_config"]["vertical_position"] == "bottom"
+        assert item["text_config"]["background_dim"] == 35
+        assert item["text_config"]["focus_x"] == 25
+        logo = tmp_path / "media" / Path(item["text_config"]["logo_source"]).name
+        assert logo.exists()
         old_background = tmp_path / "media" / Path(item["source"]).name
         assert old_background.exists()
         assert client.get("/api/player/content").json()[0]["id"] == item["id"]
@@ -474,9 +493,11 @@ def test_text_content_can_be_previewed_by_player_edited_and_deleted(tmp_path: Pa
         assert edited.json()["text_config"]["shadow_box"] is False
         assert edited.json()["text_config"]["shadow_intensity"] == "medium"
         assert edited.json()["source"] == item["source"]
+        assert edited.json()["text_config"]["logo_source"] == item["text_config"]["logo_source"]
 
         assert client.delete(f"/api/content/{item['id']}").status_code == 204
         assert not old_background.exists()
+        assert not logo.exists()
 
 
 def test_text_content_requires_image_and_some_text(tmp_path: Path, monkeypatch):

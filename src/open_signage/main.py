@@ -524,11 +524,35 @@ def text_configuration(
     body: str,
     shadow_box: bool,
     shadow_intensity: str,
+    text_align: str,
+    vertical_position: str,
+    text_color: str,
+    accent_color: str,
+    font_size: str,
+    font_family: str,
+    background_dim: int,
+    focus_x: int,
+    focus_y: int,
+    template_style: str,
+    logo_source: str | None = None,
 ) -> str:
     if not any(value.strip() for value in (headline, subheadline, body)):
         raise HTTPException(status_code=422, detail="Mindestens ein Textfeld muss ausgefüllt sein")
     if shadow_intensity not in {"light", "medium", "dark"}:
         raise HTTPException(status_code=422, detail="Ungültige Schattenbox-Intensität")
+    allowed = {
+        "text_align": (text_align, {"left", "center", "right"}),
+        "vertical_position": (vertical_position, {"top", "center", "bottom"}),
+        "font_size": (font_size, {"small", "medium", "large"}),
+        "font_family": (font_family, {"sans", "serif", "mono"}),
+        "template_style": (template_style, {"standard", "elegant", "alert"}),
+    }
+    if any(value not in choices for value, choices in allowed.values()):
+        raise HTTPException(status_code=422, detail="Ungültige Freitext-Gestaltung")
+    if not all(value.startswith("#") and len(value) == 7 for value in (text_color, accent_color)):
+        raise HTTPException(status_code=422, detail="Ungültige Farbe")
+    if not 0 <= background_dim <= 80 or not 0 <= focus_x <= 100 or not 0 <= focus_y <= 100:
+        raise HTTPException(status_code=422, detail="Ungültiger Bildwert")
     return json.dumps(
         {
             "headline": headline.strip(),
@@ -536,6 +560,17 @@ def text_configuration(
             "body": body.strip(),
             "shadow_box": shadow_box,
             "shadow_intensity": shadow_intensity,
+            "text_align": text_align,
+            "vertical_position": vertical_position,
+            "text_color": text_color,
+            "accent_color": accent_color,
+            "font_size": font_size,
+            "font_family": font_family,
+            "background_dim": background_dim,
+            "focus_x": focus_x,
+            "focus_y": focus_y,
+            "template_style": template_style,
+            "logo_source": logo_source,
         },
         ensure_ascii=False,
     )
@@ -549,12 +584,32 @@ def create_text_content(
     body: Annotated[str, Form(max_length=4000)] = "",
     shadow_box: Annotated[bool, Form()] = False,
     shadow_intensity: Annotated[str, Form()] = "medium",
+    text_align: Annotated[str, Form()] = "left",
+    vertical_position: Annotated[str, Form()] = "center",
+    text_color: Annotated[str, Form()] = "#ffffff",
+    accent_color: Annotated[str, Form()] = "#39d98a",
+    font_size: Annotated[str, Form()] = "medium",
+    font_family: Annotated[str, Form()] = "sans",
+    background_dim: Annotated[int, Form(ge=0, le=80)] = 0,
+    focus_x: Annotated[int, Form(ge=0, le=100)] = 50,
+    focus_y: Annotated[int, Form(ge=0, le=100)] = 50,
+    template_style: Annotated[str, Form()] = "standard",
     duration_seconds: Annotated[int, Form(ge=1, le=86400)] = 12,
     background: Annotated[UploadFile | None, File()] = None,
     library_media_id: Annotated[int | None, Form()] = None,
+    logo: Annotated[UploadFile | None, File()] = None,
     _: None = Depends(require_system_login),
 ):
-    config = text_configuration(headline, subheadline, body, shadow_box, shadow_intensity)
+    config = text_configuration(
+        headline, subheadline, body, shadow_box, shadow_intensity, text_align,
+        vertical_position, text_color, accent_color, font_size, font_family,
+        background_dim, focus_x, focus_y, template_style, None,
+    )
+    logo_source = save_text_background(logo) if logo and logo.filename else None
+    if logo_source:
+        config_data = json.loads(config)
+        config_data["logo_source"] = logo_source
+        config = json.dumps(config_data, ensure_ascii=False)
     library_media = get_library_media_or_404(library_media_id) if library_media_id else None
     if library_media and library_media["kind"] != "image":
         raise HTTPException(status_code=422, detail="Als Freitext-Hintergrund ist nur ein Bild möglich")
@@ -583,6 +638,8 @@ def create_text_content(
     except Exception:
         if not library_media_id:
             (media_dir() / Path(source).name).unlink(missing_ok=True)
+        if logo_source:
+            (media_dir() / Path(logo_source).name).unlink(missing_ok=True)
         raise
     return serialize(get_content_or_404(content_id))
 
@@ -596,15 +653,40 @@ def edit_text_content(
     body: Annotated[str, Form(max_length=4000)] = "",
     shadow_box: Annotated[bool, Form()] = False,
     shadow_intensity: Annotated[str, Form()] = "medium",
+    text_align: Annotated[str, Form()] = "left",
+    vertical_position: Annotated[str, Form()] = "center",
+    text_color: Annotated[str, Form()] = "#ffffff",
+    accent_color: Annotated[str, Form()] = "#39d98a",
+    font_size: Annotated[str, Form()] = "medium",
+    font_family: Annotated[str, Form()] = "sans",
+    background_dim: Annotated[int, Form(ge=0, le=80)] = 0,
+    focus_x: Annotated[int, Form(ge=0, le=100)] = 50,
+    focus_y: Annotated[int, Form(ge=0, le=100)] = 50,
+    template_style: Annotated[str, Form()] = "standard",
     duration_seconds: Annotated[int, Form(ge=1, le=86400)] = 12,
     background: Annotated[UploadFile | None, File()] = None,
     library_media_id: Annotated[int | None, Form()] = None,
+    logo: Annotated[UploadFile | None, File()] = None,
+    remove_logo: Annotated[bool, Form()] = False,
     _: None = Depends(require_system_login),
 ):
     row = get_content_or_404(content_id)
     if row["kind"] != "text":
         raise HTTPException(status_code=422, detail="Dieser Inhalt ist kein Freitext")
-    config = text_configuration(headline, subheadline, body, shadow_box, shadow_intensity)
+    old_config = json.loads(row["text_config"] or "{}")
+    old_logo = old_config.get("logo_source")
+    logo_source = None if remove_logo else old_logo
+    config = text_configuration(
+        headline, subheadline, body, shadow_box, shadow_intensity, text_align,
+        vertical_position, text_color, accent_color, font_size, font_family,
+        background_dim, focus_x, focus_y, template_style, logo_source,
+    )
+    new_logo = save_text_background(logo) if logo and logo.filename else None
+    if new_logo:
+        logo_source = new_logo
+        config_data = json.loads(config)
+        config_data["logo_source"] = logo_source
+        config = json.dumps(config_data, ensure_ascii=False)
     source = row["source"]
     selected_media = get_library_media_or_404(library_media_id) if library_media_id else None
     if selected_media and selected_media["kind"] != "image":
@@ -630,9 +712,13 @@ def edit_text_content(
     except Exception:
         if new_source:
             (media_dir() / Path(new_source).name).unlink(missing_ok=True)
+        if new_logo:
+            (media_dir() / Path(new_logo).name).unlink(missing_ok=True)
         raise
     if source != row["source"] and row["media_id"] is None:
         (media_dir() / Path(row["source"]).name).unlink(missing_ok=True)
+    if old_logo and old_logo != logo_source:
+        (media_dir() / Path(old_logo).name).unlink(missing_ok=True)
     return serialize(get_content_or_404(content_id))
 
 
@@ -750,11 +836,14 @@ def update_content(content_id: int, payload: ContentUpdate, _: None = Depends(re
 @app.delete("/api/content/{content_id}", status_code=204)
 def delete_content(content_id: int, _: None = Depends(require_system_login)):
     row = get_content_or_404(content_id)
+    text_config = json.loads(row["text_config"] or "{}") if row["kind"] == "text" else {}
     with connect() as connection:
         connection.execute("DELETE FROM content WHERE id = ?", (content_id,))
     if row["kind"] in {"image", "video", "pdf", "text"} and row["media_id"] is None:
         stored_name = Path(row["source"]).name
         (media_dir() / stored_name).unlink(missing_ok=True)
+    if text_config.get("logo_source"):
+        (media_dir() / Path(text_config["logo_source"]).name).unlink(missing_ok=True)
 
 
 @app.get("/media/{filename}", include_in_schema=False)

@@ -8,6 +8,25 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.9.5] – 2026-08-08
+
+### Hinzugefügt
+
+- Erweiterte Freitext-Gestaltung mit horizontaler und vertikaler Position,
+  Text- und Akzentfarbe, drei Schriftgrößen und drei Schriftfamilien.
+- Einstellbare Hintergrundabdunklung und horizontaler sowie vertikaler
+  Bildfokus.
+- Optionaler Logo-Upload mit automatischer Dateibereinigung beim Ersetzen oder
+  Löschen des Freitext-Inhalts.
+- Wiederverwendbare Gestaltungsvorlagen „Standard“, „Elegant“ und
+  „Hinweis / Warnung“.
+
+### Geändert
+
+- Vorschau und Player verwenden für alle Freitext-Gestaltungsoptionen dasselbe
+  Rendering.
+- Projektversion von `0.9.4` auf `0.9.5` erhöht.
+
 ## [0.9.4] – 2026-08-08
 
 ### Hinzugefügt

@@ -96,6 +96,15 @@ function show(item) {
     element = document.createElement("div");
     element.style.backgroundImage = `url("${item.source.replaceAll('"', '%22')}")`;
     const config = item.text_config || {};
+    const align = config.text_align || "left";
+    const vertical = config.vertical_position || "center";
+    const font = config.font_family || "sans";
+    const size = config.font_size || "medium";
+    const template = config.template_style || "standard";
+    element.style.backgroundPosition = `${config.focus_x ?? 50}% ${config.focus_y ?? 50}%`;
+    element.style.setProperty("--background-dim", `${config.background_dim || 0}%`);
+    element.style.setProperty("--slide-text", config.text_color || "#ffffff");
+    element.style.setProperty("--slide-accent", config.accent_color || "#39d98a");
     const overlay = document.createElement("div");
     const intensity = ["light", "medium", "dark"].includes(config.shadow_intensity)
       ? config.shadow_intensity : "medium";
@@ -109,11 +118,19 @@ function show(item) {
         overlay.append(text);
       });
     element.append(overlay);
+    if (config.logo_source) {
+      const logo = document.createElement("img");
+      logo.className = "text-logo";
+      logo.src = config.logo_source;
+      logo.alt = "Logo";
+      element.append(logo);
+    }
+    element.dataset.slideClasses = `align-${align} position-${vertical} font-${font} size-${size} template-${template}`;
   } else if (item.kind === "stream") {
     showStream(item);
     return;
   }
-  element.className = item.kind === "text" ? "content text-slide" : "content";
+  element.className = item.kind === "text" ? `content text-slide ${element.dataset.slideClasses}` : "content";
   stage.append(element);
   timer = window.setTimeout(advance, item.duration_seconds * 1000);
 }

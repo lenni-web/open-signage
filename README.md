@@ -10,7 +10,9 @@ Chromium-Kioskfenster an.
 - PDF-Dokumente hochladen und im Vollbild anzeigen
 - Webseiten als Inhalte anlegen
 - Freitext mit Hintergrundbild, Überschrift, Unterüberschrift, Text und
-  optionaler Schattenbox gestalten, vorab ansehen und später bearbeiten
+  optionaler Schattenbox gestalten, vorab ansehen und später bearbeiten;
+  inklusive Position, Farben, Schriften, Bildfokus, Abdunklung, Logo und
+  wiederverwendbaren Designvorlagen
 - Mediathek für dauerhaft gespeicherte Fotos und Videos, die mehrfach in die
   Playlist oder als Freitext-Hintergrund übernommen werden können
 - Owncast-Livestreams direkt per HLS wiedergeben

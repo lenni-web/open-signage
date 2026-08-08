@@ -154,6 +154,51 @@
             <option value="dark">Dark</option>
           </select>
         </label>
+        <label>Gestaltungsvorlage
+          <select name="template_style">
+            <option value="standard">Standard</option>
+            <option value="elegant">Elegant</option>
+            <option value="alert">Hinweis / Warnung</option>
+          </select>
+        </label>
+        <div class="style-grid">
+          <label>Textausrichtung
+            <select name="text_align"><option value="left">Links</option><option value="center">Mittig</option><option value="right">Rechts</option></select>
+          </label>
+          <label>Vertikale Position
+            <select name="vertical_position"><option value="top">Oben</option><option value="center" selected>Mitte</option><option value="bottom">Unten</option></select>
+          </label>
+          <label>Schriftgröße
+            <select name="font_size"><option value="small">Klein</option><option value="medium" selected>Mittel</option><option value="large">Groß</option></select>
+          </label>
+          <label>Schrift
+            <select name="font_family"><option value="sans">Sans Serif</option><option value="serif">Serif</option><option value="mono">Monospace</option></select>
+          </label>
+          <label>Textfarbe
+            <input name="text_color" type="color" value="#ffffff">
+          </label>
+          <label>Akzentfarbe
+            <input name="accent_color" type="color" value="#39d98a">
+          </label>
+        </div>
+        <label>Hintergrund abdunkeln: <output id="background-dim-output">0 %</output>
+          <input name="background_dim" type="range" min="0" max="80" value="0">
+        </label>
+        <div class="style-grid">
+          <label>Bildfokus horizontal
+            <input name="focus_x" type="range" min="0" max="100" value="50">
+          </label>
+          <label>Bildfokus vertikal
+            <input name="focus_y" type="range" min="0" max="100" value="50">
+          </label>
+        </div>
+        <label>Optionales Logo
+          <input name="logo" type="file" accept="image/jpeg,image/png,image/webp">
+        </label>
+        <label id="remove-logo-label" class="inline-check" hidden>
+          <input name="remove_logo" type="checkbox">
+          <span>Vorhandenes Logo entfernen</span>
+        </label>
         <div class="form-actions">
           <button id="text-preview-button" class="secondary" type="button">Vorschau</button>
           <button id="text-save-button">Speichern und zur Playlist hinzufügen</button>

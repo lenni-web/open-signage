@@ -118,6 +118,7 @@ select {
 }
 textarea { resize: vertical; }
 .form-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.style-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 button, .button {
   border: 0;
   border-radius: 9px;
@@ -271,7 +272,21 @@ button:disabled { cursor: default; opacity: .35; }
   color: white;
   overflow: hidden;
 }
+.text-slide::before { content: ""; position: absolute; inset: 0; background: rgb(0 0 0 / var(--background-dim, 0%)); pointer-events: none; }
 .text-overlay { max-width: min(900px, 85%); padding: clamp(20px, 4vw, 56px); }
+.text-overlay { position: relative; z-index: 1; color: var(--slide-text, white); text-align: var(--text-align, left); }
+.text-slide.position-top { align-items: start; }
+.text-slide.position-center { align-items: center; }
+.text-slide.position-bottom { align-items: end; }
+.text-slide.align-center .text-overlay { justify-self: center; }
+.text-slide.align-right .text-overlay { justify-self: end; }
+.text-slide.font-serif { font-family: Georgia, "Times New Roman", serif; }
+.text-slide.font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.text-slide.size-small { font-size: .75em; }
+.text-slide.size-large { font-size: 1.25em; }
+.text-slide.template-elegant .text-headline { font-weight: 400; letter-spacing: .03em; }
+.text-slide.template-alert .text-overlay { border-left: 8px solid var(--slide-accent, #ffcc00); }
+.text-logo { position: absolute; z-index: 2; top: 4%; right: 4%; max-width: 18%; max-height: 18%; object-fit: contain; }
 .text-overlay.shadow-box {
   border-radius: 18px;
   box-shadow: 0 18px 55px rgb(0 0 0 / 45%);
@@ -281,7 +296,7 @@ button:disabled { cursor: default; opacity: .35; }
 .text-overlay.shadow-box-medium { background: rgb(0 0 0 / 64%); }
 .text-overlay.shadow-box-dark { background: rgb(0 0 0 / 84%); }
 .text-headline { margin: 0; font-size: clamp(2.4rem, 6vw, 6rem); line-height: 1.02; }
-.text-subheadline { margin: .35em 0 0; font-size: clamp(1.4rem, 3vw, 3rem); font-weight: 500; }
+.text-subheadline { margin: .35em 0 0; color: var(--slide-accent, inherit); font-size: clamp(1.4rem, 3vw, 3rem); font-weight: 500; }
 .text-body { margin: 1.3em 0 0; font-size: clamp(1.05rem, 1.8vw, 1.8rem); white-space: pre-wrap; }
 #text-preview-dialog { width: min(1200px, 94vw); padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); }
 #text-preview-dialog::backdrop { background: rgb(0 0 0 / 80%); }

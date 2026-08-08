@@ -95,6 +95,16 @@ function openSchedule(item) {
 function renderTextSlide(target, source, config) {
   target.replaceChildren();
   target.style.backgroundImage = source ? `url("${source.replaceAll('"', '%22')}")` : "none";
+  const align = config.text_align || "left";
+  const vertical = config.vertical_position || "center";
+  const font = config.font_family || "sans";
+  const size = config.font_size || "medium";
+  const template = config.template_style || "standard";
+  target.className = `text-slide preview-slide align-${align} position-${vertical} font-${font} size-${size} template-${template}`;
+  target.style.backgroundPosition = `${config.focus_x ?? 50}% ${config.focus_y ?? 50}%`;
+  target.style.setProperty("--background-dim", `${config.background_dim || 0}%`);
+  target.style.setProperty("--slide-text", config.text_color || "#ffffff");
+  target.style.setProperty("--slide-accent", config.accent_color || "#39d98a");
   const overlay = document.createElement("div");
   const intensity = ["light", "medium", "dark"].includes(config.shadow_intensity)
     ? config.shadow_intensity : "medium";
@@ -108,6 +118,13 @@ function renderTextSlide(target, source, config) {
       overlay.append(element);
     });
   target.append(overlay);
+  if (config.logo_source) {
+    const logo = document.createElement("img");
+    logo.className = "text-logo";
+    logo.src = config.logo_source;
+    logo.alt = "Logo";
+    target.append(logo);
+  }
 }
 
 function resetTextForm() {
@@ -116,6 +133,18 @@ function resetTextForm() {
   textForm.elements.duration_seconds.value = "12";
   textForm.elements.shadow_box.checked = true;
   textForm.elements.shadow_intensity.value = "medium";
+  textForm.elements.template_style.value = "standard";
+  textForm.elements.text_align.value = "left";
+  textForm.elements.vertical_position.value = "center";
+  textForm.elements.font_size.value = "medium";
+  textForm.elements.font_family.value = "sans";
+  textForm.elements.text_color.value = "#ffffff";
+  textForm.elements.accent_color.value = "#39d98a";
+  textForm.elements.background_dim.value = "0";
+  textForm.elements.focus_x.value = "50";
+  textForm.elements.focus_y.value = "50";
+  document.querySelector("#background-dim-output").value = "0 %";
+  document.querySelector("#remove-logo-label").hidden = true;
   document.querySelector("#shadow-intensity-label").hidden = false;
   textForm.elements.background.required = false;
   document.querySelector("#text-form-title").textContent = "Freitext hinzufügen";
@@ -134,6 +163,12 @@ function editTextItem(item) {
   textForm.elements.duration_seconds.value = item.duration_seconds;
   textForm.elements.shadow_box.checked = Boolean(item.text_config?.shadow_box);
   textForm.elements.shadow_intensity.value = item.text_config?.shadow_intensity || "medium";
+  ["template_style", "text_align", "vertical_position", "font_size", "font_family", "text_color", "accent_color", "background_dim", "focus_x", "focus_y"].forEach((field) => {
+    const defaults = { template_style: "standard", text_align: "left", vertical_position: "center", font_size: "medium", font_family: "sans", text_color: "#ffffff", accent_color: "#39d98a", background_dim: 0, focus_x: 50, focus_y: 50 };
+    textForm.elements[field].value = item.text_config?.[field] ?? defaults[field];
+  });
+  document.querySelector("#background-dim-output").value = `${textForm.elements.background_dim.value} %`;
+  document.querySelector("#remove-logo-label").hidden = !item.text_config?.logo_source;
   document.querySelector("#shadow-intensity-label").hidden = !textForm.elements.shadow_box.checked;
   textForm.elements.library_media_id.value = item.media_id || "";
   textForm.elements.background.required = false;
@@ -695,12 +730,21 @@ document.querySelector("#text-preview-button").addEventListener("click", () => {
   }
   if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
   previewObjectUrl = selected ? source : null;
+  const selectedLogo = textForm.elements.logo.files[0];
+  const logoSource = selectedLogo ? URL.createObjectURL(selectedLogo) :
+    (form.get("remove_logo") === "on" ? null : editingTextItem?.text_config?.logo_source);
   renderTextSlide(document.querySelector("#text-preview-stage"), source, {
     headline: form.get("headline").trim(),
     subheadline: form.get("subheadline").trim(),
     body: form.get("body").trim(),
     shadow_box: form.get("shadow_box") === "on",
     shadow_intensity: form.get("shadow_intensity"),
+    text_align: form.get("text_align"), vertical_position: form.get("vertical_position"),
+    text_color: form.get("text_color"), accent_color: form.get("accent_color"),
+    font_size: form.get("font_size"), font_family: form.get("font_family"),
+    background_dim: Number(form.get("background_dim")), focus_x: Number(form.get("focus_x")),
+    focus_y: Number(form.get("focus_y")), template_style: form.get("template_style"),
+    logo_source: logoSource,
   });
   textPreviewDialog.showModal();
 });
@@ -770,6 +814,18 @@ textForm.elements.library_media_id.addEventListener("change", () => {
 });
 textForm.elements.shadow_box.addEventListener("change", () => {
   document.querySelector("#shadow-intensity-label").hidden = !textForm.elements.shadow_box.checked;
+});
+textForm.elements.background_dim.addEventListener("input", (event) => {
+  document.querySelector("#background-dim-output").value = `${event.target.value} %`;
+});
+
+textForm.elements.template_style.addEventListener("change", (event) => {
+  const presets = {
+    standard: { text_align: "left", vertical_position: "center", font_family: "sans", accent_color: "#39d98a" },
+    elegant: { text_align: "center", vertical_position: "center", font_family: "serif", accent_color: "#f2d49b" },
+    alert: { text_align: "left", vertical_position: "center", font_family: "sans", accent_color: "#ffcc00" },
+  };
+  Object.entries(presets[event.target.value]).forEach(([field, value]) => { textForm.elements[field].value = value; });
 });
 
 document.querySelector("#refresh").addEventListener("click", load);
