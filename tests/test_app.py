@@ -1,5 +1,6 @@
 import sqlite3
 import base64
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -309,6 +310,8 @@ def test_admin_contains_system_navigation_and_update_controls():
     assert 'name="shadow_intensity"' in admin
     assert 'id="playlist-select"' in admin
     assert 'id="playlist-create"' in admin
+    assert 'id="library-search"' in admin
+    assert 'id="library-bulk-add"' in admin
     assert admin.count('class="card update-card collapsible-card"') == 2
     assert 'class="card system-overview collapsible-card"' in admin
     assert 'value="12"' in admin
@@ -618,6 +621,57 @@ def test_library_image_is_optimized_and_can_be_edited(tmp_path: Path, monkeypatc
         assert result["source"] != media["source"]
         assert original.exists()
         assert not old_display.exists()
+
+
+def test_library_metadata_rename_category_and_bulk_playlist(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        ids = []
+        for name in ("eins.png", "zwei.png"):
+            uploaded = client.post(
+                "/api/media-library", files={"file": (name, VALID_PNG, "image/png")}
+            )
+            ids.append(uploaded.json()["id"])
+        updated = client.patch(
+            f"/api/media-library/{ids[0]}", json={"name": "Bühne", "category": "Veranstaltung"}
+        )
+        assert updated.status_code == 200
+        assert updated.json()["name"] == "Bühne"
+        assert updated.json()["category"] == "Veranstaltung"
+
+        bulk = client.post(
+            "/api/media-library/bulk-playlist",
+            json={"media_ids": ids, "duration_seconds": 17},
+        )
+        assert bulk.status_code == 201
+        assert len(bulk.json()["created_ids"]) == 2
+        assert {item["duration_seconds"] for item in client.get("/api/content").json()} == {17}
+        assert all(item["usage_count"] == 1 for item in client.get("/api/media-library").json())
+
+
+def test_library_video_gets_thumbnail_and_can_be_transcoded(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    video = tmp_path / "input.mp4"
+    subprocess.run(
+        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi",
+         "-i", "color=c=blue:s=320x180:d=0.2", "-c:v", "mpeg4", str(video)],
+        check=True,
+    )
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        uploaded = client.post(
+            "/api/media-library",
+            files={"file": ("clip.mp4", video.read_bytes(), "video/mp4")},
+        )
+        assert uploaded.status_code == 201
+        media = uploaded.json()
+        assert media["thumbnail_source"].endswith("-video-thumb.jpg")
+        assert media["metadata"]["width"] == 320
+        converted = client.post(f"/api/media-library/{media['id']}/transcode")
+        assert converted.status_code == 200
+        assert converted.json()["source"].endswith("-converted.mp4")
+        assert converted.json()["metadata"]["video_codec"] == "h264"
 
 
 def test_content_schedule_controls_player_playlist(tmp_path: Path, monkeypatch):

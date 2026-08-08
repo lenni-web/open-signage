@@ -8,6 +8,26 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.9.7] – 2026-08-08
+
+### Hinzugefügt
+
+- Suche sowie Filter nach Medientyp, Kategorie und Nutzungszustand in der
+  Mediathek.
+- Umbenennen, Kategorien, Auflösung, Videodauer und Nutzungsanzahl je Medium.
+- Mehrfachauswahl und gemeinsames Hinzufügen von bis zu 500 Medien zur aktiven
+  Playlist.
+- Automatische Video-Thumbnails und Metadaten zu Auflösung sowie Video- und
+  Audio-Codec.
+- Manuelle Konvertierung von Videos nach MP4 mit H.264/AAC und für Streaming
+  optimierter Dateistruktur.
+
+### Geändert
+
+- Medienkarten verwenden kleine Thumbnail-Dateien statt der vollständigen
+  Player-Dateien.
+- Projektversion von `0.9.6` auf `0.9.7` erhöht.
+
 ## [0.9.6] – 2026-08-08
 
 ### Hinzugefügt

@@ -250,6 +250,17 @@
           </div>
           <button id="library-refresh" class="secondary">Aktualisieren</button>
         </div>
+        <div class="library-toolbar">
+          <input id="library-search" type="search" placeholder="Medien durchsuchen …">
+          <select id="library-type-filter"><option value="">Alle Typen</option><option value="image">Fotos</option><option value="video">Videos</option></select>
+          <select id="library-usage-filter"><option value="">Alle Medien</option><option value="unused">Nur ungenutzte</option><option value="used">Nur verwendete</option></select>
+          <input id="library-category-filter" placeholder="Kategorie filtern">
+        </div>
+        <div class="bulk-actions">
+          <span id="library-selection-count">0 ausgewählt</span>
+          <input id="library-bulk-duration" type="number" min="1" max="86400" value="10" title="Dauer">
+          <button id="library-bulk-add" disabled>Auswahl zur Playlist</button>
+        </div>
         <p id="library-empty" class="empty" hidden>Noch keine Medien vorhanden.</p>
         <div id="media-library" class="media-library"></div>
       </section>

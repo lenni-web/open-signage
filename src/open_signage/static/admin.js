@@ -12,6 +12,7 @@ let applicationReloadScheduled = false;
 let schedulingItem = null;
 let playlists = [];
 let editingLibraryImage = null;
+const selectedMediaIds = new Set();
 
 function notify(text, isError = false) {
   message.textContent = text;
@@ -196,7 +197,16 @@ function renderLibrary(items) {
   document.querySelector("#library-empty").hidden = items.length > 0;
   items.forEach((item) => {
     const card = document.createElement("article");
-    card.className = "media-card";
+    card.className = `media-card${selectedMediaIds.has(item.id) ? " selected" : ""}`;
+    const selector = document.createElement("input");
+    selector.type = "checkbox";
+    selector.className = "media-select";
+    selector.checked = selectedMediaIds.has(item.id);
+    selector.addEventListener("change", () => {
+      selector.checked ? selectedMediaIds.add(item.id) : selectedMediaIds.delete(item.id);
+      updateBulkActions();
+      card.classList.toggle("selected", selector.checked);
+    });
     const preview = document.createElement(item.kind === "image" ? "img" : "video");
     preview.src = item.thumbnail_source || item.source;
     if (item.kind === "video") {
@@ -207,15 +217,19 @@ function renderLibrary(items) {
     const body = document.createElement("div");
     body.className = "media-card-body";
     body.innerHTML = `
-      <strong></strong>
-      <span class="media-card-meta">${kindLabel(item.kind)} · ${formatBytes(item.size_bytes)}</span>
+      <input class="media-name" value="" aria-label="Medienname">
+      <input class="media-category" value="" placeholder="Kategorie" aria-label="Kategorie">
+      <span class="media-card-meta">${kindLabel(item.kind)} · ${formatBytes(item.size_bytes)}${item.width ? ` · ${item.width}×${item.height}` : ""}${item.metadata?.duration_seconds ? ` · ${item.metadata.duration_seconds}s` : ""} · ${item.usage_count || 0}× verwendet</span>
       <div class="media-card-actions">
         <input class="library-duration" type="number" min="1" max="86400" value="10" title="Anzeigedauer in Sekunden">
         <button class="add-library">Zur Playlist</button>
         ${item.kind === "image" ? '<button class="secondary edit-library-image">Bearbeiten</button>' : ""}
+        ${item.kind === "video" ? '<button class="secondary transcode-library-video">In MP4 konvertieren</button>' : ""}
+        <button class="secondary save-library-meta">Speichern</button>
         <button class="danger delete-library">Löschen</button>
       </div>`;
-    body.querySelector("strong").textContent = item.name;
+    body.querySelector(".media-name").value = item.name;
+    body.querySelector(".media-category").value = item.category || "";
     body.querySelector(".add-library").addEventListener("click", async () => {
       try {
         const duration = Number(body.querySelector(".library-duration").value);
@@ -242,10 +256,47 @@ function renderLibrary(items) {
       document.querySelector("#image-editor-preview").src = item.source;
       document.querySelector("#image-editor-dialog").showModal();
     });
-    card.append(preview, body);
+    body.querySelector(".save-library-meta").addEventListener("click", async () => {
+      try {
+        await api(`/api/media-library/${item.id}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: body.querySelector(".media-name").value, category: body.querySelector(".media-category").value }),
+        });
+        await loadLibrary();
+        notify("Mediendaten gespeichert");
+      } catch (error) { notify(error.message, true); }
+    });
+    body.querySelector(".transcode-library-video")?.addEventListener("click", async () => {
+      if (!window.confirm("Video jetzt nach MP4/H.264/AAC konvertieren?")) return;
+      try {
+        await api(`/api/media-library/${item.id}/transcode`, { method: "POST" });
+        await loadLibrary();
+        notify("Video erfolgreich konvertiert");
+      } catch (error) { notify(error.message, true); }
+    });
+    card.append(selector, preview, body);
     target.append(card);
   });
 }
+
+function filteredLibraryItems() {
+  const query = document.querySelector("#library-search").value.trim().toLowerCase();
+  const type = document.querySelector("#library-type-filter").value;
+  const usage = document.querySelector("#library-usage-filter").value;
+  const category = document.querySelector("#library-category-filter").value.trim().toLowerCase();
+  return libraryItems.filter(item =>
+    (!query || item.name.toLowerCase().includes(query)) && (!type || item.kind === type) &&
+    (!category || (item.category || "").toLowerCase().includes(category)) &&
+    (!usage || (usage === "unused" ? !item.usage_count : Boolean(item.usage_count)))
+  );
+}
+
+function updateBulkActions() {
+  document.querySelector("#library-selection-count").textContent = `${selectedMediaIds.size} ausgewählt`;
+  document.querySelector("#library-bulk-add").disabled = selectedMediaIds.size === 0;
+}
+
+function applyLibraryFilters() { renderLibrary(filteredLibraryItems()); }
 
 async function loadLibrary() {
   try {
@@ -815,6 +866,21 @@ document.querySelector("#library-upload-form").addEventListener("submit", async 
 });
 
 document.querySelector("#library-refresh").addEventListener("click", loadLibrary);
+["#library-search", "#library-type-filter", "#library-usage-filter", "#library-category-filter"].forEach(selector => {
+  document.querySelector(selector).addEventListener("input", applyLibraryFilters);
+});
+document.querySelector("#library-bulk-add").addEventListener("click", async () => {
+  try {
+    await api("/api/media-library/bulk-playlist", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ media_ids: [...selectedMediaIds], duration_seconds: Number(document.querySelector("#library-bulk-duration").value) }),
+    });
+    selectedMediaIds.clear();
+    await Promise.all([loadLibrary(), load()]);
+    updateBulkActions();
+    notify("Ausgewählte Medien zur Playlist hinzugefügt");
+  } catch (error) { notify(error.message, true); }
+});
 document.querySelector("#image-editor-cancel").addEventListener("click", () => document.querySelector("#image-editor-dialog").close());
 document.querySelector("#image-editor-form").addEventListener("submit", async (event) => {
   event.preventDefault();

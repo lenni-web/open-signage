@@ -21,6 +21,7 @@ from .application_update import request_update as request_application_update
 from .application_update import update_status as application_update_status
 from .media_probe import inspect_video
 from .image_processing import edit_image, optimize_image
+from .video_processing import transcode_video, video_metadata, video_thumbnail
 from .system_info import collect_system_info
 from .system_update import request_update, update_status
 from .version import __version__
@@ -106,6 +107,16 @@ class ImageEdit(BaseModel):
     contrast: float = Field(default=1.0, ge=0.5, le=1.5)
 
 
+class MediaLibraryUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    category: str | None = Field(default=None, max_length=100)
+
+
+class MediaBulkPlaylistCreate(BaseModel):
+    media_ids: list[int] = Field(min_length=1, max_length=500)
+    duration_seconds: int = Field(default=10, ge=1, le=86400)
+
+
 def active_playlist_id() -> int:
     with connect() as connection:
         row = connection.execute(
@@ -166,6 +177,12 @@ def get_library_media_or_404(media_id: int):
     if row is None:
         raise HTTPException(status_code=404, detail="Medium nicht gefunden")
     return row
+
+
+def serialize_library_media(row) -> dict:
+    item = dict(row)
+    item["metadata"] = json.loads(item.pop("metadata_json") or "{}")
+    return item
 
 
 @app.get("/", include_in_schema=False)
@@ -440,9 +457,11 @@ def save_text_background(file: UploadFile) -> str:
 def list_media_library(_: None = Depends(require_system_login)):
     with connect() as connection:
         rows = connection.execute(
-            "SELECT * FROM media_library ORDER BY created_at DESC, id DESC"
+            """SELECT media_library.*, COUNT(content.id) AS usage_count
+               FROM media_library LEFT JOIN content ON content.media_id = media_library.id
+               GROUP BY media_library.id ORDER BY created_at DESC, media_library.id DESC"""
         ).fetchall()
-    return [dict(row) for row in rows]
+    return [serialize_library_media(row) for row in rows]
 
 
 @app.post("/api/media-library", status_code=201)
@@ -477,31 +496,114 @@ def upload_library_media(
         file.file.close()
     compatibility = inspect_video(destination) if kind == "video" else None
     processed = None
+    metadata = {}
+    thumbnail_source = None
     if kind == "image":
         try:
             processed = optimize_image(destination, media_dir())
         except Exception as error:
             destination.unlink(missing_ok=True)
             raise HTTPException(status_code=415, detail="Bild konnte nicht verarbeitet werden") from error
+        metadata = {"width": processed["width"], "height": processed["height"]}
+    elif kind == "video":
+        try:
+            metadata = video_metadata(destination)
+            thumbnail_source = video_thumbnail(destination, media_dir())
+        except Exception as error:
+            destination.unlink(missing_ok=True)
+            raise HTTPException(status_code=415, detail="Video konnte nicht verarbeitet werden") from error
     source = processed["source"] if processed else f"/media/{stored_name}"
     with connect() as connection:
         cursor = connection.execute(
             """INSERT INTO media_library(
-                name, kind, source, size_bytes, original_source, thumbnail_source, width, height
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                name, kind, source, size_bytes, original_source, thumbnail_source, width, height, metadata_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 Path(file.filename or stored_name).name, kind, source, size,
                 f"/media/{stored_name}" if processed else None,
-                processed["thumbnail_source"] if processed else None,
-                processed["width"] if processed else None,
-                processed["height"] if processed else None,
+                processed["thumbnail_source"] if processed else thumbnail_source,
+                metadata.get("width"), metadata.get("height"),
+                json.dumps(metadata),
             ),
         )
         media_id = cursor.lastrowid
-    response = dict(get_library_media_or_404(media_id))
+    response = serialize_library_media(get_library_media_or_404(media_id))
     if compatibility is not None:
         response["compatibility"] = compatibility
     return response
+
+
+@app.patch("/api/media-library/{media_id}")
+def update_library_media(
+    media_id: int,
+    payload: MediaLibraryUpdate,
+    _: None = Depends(require_system_login),
+):
+    get_library_media_or_404(media_id)
+    values = payload.model_dump(exclude_none=True)
+    if not values:
+        return serialize_library_media(get_library_media_or_404(media_id))
+    values = {key: value.strip() for key, value in values.items()}
+    with connect() as connection:
+        connection.execute(
+            f"UPDATE media_library SET {', '.join(f'{key} = ?' for key in values)} WHERE id = ?",
+            (*values.values(), media_id),
+        )
+        if "name" in values:
+            connection.execute(
+                "UPDATE content SET name = ? WHERE media_id = ?", (values["name"], media_id)
+            )
+    return serialize_library_media(get_library_media_or_404(media_id))
+
+
+@app.post("/api/media-library/bulk-playlist", status_code=201)
+def add_media_bulk_to_playlist(
+    payload: MediaBulkPlaylistCreate,
+    _: None = Depends(require_system_login),
+):
+    playlist_id = active_playlist_id()
+    created = []
+    with connect() as connection:
+        for media_id in dict.fromkeys(payload.media_ids):
+            media = connection.execute("SELECT * FROM media_library WHERE id = ?", (media_id,)).fetchone()
+            if not media:
+                raise HTTPException(status_code=404, detail=f"Medium {media_id} nicht gefunden")
+            position = connection.execute(
+                "SELECT COALESCE(MAX(position), -1) + 1 FROM content WHERE playlist_id = ?",
+                (playlist_id,),
+            ).fetchone()[0]
+            cursor = connection.execute(
+                """INSERT INTO content(name, kind, source, duration_seconds, position, media_id, playlist_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (media["name"], media["kind"], media["source"], payload.duration_seconds, position, media_id, playlist_id),
+            )
+            created.append(cursor.lastrowid)
+    return {"created_ids": created}
+
+
+@app.post("/api/media-library/{media_id}/transcode")
+def convert_library_video(media_id: int, _: None = Depends(require_system_login)):
+    media = get_library_media_or_404(media_id)
+    if media["kind"] != "video":
+        raise HTTPException(status_code=422, detail="Nur Videos können konvertiert werden")
+    original_source = media["original_source"] or media["source"]
+    try:
+        source, metadata, thumbnail = transcode_video(
+            media_dir() / Path(original_source).name, media_dir()
+        )
+    except Exception as error:
+        raise HTTPException(status_code=500, detail="Videokonvertierung fehlgeschlagen") from error
+    with connect() as connection:
+        connection.execute(
+            """UPDATE media_library SET source = ?, original_source = ?, thumbnail_source = ?,
+               width = ?, height = ?, metadata_json = ? WHERE id = ?""",
+            (source, original_source, thumbnail, metadata.get("width"), metadata.get("height"), json.dumps(metadata), media_id),
+        )
+        connection.execute("UPDATE content SET source = ? WHERE media_id = ?", (source, media_id))
+    for old in (media["thumbnail_source"],):
+        if old:
+            (media_dir() / Path(old).name).unlink(missing_ok=True)
+    return serialize_library_media(get_library_media_or_404(media_id))
 
 
 @app.post("/api/media-library/{media_id}/edit-image")
@@ -535,7 +637,7 @@ def process_library_image(
     for old in old_files:
         if old and old != original_source:
             (media_dir() / Path(old).name).unlink(missing_ok=True)
-    return dict(get_library_media_or_404(media_id))
+    return serialize_library_media(get_library_media_or_404(media_id))
 
 
 @app.post("/api/media-library/{media_id}/playlist", status_code=201)

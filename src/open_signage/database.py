@@ -74,6 +74,8 @@ def initialize() -> None:
                 thumbnail_source TEXT,
                 width INTEGER,
                 height INTEGER,
+                category TEXT NOT NULL DEFAULT '',
+                metadata_json TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -149,6 +151,7 @@ def initialize() -> None:
         for name, definition in {
             "original_source": "TEXT", "thumbnail_source": "TEXT",
             "width": "INTEGER", "height": "INTEGER",
+            "category": "TEXT NOT NULL DEFAULT ''", "metadata_json": "TEXT",
         }.items():
             if name not in media_columns:
                 connection.execute(f"ALTER TABLE media_library ADD COLUMN {name} {definition}")
