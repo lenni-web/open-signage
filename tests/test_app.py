@@ -278,7 +278,9 @@ def test_update_service_is_installed_without_sudo_access():
     assert "systemctl stop open-signage.service" in application_script
     assert "Healthcheck fehlgeschlagen" in application_script
     assert "ExecStart=/usr/local/sbin/open-signage-application-update" in application_service
+    assert "ExecStartPre=/bin/sleep 2" in application_service
     assert "PathExists=/var/lib/open-signage/application-update.request" in application_path
+    assert "systemctl daemon-reload" in application_script
 
 
 def test_admin_contains_system_navigation_and_update_controls():
@@ -299,6 +301,8 @@ def test_admin_contains_system_navigation_and_update_controls():
     assert 'data-page="library-page"' in admin
     assert 'id="media-library"' in admin
     assert 'id="text-library-image"' in admin
+    assert admin.count('class="card update-card collapsible-card"') == 2
+    assert 'class="card system-overview collapsible-card"' in admin
     assert 'value="12"' in admin
 
 
@@ -409,6 +413,16 @@ def test_logout_revokes_management_access(tmp_path: Path, monkeypatch):
         assert client.get("/api/content").status_code == 200
         assert client.post("/api/system/logout").status_code == 204
         assert client.get("/api/content").status_code == 401
+
+
+def test_session_is_stored_for_server_restarts(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        cookie = client.cookies.get("open_signage_session")
+    with TestClient(app) as restarted_client:
+        restarted_client.cookies.set("open_signage_session", cookie)
+        assert restarted_client.get("/api/system/session").status_code == 200
 
 
 def test_text_content_can_be_previewed_by_player_edited_and_deleted(tmp_path: Path, monkeypatch):

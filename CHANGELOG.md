@@ -8,6 +8,24 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.9.1] – 2026-08-08
+
+### Behoben
+
+- Anwendungsupdates zeigen während des erwarteten Serverneustarts nicht mehr
+  fälschlich „Load failed“, stellen die Verbindung automatisch wieder her und
+  laden die Oberfläche nach erfolgreichem Abschluss neu.
+- Anmeldesitzungen werden in SQLite gespeichert und bleiben dadurch bei einem
+  Anwendungsneustart während des Updates gültig.
+- Der Anwendungs-Updater aktualisiert künftig auch seinen privilegierten
+  Helfer und die zugehörigen systemd-Units.
+
+### Geändert
+
+- Die Bereiche „Sicherheit“, „Anwendungsupdate“ und „Systemupdate“ sind auf der
+  Systemseite einklappbar und standardmäßig geschlossen.
+- Projektversion von `0.9.0` auf `0.9.1` erhöht.
+
 ## [0.9.0] – 2026-08-08
 
 ### Hinzugefügt

@@ -194,6 +194,14 @@ button:disabled { cursor: default; opacity: .35; }
 .empty { color: var(--muted); text-align: center; padding: 25px; }
 .page-title { width: min(1100px, 100%); margin: 0 auto 18px; }
 .system-overview, .update-card { grid-column: 1 / -1; }
+.collapsible-card { padding: 0; }
+.collapsible-summary { display: flex; align-items: center; padding: 22px; cursor: pointer; list-style: none; }
+.collapsible-summary::-webkit-details-marker { display: none; }
+.collapsible-summary::after { content: "⌄"; margin-left: auto; color: var(--muted); font-size: 1.4rem; transition: transform .2s; }
+.collapsible-card[open] > .collapsible-summary::after { transform: rotate(180deg); }
+.collapsible-summary strong { font-size: 1.25rem; }
+.collapsible-body { padding: 0 22px 22px; border-top: 1px solid var(--line); }
+.collapsible-body > h2 { margin-top: 20px; }
 .auth-card { max-width: 560px; justify-self: center; width: 100%; }
 .login-screen { min-height: calc(100vh - 48px); display: grid; place-items: center; }
 .login-screen .auth-card { align-self: center; }
@@ -215,7 +223,7 @@ button:disabled { cursor: default; opacity: .35; }
 .connection { padding: 2px 7px; border-radius: 999px; font-size: .75rem; }
 .connection.online { background: #173c29; color: var(--accent); }
 .connection.offline { background: #3a2020; color: var(--danger); }
-.update-card > p { color: var(--muted); }
+.update-card .collapsible-body > p { color: var(--muted); }
 .update-state { display: grid; gap: 4px; margin: 16px 0; padding: 13px; border: 1px solid var(--line); border-radius: 10px; }
 .update-state span { color: var(--muted); font-size: .82rem; }
 .update-state.running, .update-state.queued { border-color: #d29922; }

@@ -31,7 +31,8 @@ Bildschirmname vergeben und ein Betriebssystemupdate gestartet werden.
 
 Die Anmeldung schützt die gesamte Verwaltungsoberfläche einschließlich der
 Inhalte-Seite. Der Vollbild-Player bleibt davon unabhängig und startet ohne
-Anmeldung.
+Anmeldung. Eine Anmeldung bleibt auch während eines Anwendungsneustarts gültig
+und läuft nach zwölf Stunden ab.
 Im Hintergrund führt ein separater root-Dienst fest definiert Folgendes aus:
 
 ```bash

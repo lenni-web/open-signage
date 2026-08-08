@@ -203,8 +203,11 @@
           <button>Bildschirmname speichern</button>
         </form>
       </section>
-      <section class="card system-overview">
-        <span class="eyebrow">Sicherheit</span>
+      <details class="card system-overview collapsible-card">
+        <summary class="collapsible-summary">
+          <span><span class="eyebrow">Zugangsschutz</span><strong>Sicherheit</strong></span>
+        </summary>
+        <div class="collapsible-body">
         <h2>Passwort ändern</h2>
         <form id="password-form">
           <label>Aktuelles Passwort
@@ -218,7 +221,8 @@
           </label>
           <button>Passwort ändern</button>
         </form>
-      </section>
+        </div>
+      </details>
       <section class="card system-overview">
         <div class="section-heading">
           <div>
@@ -252,9 +256,11 @@
         <div id="ethernet-info" class="network-list"><p class="empty">Wird geladen …</p></div>
       </section>
 
-      <section class="card update-card">
-        <span class="eyebrow">Open Signage</span>
-        <h2>Anwendungsupdate</h2>
+      <details class="card update-card collapsible-card">
+        <summary class="collapsible-summary">
+          <span><span class="eyebrow">Open Signage</span><strong>Anwendungsupdate</strong></span>
+        </summary>
+        <div class="collapsible-body">
         <p>Installiert den neuesten mit einem Git-Tag veröffentlichten Release. Bei einem fehlgeschlagenen Start wird automatisch zurückgerollt.</p>
         <div id="application-update-state" class="update-state idle">
           <strong>Noch kein Anwendungsupdate ausgeführt.</strong>
@@ -265,11 +271,14 @@
           <summary>Update-Protokoll</summary>
           <pre></pre>
         </details>
-      </section>
+        </div>
+      </details>
 
-      <section class="card update-card">
-        <span class="eyebrow">Betriebssystem</span>
-        <h2>Systemupdate</h2>
+      <details class="card update-card collapsible-card">
+        <summary class="collapsible-summary">
+          <span><span class="eyebrow">Betriebssystem</span><strong>Systemupdate</strong></span>
+        </summary>
+        <div class="collapsible-body">
         <p>Aktualisiert die Paketlisten und installiert verfügbare Updates im Hintergrund.</p>
         <div id="update-state" class="update-state idle">
           <strong>Noch kein Systemupdate ausgeführt.</strong>
@@ -280,7 +289,8 @@
           <summary>Update-Protokoll</summary>
           <pre></pre>
         </details>
-      </section>
+        </div>
+      </details>
     </main>
   </section>
   </div>

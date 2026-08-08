@@ -7,6 +7,8 @@ const textPreviewDialog = document.querySelector("#text-preview-dialog");
 let editingTextItem = null;
 let previewObjectUrl = null;
 let libraryItems = [];
+let applicationUpdateInProgress = false;
+let applicationReloadScheduled = false;
 
 function notify(text, isError = false) {
   message.textContent = text;
@@ -369,6 +371,8 @@ function renderUpdateStatus(status) {
 }
 
 function renderApplicationUpdateStatus(status) {
+  const wasUpdating = applicationUpdateInProgress;
+  applicationUpdateInProgress = ["queued", "running"].includes(status.status);
   const state = document.querySelector("#application-update-state");
   state.className = `update-state ${status.status}`;
   state.querySelector("strong").textContent = status.message;
@@ -382,13 +386,18 @@ function renderApplicationUpdateStatus(status) {
   const details = document.querySelector("#application-update-log");
   details.hidden = !status.log?.length;
   details.querySelector("pre").textContent = status.log?.join("\n") || "";
+  if (wasUpdating && status.status === "success" && !applicationReloadScheduled) {
+    applicationReloadScheduled = true;
+    state.querySelector("strong").textContent = "Update erfolgreich – Oberfläche wird neu geladen …";
+    window.setTimeout(() => window.location.reload(), 1200);
+  }
 }
 
 async function loadUpdateStatus() {
   try {
     renderUpdateStatus(await api("/api/system/update"));
   } catch (error) {
-    notify(error.message, true);
+    if (!applicationUpdateInProgress) notify(error.message, true);
   }
 }
 
@@ -396,7 +405,14 @@ async function loadApplicationUpdateStatus() {
   try {
     renderApplicationUpdateStatus(await api("/api/system/application-update"));
   } catch (error) {
-    notify(error.message, true);
+    if (applicationUpdateInProgress) {
+      const state = document.querySelector("#application-update-state");
+      state.className = "update-state running";
+      state.querySelector("strong").textContent = "Server wird aktualisiert und neu gestartet …";
+      state.querySelector("span").textContent = "Verbindung wird automatisch wiederhergestellt.";
+    } else {
+      notify(error.message, true);
+    }
   }
 }
 
@@ -483,11 +499,15 @@ document.querySelector("#application-update").addEventListener("click", async ()
     "Jetzt den neuesten veröffentlichten Open-Signage-Release installieren?"
   );
   if (!confirmed) return;
+  applicationUpdateInProgress = true;
   try {
     renderApplicationUpdateStatus(await api("/api/system/application-update", { method: "POST" }));
     notify("Anwendungsupdate wurde im Hintergrund gestartet");
   } catch (error) {
-    notify(error.message, true);
+    const state = document.querySelector("#application-update-state");
+    state.className = "update-state running";
+    state.querySelector("strong").textContent = "Server wird aktualisiert und neu gestartet …";
+    state.querySelector("span").textContent = "Verbindung wird automatisch wiederhergestellt.";
   }
 });
 

@@ -5,6 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+ExecStartPre=/bin/sleep 2
 ExecStart=/usr/local/sbin/open-signage-application-update
 Nice=10
 IOSchedulingClass=best-effort

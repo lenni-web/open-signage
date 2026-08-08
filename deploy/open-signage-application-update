@@ -63,6 +63,18 @@ fi
   "${release_dir}/.venv/bin/python" -m pip install --upgrade pip
   "${release_dir}/.venv/bin/python" -m pip install "${release_dir}"
 
+  # Keep the privileged updater and its units in sync with the installed release.
+  install -o root -g root -m 0755 \
+    "${release_dir}/deploy/open-signage-application-update" \
+    /usr/local/sbin/open-signage-application-update
+  install -o root -g root -m 0644 \
+    "${release_dir}/deploy/open-signage-application-update.service" \
+    /etc/systemd/system/open-signage-application-update.service
+  install -o root -g root -m 0644 \
+    "${release_dir}/deploy/open-signage-application-update.path" \
+    /etc/systemd/system/open-signage-application-update.path
+  systemctl daemon-reload
+
   systemctl stop open-signage.service
   mv "${APP_DIR}" "${backup_dir}"
   mv "${release_dir}" "${APP_DIR}"

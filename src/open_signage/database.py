@@ -86,6 +86,11 @@ def initialize() -> None:
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS admin_sessions (
+                token_hash TEXT PRIMARY KEY,
+                expires_at TEXT NOT NULL
+            );
             """
         )
         if existing and connection.execute(
