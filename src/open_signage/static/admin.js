@@ -2,6 +2,11 @@ const playlist = document.querySelector("#playlist");
 const empty = document.querySelector("#empty");
 const message = document.querySelector("#message");
 const uploadWarning = document.querySelector("#upload-warning");
+const textForm = document.querySelector("#text-form");
+const textPreviewDialog = document.querySelector("#text-preview-dialog");
+let editingTextItem = null;
+let previewObjectUrl = null;
+let libraryItems = [];
 
 function notify(text, isError = false) {
   message.textContent = text;
@@ -46,14 +51,127 @@ async function boot() {
   try {
     const session = await api("/api/system/session");
     showApplication(session);
-    await Promise.all([loadVersion(), load()]);
+    await Promise.all([loadVersion(), load(), loadLibrary()]);
   } catch (_) {
     showLogin();
   }
 }
 
 function kindLabel(kind) {
-  return { image: "Bild", video: "Video", pdf: "PDF", website: "Webseite", stream: "Livestream" }[kind] || kind;
+  return { image: "Bild", video: "Video", pdf: "PDF", website: "Webseite", stream: "Livestream", text: "Freitext" }[kind] || kind;
+}
+
+function renderTextSlide(target, source, config) {
+  target.replaceChildren();
+  target.style.backgroundImage = source ? `url("${source.replaceAll('"', '%22')}")` : "none";
+  const overlay = document.createElement("div");
+  overlay.className = `text-overlay${config.shadow_box ? " shadow-box" : ""}`;
+  [["h2", "text-headline", config.headline], ["h3", "text-subheadline", config.subheadline], ["p", "text-body", config.body]]
+    .forEach(([tag, className, value]) => {
+      if (!value) return;
+      const element = document.createElement(tag);
+      element.className = className;
+      element.textContent = value;
+      overlay.append(element);
+    });
+  target.append(overlay);
+}
+
+function resetTextForm() {
+  editingTextItem = null;
+  textForm.reset();
+  textForm.elements.duration_seconds.value = "12";
+  textForm.elements.shadow_box.checked = true;
+  textForm.elements.background.required = false;
+  document.querySelector("#text-form-title").textContent = "Freitext hinzufügen";
+  document.querySelector("#text-background-note").textContent = "JPG, PNG oder WebP";
+  document.querySelector("#text-save-button").textContent = "Speichern und zur Playlist hinzufügen";
+  document.querySelector("#text-cancel-edit").hidden = true;
+}
+
+function editTextItem(item) {
+  editingTextItem = item;
+  textForm.elements.content_id.value = item.id;
+  textForm.elements.name.value = item.name;
+  textForm.elements.headline.value = item.text_config?.headline || "";
+  textForm.elements.subheadline.value = item.text_config?.subheadline || "";
+  textForm.elements.body.value = item.text_config?.body || "";
+  textForm.elements.duration_seconds.value = item.duration_seconds;
+  textForm.elements.shadow_box.checked = Boolean(item.text_config?.shadow_box);
+  textForm.elements.library_media_id.value = item.media_id || "";
+  textForm.elements.background.required = false;
+  document.querySelector("#text-form-title").textContent = "Freitext bearbeiten";
+  document.querySelector("#text-background-note").textContent = "Optional: neues Bild auswählen, sonst bleibt das bisherige erhalten.";
+  document.querySelector("#text-save-button").textContent = "Änderungen speichern";
+  document.querySelector("#text-cancel-edit").hidden = false;
+  textForm.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function populateLibraryImageSelect() {
+  const select = document.querySelector("#text-library-image");
+  const selected = select.value;
+  select.replaceChildren(new Option("Kein Mediathek-Bild ausgewählt", ""));
+  libraryItems.filter(item => item.kind === "image").forEach((item) => {
+    select.append(new Option(item.name, item.id));
+  });
+  if ([...select.options].some(option => option.value === selected)) select.value = selected;
+}
+
+function renderLibrary(items) {
+  const target = document.querySelector("#media-library");
+  target.replaceChildren();
+  document.querySelector("#library-empty").hidden = items.length > 0;
+  items.forEach((item) => {
+    const card = document.createElement("article");
+    card.className = "media-card";
+    const preview = document.createElement(item.kind === "image" ? "img" : "video");
+    preview.src = item.source;
+    if (item.kind === "video") {
+      preview.muted = true;
+      preview.controls = true;
+      preview.preload = "metadata";
+    }
+    const body = document.createElement("div");
+    body.className = "media-card-body";
+    body.innerHTML = `
+      <strong></strong>
+      <span class="media-card-meta">${kindLabel(item.kind)} · ${formatBytes(item.size_bytes)}</span>
+      <div class="media-card-actions">
+        <input class="library-duration" type="number" min="1" max="86400" value="10" title="Anzeigedauer in Sekunden">
+        <button class="add-library">Zur Playlist</button>
+        <button class="danger delete-library">Löschen</button>
+      </div>`;
+    body.querySelector("strong").textContent = item.name;
+    body.querySelector(".add-library").addEventListener("click", async () => {
+      try {
+        const duration = Number(body.querySelector(".library-duration").value);
+        await api(`/api/media-library/${item.id}/playlist`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ duration_seconds: duration }),
+        });
+        notify("Medium zur Playlist hinzugefügt");
+      } catch (error) { notify(error.message, true); }
+    });
+    body.querySelector(".delete-library").addEventListener("click", async () => {
+      if (!window.confirm(`„${item.name}“ aus der Mediathek löschen?`)) return;
+      try {
+        await api(`/api/media-library/${item.id}`, { method: "DELETE" });
+        await loadLibrary();
+        notify("Medium gelöscht");
+      } catch (error) { notify(error.message, true); }
+    });
+    card.append(preview, body);
+    target.append(card);
+  });
+}
+
+async function loadLibrary() {
+  try {
+    libraryItems = await api("/api/media-library");
+    renderLibrary(libraryItems);
+    populateLibraryImageSelect();
+  } catch (error) { notify(error.message, true); }
 }
 
 async function updateItem(id, changes) {
@@ -94,6 +212,7 @@ function render(items) {
           <span>Ton</span>
         </label>
       ` : ""}
+      ${item.kind === "text" ? '<button class="secondary edit-text">Bearbeiten</button>' : ""}
       <button class="danger delete">Löschen</button>
     `;
     row.querySelector("strong").textContent = item.name;
@@ -124,6 +243,7 @@ function render(items) {
         notify("Inhalt gelöscht");
       } catch (error) { notify(error.message, true); }
     });
+    row.querySelector(".edit-text")?.addEventListener("click", () => editTextItem(item));
     row.querySelector(".up").addEventListener("click", () => move(items, index, -1));
     row.querySelector(".down").addEventListener("click", () => move(items, index, 1));
     playlist.append(row);
@@ -288,6 +408,10 @@ document.querySelectorAll(".nav-button").forEach((button) => {
     document.querySelector(`#${button.dataset.page}`).hidden = false;
     if (button.dataset.page === "system-page") {
       await openSystemPage();
+    } else if (button.dataset.page === "library-page") {
+      await loadLibrary();
+    } else if (button.dataset.page === "content-page") {
+      await load();
     }
   });
 });
@@ -303,7 +427,7 @@ document.querySelector("#login-form").addEventListener("submit", async (event) =
     });
     event.target.reset();
     showApplication(session);
-    await Promise.all([loadVersion(), load()]);
+    await Promise.all([loadVersion(), load(), loadLibrary()]);
     notify("Anmeldung erfolgreich");
   } catch (error) { notify(error.message, true); }
 });
@@ -458,6 +582,95 @@ document.querySelector("#stream-form").addEventListener("submit", async (event) 
     await load();
     notify("Livestream hinzugefügt");
   } catch (error) { notify(error.message, true); }
+});
+
+document.querySelector("#text-preview-button").addEventListener("click", () => {
+  const form = new FormData(textForm);
+  const selected = textForm.elements.background.files[0];
+  const libraryImage = libraryItems.find(item => String(item.id) === String(form.get("library_media_id")));
+  const source = selected ? URL.createObjectURL(selected) : libraryImage?.source || editingTextItem?.source;
+  if (!source) {
+    notify("Bitte zuerst ein Hintergrundbild auswählen", true);
+    return;
+  }
+  if (!form.get("headline")?.trim() && !form.get("subheadline")?.trim() && !form.get("body")?.trim()) {
+    notify("Bitte mindestens ein Textfeld ausfüllen", true);
+    if (selected) URL.revokeObjectURL(source);
+    return;
+  }
+  if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+  previewObjectUrl = selected ? source : null;
+  renderTextSlide(document.querySelector("#text-preview-stage"), source, {
+    headline: form.get("headline").trim(),
+    subheadline: form.get("subheadline").trim(),
+    body: form.get("body").trim(),
+    shadow_box: form.get("shadow_box") === "on",
+  });
+  textPreviewDialog.showModal();
+});
+
+document.querySelector("#text-preview-close").addEventListener("click", () => textPreviewDialog.close());
+textPreviewDialog.addEventListener("close", () => {
+  if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+  previewObjectUrl = null;
+});
+
+document.querySelector("#text-cancel-edit").addEventListener("click", resetTextForm);
+
+textForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = document.querySelector("#text-save-button");
+  button.disabled = true;
+  try {
+    const form = new FormData(textForm);
+    const id = form.get("content_id");
+    form.delete("content_id");
+    if (!form.get("background")?.size) form.delete("background");
+    if (!form.get("background") && !form.get("library_media_id") && !editingTextItem) {
+      throw new Error("Bitte ein Hintergrundbild hochladen oder aus der Mediathek auswählen");
+    }
+    await api(id ? `/api/content/${id}/text` : "/api/content/text", {
+      method: "POST",
+      body: form,
+    });
+    resetTextForm();
+    await load();
+    notify(id ? "Freitext aktualisiert" : "Freitext zur Playlist hinzugefügt");
+  } catch (error) { notify(error.message, true); }
+  finally { button.disabled = false; }
+});
+
+document.querySelector("#library-upload-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = event.target.querySelector("button");
+  const warning = document.querySelector("#library-upload-warning");
+  button.disabled = true;
+  warning.hidden = true;
+  try {
+    const item = await api("/api/media-library", { method: "POST", body: new FormData(event.target) });
+    event.target.reset();
+    await loadLibrary();
+    if (item.compatibility?.warnings?.length) {
+      const list = warning.querySelector("ul");
+      list.replaceChildren(...item.compatibility.warnings.map(text => {
+        const entry = document.createElement("li");
+        entry.textContent = text;
+        return entry;
+      }));
+      warning.querySelector("p").textContent = item.compatibility.recommendation;
+      warning.hidden = false;
+    }
+    notify("Medium in der Mediathek gespeichert");
+  } catch (error) { notify(error.message, true); }
+  finally { button.disabled = false; }
+});
+
+document.querySelector("#library-refresh").addEventListener("click", loadLibrary);
+textForm.elements.background.addEventListener("change", () => {
+  if (textForm.elements.background.files.length) textForm.elements.library_media_id.value = "";
+});
+textForm.elements.library_media_id.addEventListener("change", () => {
+  if (textForm.elements.library_media_id.value) textForm.elements.background.value = "";
 });
 
 document.querySelector("#refresh").addEventListener("click", load);

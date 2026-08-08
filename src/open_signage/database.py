@@ -40,25 +40,42 @@ def initialize() -> None:
         existing = connection.execute(
             "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'content'"
         ).fetchone()
+        existing_columns = (
+            {row["name"] for row in connection.execute("PRAGMA table_info(content)")}
+            if existing else set()
+        )
         if existing and (
             "'stream'" not in existing["sql"]
             or "'pdf'" not in existing["sql"]
-            or "muted" not in {row["name"] for row in connection.execute("PRAGMA table_info(content)")}
+            or "'text'" not in existing["sql"]
+            or "muted" not in existing_columns
+            or "media_id" not in existing_columns
         ):
             connection.execute("ALTER TABLE content RENAME TO content_legacy")
 
         connection.executescript(
             """
+            CREATE TABLE IF NOT EXISTS media_library (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                kind TEXT NOT NULL CHECK(kind IN ('image', 'video')),
+                source TEXT NOT NULL UNIQUE,
+                size_bytes INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE TABLE IF NOT EXISTS content (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
-                kind TEXT NOT NULL CHECK(kind IN ('image', 'video', 'pdf', 'website', 'stream')),
+                kind TEXT NOT NULL CHECK(kind IN ('image', 'video', 'pdf', 'website', 'stream', 'text')),
                 source TEXT NOT NULL,
                 duration_seconds INTEGER NOT NULL DEFAULT 10
                     CHECK(duration_seconds BETWEEN 1 AND 86400),
                 position INTEGER NOT NULL DEFAULT 0,
                 enabled INTEGER NOT NULL DEFAULT 1,
                 muted INTEGER NOT NULL DEFAULT 1,
+                text_config TEXT,
+                media_id INTEGER REFERENCES media_library(id) ON DELETE RESTRICT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -74,12 +91,15 @@ def initialize() -> None:
         if existing and connection.execute(
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'content_legacy'"
         ).fetchone():
+            muted_expression = "muted" if "muted" in existing_columns else "1"
+            text_expression = "text_config" if "text_config" in existing_columns else "NULL"
             connection.execute(
-                """
+                f"""
                 INSERT INTO content(
-                    id, name, kind, source, duration_seconds, position, enabled, muted, created_at
+                    id, name, kind, source, duration_seconds, position, enabled, muted, text_config, media_id, created_at
                 )
-                SELECT id, name, kind, source, duration_seconds, position, enabled, 1, created_at
+                SELECT id, name, kind, source, duration_seconds, position, enabled,
+                       {muted_expression}, {text_expression}, NULL, created_at
                 FROM content_legacy
                 """
             )

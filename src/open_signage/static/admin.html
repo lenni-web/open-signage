@@ -35,6 +35,7 @@
 
   <nav class="admin-nav" aria-label="Verwaltung">
     <button class="nav-button active" data-page="content-page">Inhalte</button>
+    <button class="nav-button" data-page="library-page">Mediathek</button>
     <button class="nav-button" data-page="system-page">System</button>
   </nav>
 
@@ -95,6 +96,51 @@
       </form>
     </section>
 
+    <section class="card text-card">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Gestalteter Inhalt</span>
+          <h2 id="text-form-title">Freitext hinzufügen</h2>
+        </div>
+        <button id="text-cancel-edit" class="secondary" type="button" hidden>Bearbeiten abbrechen</button>
+      </div>
+      <form id="text-form">
+        <input name="content_id" type="hidden">
+        <label>Name
+          <input name="name" maxlength="200" placeholder="Willkommenshinweis" required>
+        </label>
+        <label>Hintergrundbild
+          <input name="background" type="file" accept="image/jpeg,image/png,image/webp">
+          <small id="text-background-note">JPG, PNG oder WebP</small>
+        </label>
+        <label>Oder Bild aus der Mediathek
+          <select name="library_media_id" id="text-library-image">
+            <option value="">Kein Mediathek-Bild ausgewählt</option>
+          </select>
+        </label>
+        <label>Überschrift
+          <input name="headline" maxlength="200" placeholder="Herzlich willkommen">
+        </label>
+        <label>Unterüberschrift
+          <input name="subheadline" maxlength="300" placeholder="Schön, dass Sie da sind">
+        </label>
+        <label>Text
+          <textarea name="body" maxlength="4000" rows="5" placeholder="Weitere Informationen …"></textarea>
+        </label>
+        <label>Dauer in Sekunden
+          <input name="duration_seconds" type="number" min="1" max="86400" value="12" required>
+        </label>
+        <label class="inline-check">
+          <input name="shadow_box" type="checkbox" checked>
+          <span>Schattenbox hinter dem Text anzeigen</span>
+        </label>
+        <div class="form-actions">
+          <button id="text-preview-button" class="secondary" type="button">Vorschau</button>
+          <button id="text-save-button">Speichern und zur Playlist hinzufügen</button>
+        </div>
+      </form>
+    </section>
+
     <section class="card playlist-card">
       <div class="section-heading">
         <div>
@@ -107,6 +153,42 @@
       <div id="playlist" class="playlist"></div>
     </section>
   </main>
+  </section>
+
+  <section id="library-page" class="page" hidden>
+    <h2 class="page-title">Mediathek</h2>
+    <main>
+      <section class="card playlist-card">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Dauerhaft speichern</span>
+            <h2>Foto oder Video hochladen</h2>
+          </div>
+        </div>
+        <form id="library-upload-form">
+          <label>Datei
+            <input name="file" type="file" accept="image/*,video/mp4,video/webm" required>
+          </label>
+          <button>In die Mediathek hochladen</button>
+        </form>
+        <div id="library-upload-warning" class="compat-warning" role="alert" hidden>
+          <strong>Video möglicherweise nicht kompatibel</strong>
+          <ul></ul>
+          <p></p>
+        </div>
+      </section>
+      <section class="card playlist-card">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Gespeicherte Medien</span>
+            <h2>Fotos und Videos</h2>
+          </div>
+          <button id="library-refresh" class="secondary">Aktualisieren</button>
+        </div>
+        <p id="library-empty" class="empty" hidden>Noch keine Medien vorhanden.</p>
+        <div id="media-library" class="media-library"></div>
+      </section>
+    </main>
   </section>
 
   <section id="system-page" class="page" hidden>
@@ -202,6 +284,10 @@
     </main>
   </section>
   </div>
+  <dialog id="text-preview-dialog">
+    <div id="text-preview-stage" class="text-slide preview-slide"></div>
+    <button id="text-preview-close" class="secondary" type="button">Vorschau schließen</button>
+  </dialog>
   <div id="message" role="status" aria-live="polite"></div>
   <script src="/static/admin.js"></script>
 </body>

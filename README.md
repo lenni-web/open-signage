@@ -9,6 +9,10 @@ Chromium-Kioskfenster an.
 - Bilder und Videos hochladen
 - PDF-Dokumente hochladen und im Vollbild anzeigen
 - Webseiten als Inhalte anlegen
+- Freitext mit Hintergrundbild, Überschrift, Unterüberschrift, Text und
+  optionaler Schattenbox gestalten, vorab ansehen und später bearbeiten
+- Mediathek für dauerhaft gespeicherte Fotos und Videos, die mehrfach in die
+  Playlist oder als Freitext-Hintergrund übernommen werden können
 - Owncast-Livestreams direkt per HLS wiedergeben
 - Inhalte aktivieren, sortieren und mit einer Anzeigedauer versehen
 - Vollbild-Player mit automatischem Wechsel
@@ -154,8 +158,13 @@ Installation ist ein Neustart erforderlich:
 sudo reboot
 ```
 
-Noch geplant sind `open-signage.local` und MediaMTX für zusätzliche direkte
-SRT-Quellen.
+## Roadmap
+
+- Master-/Slave-Betrieb für mehrere Raspberry Pis: Ein Master verwaltet
+  Inhalte und Einstellungen, während verbundene Slaves den Stand automatisch
+  und identisch übernehmen.
+- `open-signage.local` als leicht erreichbarer lokaler Hostname.
+- MediaMTX für zusätzliche direkte SRT-Quellen.
 
 ## Owncast-Livestream
 

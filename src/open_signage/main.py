@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import mimetypes
+import json
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -79,10 +80,15 @@ class ContentUpdate(BaseModel):
     muted: bool | None = None
 
 
+class LibraryPlaylistCreate(BaseModel):
+    duration_seconds: int = Field(default=10, ge=1, le=86400)
+
+
 def serialize(row) -> dict:
     item = dict(row)
     item["enabled"] = bool(item["enabled"])
     item["muted"] = bool(item["muted"])
+    item["text_config"] = json.loads(item["text_config"]) if item.get("text_config") else None
     return item
 
 
@@ -93,6 +99,16 @@ def get_content_or_404(content_id: int):
         ).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Inhalt nicht gefunden")
+    return row
+
+
+def get_library_media_or_404(media_id: int):
+    with connect() as connection:
+        row = connection.execute(
+            "SELECT * FROM media_library WHERE id = ?", (media_id,)
+        ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Medium nicht gefunden")
     return row
 
 
@@ -276,6 +292,229 @@ def upload_content(
     return response
 
 
+def save_text_background(file: UploadFile) -> str:
+    media_type = file.content_type
+    if media_type not in {"image/jpeg", "image/png", "image/webp"}:
+        media_type = mimetypes.guess_type(file.filename or "")[0]
+    if media_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise HTTPException(
+            status_code=415,
+            detail="Als Freitext-Hintergrund sind JPG, PNG und WebP erlaubt.",
+        )
+    suffix = Path(file.filename or "").suffix.lower()
+    stored_name = f"{uuid.uuid4().hex}{suffix}"
+    destination = media_dir() / stored_name
+    size = 0
+    try:
+        with destination.open("wb") as output:
+            while chunk := file.file.read(1024 * 1024):
+                size += len(chunk)
+                if size > MAX_UPLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail="Datei ist zu groß")
+                output.write(chunk)
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+    finally:
+        file.file.close()
+    return f"/media/{stored_name}"
+
+
+@app.get("/api/media-library")
+def list_media_library(_: None = Depends(require_system_login)):
+    with connect() as connection:
+        rows = connection.execute(
+            "SELECT * FROM media_library ORDER BY created_at DESC, id DESC"
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+@app.post("/api/media-library", status_code=201)
+def upload_library_media(
+    file: Annotated[UploadFile, File()],
+    _: None = Depends(require_system_login),
+):
+    media_type = file.content_type
+    if media_type not in ALLOWED_MEDIA_TYPES:
+        media_type = mimetypes.guess_type(file.filename or "")[0]
+    kind = ALLOWED_MEDIA_TYPES.get(media_type or "")
+    if kind not in {"image", "video"}:
+        raise HTTPException(
+            status_code=415,
+            detail="Für die Mediathek sind JPG, PNG, WebP, GIF, MP4 und WebM erlaubt.",
+        )
+    suffix = Path(file.filename or "").suffix.lower()
+    stored_name = f"{uuid.uuid4().hex}{suffix}"
+    destination = media_dir() / stored_name
+    size = 0
+    try:
+        with destination.open("wb") as output:
+            while chunk := file.file.read(1024 * 1024):
+                size += len(chunk)
+                if size > MAX_UPLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail="Datei ist zu groß")
+                output.write(chunk)
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+    finally:
+        file.file.close()
+    compatibility = inspect_video(destination) if kind == "video" else None
+    with connect() as connection:
+        cursor = connection.execute(
+            "INSERT INTO media_library(name, kind, source, size_bytes) VALUES (?, ?, ?, ?)",
+            (Path(file.filename or stored_name).name, kind, f"/media/{stored_name}", size),
+        )
+        media_id = cursor.lastrowid
+    response = dict(get_library_media_or_404(media_id))
+    if compatibility is not None:
+        response["compatibility"] = compatibility
+    return response
+
+
+@app.post("/api/media-library/{media_id}/playlist", status_code=201)
+def add_library_media_to_playlist(
+    media_id: int,
+    payload: LibraryPlaylistCreate,
+    _: None = Depends(require_system_login),
+):
+    media = get_library_media_or_404(media_id)
+    with connect() as connection:
+        position = connection.execute(
+            "SELECT COALESCE(MAX(position), -1) + 1 FROM content"
+        ).fetchone()[0]
+        cursor = connection.execute(
+            """
+            INSERT INTO content(name, kind, source, duration_seconds, position, media_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (media["name"], media["kind"], media["source"], payload.duration_seconds, position, media_id),
+        )
+        content_id = cursor.lastrowid
+    return serialize(get_content_or_404(content_id))
+
+
+@app.delete("/api/media-library/{media_id}", status_code=204)
+def delete_library_media(media_id: int, _: None = Depends(require_system_login)):
+    media = get_library_media_or_404(media_id)
+    with connect() as connection:
+        used = connection.execute(
+            "SELECT COUNT(*) FROM content WHERE media_id = ?", (media_id,)
+        ).fetchone()[0]
+        if used:
+            raise HTTPException(
+                status_code=409,
+                detail="Das Medium wird noch in der Playlist oder einem Freitext verwendet.",
+            )
+        connection.execute("DELETE FROM media_library WHERE id = ?", (media_id,))
+    (media_dir() / Path(media["source"]).name).unlink(missing_ok=True)
+
+
+def text_configuration(headline: str, subheadline: str, body: str, shadow_box: bool) -> str:
+    if not any(value.strip() for value in (headline, subheadline, body)):
+        raise HTTPException(status_code=422, detail="Mindestens ein Textfeld muss ausgefüllt sein")
+    return json.dumps(
+        {
+            "headline": headline.strip(),
+            "subheadline": subheadline.strip(),
+            "body": body.strip(),
+            "shadow_box": shadow_box,
+        },
+        ensure_ascii=False,
+    )
+
+
+@app.post("/api/content/text", status_code=201)
+def create_text_content(
+    name: Annotated[str, Form(min_length=1, max_length=200)],
+    headline: Annotated[str, Form(max_length=200)] = "",
+    subheadline: Annotated[str, Form(max_length=300)] = "",
+    body: Annotated[str, Form(max_length=4000)] = "",
+    shadow_box: Annotated[bool, Form()] = False,
+    duration_seconds: Annotated[int, Form(ge=1, le=86400)] = 12,
+    background: Annotated[UploadFile | None, File()] = None,
+    library_media_id: Annotated[int | None, Form()] = None,
+    _: None = Depends(require_system_login),
+):
+    config = text_configuration(headline, subheadline, body, shadow_box)
+    library_media = get_library_media_or_404(library_media_id) if library_media_id else None
+    if library_media and library_media["kind"] != "image":
+        raise HTTPException(status_code=422, detail="Als Freitext-Hintergrund ist nur ein Bild möglich")
+    if background and background.filename:
+        source = save_text_background(background)
+        library_media_id = None
+    elif library_media:
+        source = library_media["source"]
+    else:
+        raise HTTPException(status_code=422, detail="Bitte ein Hintergrundbild auswählen")
+    try:
+        with connect() as connection:
+            position = connection.execute(
+                "SELECT COALESCE(MAX(position), -1) + 1 FROM content"
+            ).fetchone()[0]
+            cursor = connection.execute(
+                """
+                INSERT INTO content(name, kind, source, duration_seconds, position, text_config, media_id)
+                VALUES (?, 'text', ?, ?, ?, ?, ?)
+                """,
+                (name.strip(), source, duration_seconds, position, config, library_media_id),
+            )
+            content_id = cursor.lastrowid
+    except Exception:
+        if not library_media_id:
+            (media_dir() / Path(source).name).unlink(missing_ok=True)
+        raise
+    return serialize(get_content_or_404(content_id))
+
+
+@app.post("/api/content/{content_id}/text")
+def edit_text_content(
+    content_id: int,
+    name: Annotated[str, Form(min_length=1, max_length=200)],
+    headline: Annotated[str, Form(max_length=200)] = "",
+    subheadline: Annotated[str, Form(max_length=300)] = "",
+    body: Annotated[str, Form(max_length=4000)] = "",
+    shadow_box: Annotated[bool, Form()] = False,
+    duration_seconds: Annotated[int, Form(ge=1, le=86400)] = 12,
+    background: Annotated[UploadFile | None, File()] = None,
+    library_media_id: Annotated[int | None, Form()] = None,
+    _: None = Depends(require_system_login),
+):
+    row = get_content_or_404(content_id)
+    if row["kind"] != "text":
+        raise HTTPException(status_code=422, detail="Dieser Inhalt ist kein Freitext")
+    config = text_configuration(headline, subheadline, body, shadow_box)
+    source = row["source"]
+    selected_media = get_library_media_or_404(library_media_id) if library_media_id else None
+    if selected_media and selected_media["kind"] != "image":
+        raise HTTPException(status_code=422, detail="Als Freitext-Hintergrund ist nur ein Bild möglich")
+    new_source = save_text_background(background) if background and background.filename else None
+    if new_source:
+        source = new_source
+        library_media_id = None
+    elif selected_media:
+        source = selected_media["source"]
+    else:
+        library_media_id = row["media_id"]
+    try:
+        with connect() as connection:
+            connection.execute(
+                """
+                UPDATE content
+                SET name = ?, source = ?, duration_seconds = ?, text_config = ?, media_id = ?
+                WHERE id = ?
+                """,
+                (name.strip(), source, duration_seconds, config, library_media_id, content_id),
+            )
+    except Exception:
+        if new_source:
+            (media_dir() / Path(new_source).name).unlink(missing_ok=True)
+        raise
+    if source != row["source"] and row["media_id"] is None:
+        (media_dir() / Path(row["source"]).name).unlink(missing_ok=True)
+    return serialize(get_content_or_404(content_id))
+
+
 @app.post("/api/content/website", status_code=201)
 def create_website(payload: WebsiteCreate, _: None = Depends(require_system_login)):
     parsed = urlparse(payload.url)
@@ -359,7 +598,7 @@ def delete_content(content_id: int, _: None = Depends(require_system_login)):
     row = get_content_or_404(content_id)
     with connect() as connection:
         connection.execute("DELETE FROM content WHERE id = ?", (content_id,))
-    if row["kind"] in {"image", "video", "pdf"}:
+    if row["kind"] in {"image", "video", "pdf", "text"} and row["media_id"] is None:
         stored_name = Path(row["source"]).name
         (media_dir() / stored_name).unlink(missing_ok=True)
 

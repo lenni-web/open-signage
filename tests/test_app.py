@@ -296,6 +296,9 @@ def test_admin_contains_system_navigation_and_update_controls():
     assert 'id="login-screen"' in admin
     assert 'id="admin-app" hidden' in admin
     assert 'id="logout"' in admin
+    assert 'data-page="library-page"' in admin
+    assert 'id="media-library"' in admin
+    assert 'id="text-library-image"' in admin
     assert 'value="12"' in admin
 
 
@@ -406,3 +409,121 @@ def test_logout_revokes_management_access(tmp_path: Path, monkeypatch):
         assert client.get("/api/content").status_code == 200
         assert client.post("/api/system/logout").status_code == 204
         assert client.get("/api/content").status_code == 401
+
+
+def test_text_content_can_be_previewed_by_player_edited_and_deleted(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        created = client.post(
+            "/api/content/text",
+            data={
+                "name": "Begrüßung",
+                "headline": "Willkommen",
+                "subheadline": "Im Foyer",
+                "body": "Die Veranstaltung beginnt um 18 Uhr.",
+                "shadow_box": "true",
+                "duration_seconds": "12",
+            },
+            files={"background": ("foyer.jpg", b"image", "image/jpeg")},
+        )
+        assert created.status_code == 201
+        item = created.json()
+        assert item["kind"] == "text"
+        assert item["text_config"]["headline"] == "Willkommen"
+        assert item["text_config"]["shadow_box"] is True
+        old_background = tmp_path / "media" / Path(item["source"]).name
+        assert old_background.exists()
+        assert client.get("/api/player/content").json()[0]["id"] == item["id"]
+
+        edited = client.post(
+            f"/api/content/{item['id']}/text",
+            data={
+                "name": "Neue Begrüßung",
+                "headline": "Guten Abend",
+                "subheadline": "",
+                "body": "Beginn um 19 Uhr.",
+                "duration_seconds": "20",
+            },
+        )
+        assert edited.status_code == 200
+        assert edited.json()["text_config"]["headline"] == "Guten Abend"
+        assert edited.json()["text_config"]["shadow_box"] is False
+        assert edited.json()["source"] == item["source"]
+
+        assert client.delete(f"/api/content/{item['id']}").status_code == 204
+        assert not old_background.exists()
+
+
+def test_text_content_requires_image_and_some_text(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        wrong_image = client.post(
+            "/api/content/text",
+            data={"name": "Text", "headline": "Titel", "subheadline": "", "body": ""},
+            files={"background": ("datei.pdf", b"pdf", "application/pdf")},
+        )
+        assert wrong_image.status_code == 415
+
+        no_text = client.post(
+            "/api/content/text",
+            data={"name": "Leer", "headline": "", "subheadline": "", "body": ""},
+            files={"background": ("bild.png", b"image", "image/png")},
+        )
+        assert no_text.status_code == 422
+        assert not (tmp_path / "media").exists() or not list((tmp_path / "media").iterdir())
+
+
+def test_media_library_reuses_files_for_playlist_and_text(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        uploaded = client.post(
+            "/api/media-library",
+            files={"file": ("hintergrund.jpg", b"image", "image/jpeg")},
+        )
+        assert uploaded.status_code == 201
+        media = uploaded.json()
+        assert client.get("/api/media-library").json()[0]["id"] == media["id"]
+        stored = tmp_path / "media" / Path(media["source"]).name
+        assert stored.exists()
+
+        playlist = client.post(
+            f"/api/media-library/{media['id']}/playlist",
+            json={"duration_seconds": 15},
+        )
+        assert playlist.status_code == 201
+        playlist_item = playlist.json()
+        assert playlist_item["media_id"] == media["id"]
+
+        text = client.post(
+            "/api/content/text",
+            data={
+                "name": "Hinweis",
+                "headline": "Hallo",
+                "library_media_id": str(media["id"]),
+            },
+        )
+        assert text.status_code == 201
+        text_item = text.json()
+        assert text_item["source"] == media["source"]
+        assert text_item["media_id"] == media["id"]
+
+        blocked = client.delete(f"/api/media-library/{media['id']}")
+        assert blocked.status_code == 409
+        assert client.delete(f"/api/content/{playlist_item['id']}").status_code == 204
+        assert stored.exists()
+        assert client.delete(f"/api/content/{text_item['id']}").status_code == 204
+        assert client.delete(f"/api/media-library/{media['id']}").status_code == 204
+        assert not stored.exists()
+
+
+def test_media_library_is_protected(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        assert client.get("/api/media-library").status_code == 401
+        assert client.post(
+            "/api/media-library",
+            files={"file": ("bild.jpg", b"image", "image/jpeg")},
+        ).status_code == 401

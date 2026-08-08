@@ -7,8 +7,8 @@ let activeHls;
 let reconnectTimer;
 
 function signature(value) {
-  return JSON.stringify(value.map(({ id, source, duration_seconds, position, muted }) =>
-    [id, source, duration_seconds, position, muted]));
+  return JSON.stringify(value.map(({ id, name, kind, source, duration_seconds, position, muted, text_config }) =>
+    [id, name, kind, source, duration_seconds, position, muted, text_config]));
 }
 
 function clearStage() {
@@ -58,11 +58,26 @@ function show(item) {
     element = document.createElement("iframe");
     element.src = `${item.source}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
     element.title = item.name;
+  } else if (item.kind === "text") {
+    element = document.createElement("div");
+    element.style.backgroundImage = `url("${item.source.replaceAll('"', '%22')}")`;
+    const config = item.text_config || {};
+    const overlay = document.createElement("div");
+    overlay.className = `text-overlay${config.shadow_box ? " shadow-box" : ""}`;
+    [["h2", "text-headline", config.headline], ["h3", "text-subheadline", config.subheadline], ["p", "text-body", config.body]]
+      .forEach(([tag, className, value]) => {
+        if (!value) return;
+        const text = document.createElement(tag);
+        text.className = className;
+        text.textContent = value;
+        overlay.append(text);
+      });
+    element.append(overlay);
   } else if (item.kind === "stream") {
     showStream(item);
     return;
   }
-  element.className = "content";
+  element.className = item.kind === "text" ? "content text-slide" : "content";
   stage.append(element);
   timer = window.setTimeout(advance, item.duration_seconds * 1000);
 }

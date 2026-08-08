@@ -8,8 +8,21 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- Neue Verwaltungsseite „Mediathek“ zum dauerhaften Speichern von Fotos und
+  Videos und zum direkten Hinzufügen vorhandener Medien zur Playlist.
+- Auswahl eines bereits gespeicherten Mediathek-Bildes als Hintergrund für
+  neue und bestehende Freitext-Inhalte.
+- Neuer Playlist-Inhalt „Freitext“ mit Hintergrundbild, Überschrift,
+  Unterüberschrift, Fließtext und optionaler Schattenbox.
+- Vorschau vor dem Speichern sowie nachträgliches Bearbeiten bestehender
+  Freitext-Inhalte einschließlich optionalem Austausch des Hintergrundbilds.
+
 ### Geändert
 
+- Seitenüberschriften verwenden nun dieselbe zentrierte Inhaltsbreite wie die
+  darunterliegenden Karten.
 - Die gesamte Verwaltungsoberfläche einschließlich Inhalte-Seite und aller
   schreibenden Inhalts-APIs ist nur noch nach Anmeldung erreichbar.
 - Der Player bezieht seine aktive Playlist über einen separaten,
