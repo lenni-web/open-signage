@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .database import connect, initialize, media_dir
-from .auth import change_password, create_session, require_system_login, screen_name, set_setting, verify_password
+from .auth import change_password, create_session, destroy_session, require_system_login, screen_name, set_setting, verify_password
 from .application_update import request_update as request_application_update
 from .application_update import update_status as application_update_status
 from .media_probe import inspect_video
@@ -164,6 +164,11 @@ def system_login(payload: LoginRequest, response: Response):
     return {"authenticated": True, "screen_name": screen_name()}
 
 
+@app.post("/api/system/logout", status_code=204)
+def system_logout(request: Request, response: Response):
+    destroy_session(request, response)
+
+
 @app.patch("/api/system/settings")
 def update_system_settings(payload: ScreenSettings, _: None = Depends(require_system_login)):
     name = payload.screen_name.strip()
@@ -181,8 +186,7 @@ def update_system_password(payload: PasswordChange, response: Response, _: None 
     return {"changed": True}
 
 
-@app.get("/api/content")
-def list_content(enabled_only: bool = False):
+def content_rows(enabled_only: bool = False) -> list[dict]:
     query = "SELECT * FROM content"
     params: tuple = ()
     if enabled_only:
@@ -194,10 +198,21 @@ def list_content(enabled_only: bool = False):
     return [serialize(row) for row in rows]
 
 
+@app.get("/api/player/content")
+def player_content():
+    return content_rows(enabled_only=True)
+
+
+@app.get("/api/content")
+def list_content(_: None = Depends(require_system_login)):
+    return content_rows()
+
+
 @app.post("/api/content/upload", status_code=201)
 def upload_content(
     file: Annotated[UploadFile, File()],
     duration_seconds: Annotated[int, Form(ge=1, le=86400)] = 10,
+    _: None = Depends(require_system_login),
 ):
     media_type = file.content_type
     if media_type not in ALLOWED_MEDIA_TYPES:
@@ -262,7 +277,7 @@ def upload_content(
 
 
 @app.post("/api/content/website", status_code=201)
-def create_website(payload: WebsiteCreate):
+def create_website(payload: WebsiteCreate, _: None = Depends(require_system_login)):
     parsed = urlparse(payload.url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise HTTPException(status_code=422, detail="Ungültige HTTP(S)-Adresse")
@@ -295,7 +310,7 @@ def normalize_owncast_url(url: str) -> str:
 
 
 @app.post("/api/content/stream", status_code=201)
-def create_stream(payload: StreamCreate):
+def create_stream(payload: StreamCreate, _: None = Depends(require_system_login)):
     stream_url = normalize_owncast_url(payload.url)
     with connect() as connection:
         position = connection.execute(
@@ -321,7 +336,7 @@ def create_stream(payload: StreamCreate):
 
 
 @app.patch("/api/content/{content_id}")
-def update_content(content_id: int, payload: ContentUpdate):
+def update_content(content_id: int, payload: ContentUpdate, _: None = Depends(require_system_login)):
     get_content_or_404(content_id)
     values = payload.model_dump(exclude_none=True)
     if not values:
@@ -340,7 +355,7 @@ def update_content(content_id: int, payload: ContentUpdate):
 
 
 @app.delete("/api/content/{content_id}", status_code=204)
-def delete_content(content_id: int):
+def delete_content(content_id: int, _: None = Depends(require_system_login)):
     row = get_content_or_404(content_id)
     with connect() as connection:
         connection.execute("DELETE FROM content WHERE id = ?", (content_id,))

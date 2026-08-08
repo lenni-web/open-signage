@@ -13,20 +13,22 @@ async function api(path, options = {}) {
   const response = await fetch(path, options);
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
+    if (response.status === 401 && path !== "/api/system/login") showLogin();
     throw new Error(body.detail || `Fehler ${response.status}`);
   }
   return response.status === 204 ? null : response.json();
 }
 
-function showSystemLogin() {
-  document.querySelector("#system-login").hidden = false;
-  document.querySelector("#system-content").hidden = true;
+function showLogin() {
+  document.querySelector("#login-screen").hidden = false;
+  document.querySelector("#admin-app").hidden = true;
 }
 
-function showSystemContent(settings) {
-  document.querySelector("#system-login").hidden = true;
-  document.querySelector("#system-content").hidden = false;
+function showApplication(settings) {
+  document.querySelector("#login-screen").hidden = true;
+  document.querySelector("#admin-app").hidden = false;
   document.querySelector('#screen-settings-form [name="screen_name"]').value = settings.screen_name;
+  document.querySelector("#content-heading").textContent = `Inhalte – ${settings.screen_name}`;
 }
 
 async function loadSettings() {
@@ -37,13 +39,16 @@ async function loadSettings() {
 }
 
 async function openSystemPage() {
+  await Promise.all([loadSystemInfo(), loadUpdateStatus(), loadApplicationUpdateStatus()]);
+}
+
+async function boot() {
   try {
     const session = await api("/api/system/session");
-    showSystemContent(session);
-    await Promise.all([loadSystemInfo(), loadUpdateStatus(), loadApplicationUpdateStatus()]);
-  } catch (error) {
-    showSystemLogin();
-    if (error.message !== "Anmeldung erforderlich") notify(error.message, true);
+    showApplication(session);
+    await Promise.all([loadVersion(), load()]);
+  } catch (_) {
+    showLogin();
   }
 }
 
@@ -297,10 +302,15 @@ document.querySelector("#login-form").addEventListener("submit", async (event) =
       body: JSON.stringify({ password }),
     });
     event.target.reset();
-    showSystemContent(session);
-    await Promise.all([loadSystemInfo(), loadUpdateStatus(), loadApplicationUpdateStatus()]);
+    showApplication(session);
+    await Promise.all([loadVersion(), load()]);
     notify("Anmeldung erfolgreich");
   } catch (error) { notify(error.message, true); }
+});
+
+document.querySelector("#logout").addEventListener("click", async () => {
+  await api("/api/system/logout", { method: "POST" });
+  showLogin();
 });
 
 document.querySelector("#screen-settings-form").addEventListener("submit", async (event) => {
@@ -451,6 +461,4 @@ document.querySelector("#stream-form").addEventListener("submit", async (event) 
 });
 
 document.querySelector("#refresh").addEventListener("click", load);
-loadVersion();
-loadSettings();
-load();
+boot();

@@ -138,7 +138,7 @@ function showStream(item) {
 
 async function refreshPlaylist() {
   try {
-    const response = await fetch("/api/content?enabled_only=true", { cache: "no-store" });
+    const response = await fetch("/api/player/content", { cache: "no-store" });
     if (!response.ok) return;
     const nextItems = await response.json();
     const nextSignature = signature(nextItems);

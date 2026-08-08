@@ -8,6 +8,13 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Geändert
+
+- Die gesamte Verwaltungsoberfläche einschließlich Inhalte-Seite und aller
+  schreibenden Inhalts-APIs ist nur noch nach Anmeldung erreichbar.
+- Der Player bezieht seine aktive Playlist über einen separaten,
+  schreibgeschützten Endpunkt und benötigt weiterhin keine Anmeldung.
+
 ## [0.8.0] – 2026-08-08
 
 ### Hinzugefügt

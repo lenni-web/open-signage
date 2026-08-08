@@ -21,6 +21,10 @@ def test_health_and_website_crud(tmp_path: Path, monkeypatch):
         response = client.get("/api/health")
         assert response.status_code == 200
         assert response.json() == {"status": "ok", "version": __version__}
+        assert client.get("/api/content").status_code == 401
+        assert client.post(
+            "/api/system/login", json={"password": "open-signage"}
+        ).status_code == 200
 
         created = client.post(
             "/api/content/website",
@@ -43,13 +47,14 @@ def test_health_and_website_crud(tmp_path: Path, monkeypatch):
         assert updated.json()["duration_seconds"] == 20
         assert updated.json()["enabled"] is False
 
-        assert client.get("/api/content?enabled_only=true").json() == []
+        assert client.get("/api/player/content").json() == []
         assert client.delete(f"/api/content/{item['id']}").status_code == 204
 
 
 def test_invalid_website_is_rejected(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
     with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
         response = client.post(
             "/api/content/website",
             json={"name": "Falsch", "url": "javascript:alert(1)", "duration_seconds": 10},
@@ -60,6 +65,7 @@ def test_invalid_website_is_rejected(tmp_path: Path, monkeypatch):
 def test_owncast_stream_is_normalized_and_can_enable_sound(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
     with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
         response = client.post(
             "/api/content/stream",
             json={
@@ -184,6 +190,7 @@ def test_video_upload_returns_compatibility_result(tmp_path: Path, monkeypatch):
     )
 
     with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
         response = client.post(
             "/api/content/upload",
             data={"duration_seconds": "10"},
@@ -286,6 +293,9 @@ def test_admin_contains_system_navigation_and_update_controls():
     assert 'id="login-form"' in admin
     assert 'id="screen-settings-form"' in admin
     assert 'id="application-update"' in admin
+    assert 'id="login-screen"' in admin
+    assert 'id="admin-app" hidden' in admin
+    assert 'id="logout"' in admin
     assert 'value="12"' in admin
 
 
@@ -327,6 +337,7 @@ def test_screen_name_and_password_are_persisted_and_protected(tmp_path: Path, mo
 def test_website_default_duration_is_twelve_seconds(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
     with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
         response = client.post(
             "/api/content/website",
             json={"name": "Web", "url": "https://example.org"},
@@ -338,6 +349,7 @@ def test_website_default_duration_is_twelve_seconds(tmp_path: Path, monkeypatch)
 def test_pdf_can_be_uploaded_and_deleted(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
     with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
         uploaded = client.post(
             "/api/content/upload",
             data={"duration_seconds": "20"},
@@ -363,6 +375,7 @@ def test_pdf_can_be_uploaded_and_deleted(tmp_path: Path, monkeypatch):
 def test_invalid_pdf_is_rejected_and_removed(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
     with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
         response = client.post(
             "/api/content/upload",
             files={"file": ("falsch.pdf", b"kein pdf", "application/pdf")},
@@ -384,3 +397,12 @@ def test_application_update_request_and_api_are_protected(tmp_path: Path, monkey
         assert client.post("/api/system/application-update").status_code == 401
         client.post("/api/system/login", json={"password": "open-signage"})
         assert client.post("/api/system/application-update").status_code == 202
+
+
+def test_logout_revokes_management_access(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        assert client.get("/api/content").status_code == 200
+        assert client.post("/api/system/logout").status_code == 204
+        assert client.get("/api/content").status_code == 401

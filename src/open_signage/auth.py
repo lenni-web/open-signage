@@ -70,6 +70,11 @@ def create_session(response: Response) -> None:
     )
 
 
+def destroy_session(request: Request, response: Response) -> None:
+    _sessions.pop(request.cookies.get(SESSION_COOKIE, ""), None)
+    response.delete_cookie(SESSION_COOKIE, samesite="strict")
+
+
 def change_password(password: str, response: Response) -> None:
     set_setting("admin_password", _password_hash(password))
     _sessions.clear()

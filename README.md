@@ -24,6 +24,10 @@ Die passwortgeschützte Seite **System** zeigt Geräte-, Speicher- und
 Netzwerkinformationen des Raspberry Pi. Das initiale Passwort lautet
 `open-signage` und sollte dort direkt geändert werden. Außerdem kann ein
 Bildschirmname vergeben und ein Betriebssystemupdate gestartet werden.
+
+Die Anmeldung schützt die gesamte Verwaltungsoberfläche einschließlich der
+Inhalte-Seite. Der Vollbild-Player bleibt davon unabhängig und startet ohne
+Anmeldung.
 Im Hintergrund führt ein separater root-Dienst fest definiert Folgendes aus:
 
 ```bash

@@ -7,6 +7,20 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="admin">
+  <main id="login-screen" class="login-screen">
+    <section class="card auth-card">
+      <span class="eyebrow">Open Signage Verwaltung</span>
+      <h1>Anmelden</h1>
+      <p>Bitte gib das Verwaltungspasswort ein.</p>
+      <form id="login-form">
+        <label>Passwort
+          <input name="password" type="password" autocomplete="current-password" required autofocus>
+        </label>
+        <button>Anmelden</button>
+      </form>
+    </section>
+  </main>
+  <div id="admin-app" hidden>
   <header>
     <div>
       <span class="eyebrow">Lokaler Bildschirm</span>
@@ -15,6 +29,7 @@
     <div class="header-actions">
       <span id="app-version" class="version" title="Installierte Open-Signage-Version">v…</span>
       <a class="button secondary" href="/player" target="_blank">Player öffnen</a>
+      <button id="logout" class="secondary">Abmelden</button>
     </div>
   </header>
 
@@ -95,19 +110,7 @@
   </section>
 
   <section id="system-page" class="page" hidden>
-    <main id="system-login" class="system-grid" hidden>
-      <section class="card system-overview auth-card">
-        <span class="eyebrow">Geschützter Bereich</span>
-        <h2>System anmelden</h2>
-        <form id="login-form">
-          <label>Passwort
-            <input name="password" type="password" autocomplete="current-password" required autofocus>
-          </label>
-          <button>Anmelden</button>
-        </form>
-      </section>
-    </main>
-    <main id="system-content" class="system-grid" hidden>
+    <main id="system-content" class="system-grid">
       <section class="card system-overview">
         <span class="eyebrow">Anzeige</span>
         <h2>Bildschirm</h2>
@@ -198,6 +201,7 @@
       </section>
     </main>
   </section>
+  </div>
   <div id="message" role="status" aria-live="polite"></div>
   <script src="/static/admin.js"></script>
 </body>
