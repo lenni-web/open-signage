@@ -8,6 +8,19 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.10.0] – 2026-08-08
+
+### Hinzugefügt
+
+- Responsive Verwaltungsoberfläche für Smartphones und Tablets mit
+  einspaltigen Formularen, Mediathek-, Monitoring- und Playlist-Ansichten.
+- Smartphone-gerechte Navigation, Touch-Ziele, Dialoggrößen und Aktionsleisten
+  bis zu einer Bildschirmbreite von 320 Pixeln.
+
+### Geändert
+
+- Projektversion von `0.9.9` auf `0.10.0` erhöht.
+
 ## [0.9.9] – 2026-08-08
 
 ### Hinzugefügt

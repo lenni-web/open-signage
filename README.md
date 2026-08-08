@@ -17,6 +17,7 @@ Chromium-Kioskfenster an.
 - Mediathek für dauerhaft gespeicherte Fotos und Videos, die mehrfach in die
   Playlist oder als Freitext-Hintergrund übernommen werden können; direkte
   Bild- und Video-Uploads landen automatisch in der Mediathek
+- Responsive Verwaltungsoberfläche für Desktop, Tablet und Smartphone
 - Bildeditor mit 16:9-Zuschnitt, Drehung, Fokus, Helligkeit und Kontrast sowie
   automatisch erzeugten Full-HD- und Thumbnail-Dateien
 - Mediathek-Suche, Kategorien, Nutzungsfilter, Mehrfachauswahl, Video-
