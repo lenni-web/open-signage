@@ -5,6 +5,7 @@ let timer;
 let playlistSignature = "";
 let activeHls;
 let reconnectTimer;
+const imagePreloads = new Map();
 
 function signature(value) {
   return JSON.stringify(value.map(({ id, name, kind, source, duration_seconds, position, muted, text_config }) =>
@@ -19,6 +20,37 @@ function clearStage() {
     activeHls = null;
   }
   stage.replaceChildren();
+}
+
+function preloadImage(source, highPriority = false) {
+  if (!source) return Promise.resolve();
+  if (imagePreloads.has(source)) return imagePreloads.get(source);
+  const promise = new Promise((resolve) => {
+    const image = new Image();
+    image.decoding = "async";
+    image.fetchPriority = highPriority ? "high" : "low";
+    image.onload = () => image.decode?.().catch(() => {}).finally(resolve);
+    image.onerror = resolve;
+    image.src = source;
+  });
+  imagePreloads.set(source, promise);
+  return promise;
+}
+
+function imageSource(item) {
+  return ["image", "text"].includes(item?.kind) ? item.source : null;
+}
+
+function preloadPlaylist(playlist, firstIndex = 0) {
+  const activeSources = new Set(playlist.map(imageSource).filter(Boolean));
+  for (const source of imagePreloads.keys()) {
+    if (!activeSources.has(source)) imagePreloads.delete(source);
+  }
+  const firstPromise = preloadImage(imageSource(playlist[firstIndex]), true);
+  playlist.forEach((item, index) => {
+    if (index !== firstIndex) preloadImage(imageSource(item));
+  });
+  return firstPromise;
 }
 
 function showPlaceholder() {
@@ -42,6 +74,8 @@ function show(item) {
     element = document.createElement("img");
     element.src = item.source;
     element.alt = item.name;
+    element.fetchPriority = "high";
+    element.decoding = "async";
   } else if (item.kind === "video") {
     element = document.createElement("video");
     element.src = item.source;
@@ -63,7 +97,9 @@ function show(item) {
     element.style.backgroundImage = `url("${item.source.replaceAll('"', '%22')}")`;
     const config = item.text_config || {};
     const overlay = document.createElement("div");
-    overlay.className = `text-overlay${config.shadow_box ? " shadow-box" : ""}`;
+    const intensity = ["light", "medium", "dark"].includes(config.shadow_intensity)
+      ? config.shadow_intensity : "medium";
+    overlay.className = `text-overlay${config.shadow_box ? ` shadow-box shadow-box-${intensity}` : ""}`;
     [["h2", "text-headline", config.headline], ["h3", "text-subheadline", config.subheadline], ["p", "text-body", config.body]]
       .forEach(([tag, className, value]) => {
         if (!value) return;
@@ -163,6 +199,8 @@ async function refreshPlaylist() {
       playlistSignature = nextSignature;
       const preservedIndex = items.findIndex(item => item.id === currentId);
       currentIndex = preservedIndex >= 0 ? preservedIndex - 1 : -1;
+      const nextIndex = preservedIndex >= 0 ? preservedIndex : 0;
+      await preloadPlaylist(items, nextIndex);
       advance();
     }
   } catch (_) {

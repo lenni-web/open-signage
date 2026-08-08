@@ -301,6 +301,7 @@ def test_admin_contains_system_navigation_and_update_controls():
     assert 'data-page="library-page"' in admin
     assert 'id="media-library"' in admin
     assert 'id="text-library-image"' in admin
+    assert 'name="shadow_intensity"' in admin
     assert admin.count('class="card update-card collapsible-card"') == 2
     assert 'class="card system-overview collapsible-card"' in admin
     assert 'value="12"' in admin
@@ -374,6 +375,9 @@ def test_pdf_can_be_uploaded_and_deleted(tmp_path: Path, monkeypatch):
         stored = tmp_path / "media" / Path(item["source"]).name
         assert stored.exists()
 
+        served = client.get(item["source"])
+        assert served.headers["cache-control"] == "public, max-age=31536000, immutable"
+
         deleted = client.delete(f"/api/content/{item['id']}")
         assert deleted.status_code == 204
         assert not stored.exists()
@@ -437,6 +441,7 @@ def test_text_content_can_be_previewed_by_player_edited_and_deleted(tmp_path: Pa
                 "subheadline": "Im Foyer",
                 "body": "Die Veranstaltung beginnt um 18 Uhr.",
                 "shadow_box": "true",
+                "shadow_intensity": "dark",
                 "duration_seconds": "12",
             },
             files={"background": ("foyer.jpg", b"image", "image/jpeg")},
@@ -446,6 +451,7 @@ def test_text_content_can_be_previewed_by_player_edited_and_deleted(tmp_path: Pa
         assert item["kind"] == "text"
         assert item["text_config"]["headline"] == "Willkommen"
         assert item["text_config"]["shadow_box"] is True
+        assert item["text_config"]["shadow_intensity"] == "dark"
         old_background = tmp_path / "media" / Path(item["source"]).name
         assert old_background.exists()
         assert client.get("/api/player/content").json()[0]["id"] == item["id"]
@@ -463,6 +469,7 @@ def test_text_content_can_be_previewed_by_player_edited_and_deleted(tmp_path: Pa
         assert edited.status_code == 200
         assert edited.json()["text_config"]["headline"] == "Guten Abend"
         assert edited.json()["text_config"]["shadow_box"] is False
+        assert edited.json()["text_config"]["shadow_intensity"] == "medium"
         assert edited.json()["source"] == item["source"]
 
         assert client.delete(f"/api/content/{item['id']}").status_code == 204
@@ -487,6 +494,17 @@ def test_text_content_requires_image_and_some_text(tmp_path: Path, monkeypatch):
         )
         assert no_text.status_code == 422
         assert not (tmp_path / "media").exists() or not list((tmp_path / "media").iterdir())
+
+        invalid_intensity = client.post(
+            "/api/content/text",
+            data={
+                "name": "Schatten",
+                "headline": "Titel",
+                "shadow_intensity": "maximum",
+            },
+            files={"background": ("bild.png", b"image", "image/png")},
+        )
+        assert invalid_intensity.status_code == 422
 
 
 def test_media_library_reuses_files_for_playlist_and_text(tmp_path: Path, monkeypatch):

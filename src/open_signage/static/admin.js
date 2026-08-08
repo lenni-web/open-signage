@@ -67,7 +67,9 @@ function renderTextSlide(target, source, config) {
   target.replaceChildren();
   target.style.backgroundImage = source ? `url("${source.replaceAll('"', '%22')}")` : "none";
   const overlay = document.createElement("div");
-  overlay.className = `text-overlay${config.shadow_box ? " shadow-box" : ""}`;
+  const intensity = ["light", "medium", "dark"].includes(config.shadow_intensity)
+    ? config.shadow_intensity : "medium";
+  overlay.className = `text-overlay${config.shadow_box ? ` shadow-box shadow-box-${intensity}` : ""}`;
   [["h2", "text-headline", config.headline], ["h3", "text-subheadline", config.subheadline], ["p", "text-body", config.body]]
     .forEach(([tag, className, value]) => {
       if (!value) return;
@@ -84,6 +86,8 @@ function resetTextForm() {
   textForm.reset();
   textForm.elements.duration_seconds.value = "12";
   textForm.elements.shadow_box.checked = true;
+  textForm.elements.shadow_intensity.value = "medium";
+  document.querySelector("#shadow-intensity-label").hidden = false;
   textForm.elements.background.required = false;
   document.querySelector("#text-form-title").textContent = "Freitext hinzufügen";
   document.querySelector("#text-background-note").textContent = "JPG, PNG oder WebP";
@@ -100,6 +104,8 @@ function editTextItem(item) {
   textForm.elements.body.value = item.text_config?.body || "";
   textForm.elements.duration_seconds.value = item.duration_seconds;
   textForm.elements.shadow_box.checked = Boolean(item.text_config?.shadow_box);
+  textForm.elements.shadow_intensity.value = item.text_config?.shadow_intensity || "medium";
+  document.querySelector("#shadow-intensity-label").hidden = !textForm.elements.shadow_box.checked;
   textForm.elements.library_media_id.value = item.media_id || "";
   textForm.elements.background.required = false;
   document.querySelector("#text-form-title").textContent = "Freitext bearbeiten";
@@ -625,6 +631,7 @@ document.querySelector("#text-preview-button").addEventListener("click", () => {
     subheadline: form.get("subheadline").trim(),
     body: form.get("body").trim(),
     shadow_box: form.get("shadow_box") === "on",
+    shadow_intensity: form.get("shadow_intensity"),
   });
   textPreviewDialog.showModal();
 });
@@ -691,6 +698,9 @@ textForm.elements.background.addEventListener("change", () => {
 });
 textForm.elements.library_media_id.addEventListener("change", () => {
   if (textForm.elements.library_media_id.value) textForm.elements.background.value = "";
+});
+textForm.elements.shadow_box.addEventListener("change", () => {
+  document.querySelector("#shadow-intensity-label").hidden = !textForm.elements.shadow_box.checked;
 });
 
 document.querySelector("#refresh").addEventListener("click", load);

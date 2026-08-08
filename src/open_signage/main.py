@@ -410,15 +410,24 @@ def delete_library_media(media_id: int, _: None = Depends(require_system_login))
     (media_dir() / Path(media["source"]).name).unlink(missing_ok=True)
 
 
-def text_configuration(headline: str, subheadline: str, body: str, shadow_box: bool) -> str:
+def text_configuration(
+    headline: str,
+    subheadline: str,
+    body: str,
+    shadow_box: bool,
+    shadow_intensity: str,
+) -> str:
     if not any(value.strip() for value in (headline, subheadline, body)):
         raise HTTPException(status_code=422, detail="Mindestens ein Textfeld muss ausgefüllt sein")
+    if shadow_intensity not in {"light", "medium", "dark"}:
+        raise HTTPException(status_code=422, detail="Ungültige Schattenbox-Intensität")
     return json.dumps(
         {
             "headline": headline.strip(),
             "subheadline": subheadline.strip(),
             "body": body.strip(),
             "shadow_box": shadow_box,
+            "shadow_intensity": shadow_intensity,
         },
         ensure_ascii=False,
     )
@@ -431,12 +440,13 @@ def create_text_content(
     subheadline: Annotated[str, Form(max_length=300)] = "",
     body: Annotated[str, Form(max_length=4000)] = "",
     shadow_box: Annotated[bool, Form()] = False,
+    shadow_intensity: Annotated[str, Form()] = "medium",
     duration_seconds: Annotated[int, Form(ge=1, le=86400)] = 12,
     background: Annotated[UploadFile | None, File()] = None,
     library_media_id: Annotated[int | None, Form()] = None,
     _: None = Depends(require_system_login),
 ):
-    config = text_configuration(headline, subheadline, body, shadow_box)
+    config = text_configuration(headline, subheadline, body, shadow_box, shadow_intensity)
     library_media = get_library_media_or_404(library_media_id) if library_media_id else None
     if library_media and library_media["kind"] != "image":
         raise HTTPException(status_code=422, detail="Als Freitext-Hintergrund ist nur ein Bild möglich")
@@ -475,6 +485,7 @@ def edit_text_content(
     subheadline: Annotated[str, Form(max_length=300)] = "",
     body: Annotated[str, Form(max_length=4000)] = "",
     shadow_box: Annotated[bool, Form()] = False,
+    shadow_intensity: Annotated[str, Form()] = "medium",
     duration_seconds: Annotated[int, Form(ge=1, le=86400)] = 12,
     background: Annotated[UploadFile | None, File()] = None,
     library_media_id: Annotated[int | None, Form()] = None,
@@ -483,7 +494,7 @@ def edit_text_content(
     row = get_content_or_404(content_id)
     if row["kind"] != "text":
         raise HTTPException(status_code=422, detail="Dieser Inhalt ist kein Freitext")
-    config = text_configuration(headline, subheadline, body, shadow_box)
+    config = text_configuration(headline, subheadline, body, shadow_box, shadow_intensity)
     source = row["source"]
     selected_media = get_library_media_or_404(library_media_id) if library_media_id else None
     if selected_media and selected_media["kind"] != "image":
@@ -611,4 +622,7 @@ def serve_media(filename: str):
     path = media_dir() / safe_name
     if not path.is_file():
         raise HTTPException(status_code=404)
-    return FileResponse(path)
+    return FileResponse(
+        path,
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )

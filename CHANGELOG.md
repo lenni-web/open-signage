@@ -8,6 +8,21 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.9.2] – 2026-08-08
+
+### Hinzugefügt
+
+- Schattenboxen für Freitext-Inhalte können in den Intensitäten `Light`,
+  `Medium` und `Dark` konfiguriert werden.
+
+### Geändert
+
+- Der Player lädt das zuerst benötigte Bild mit hoher Priorität und weitere
+  Bilder sowie Freitext-Hintergründe vorausschauend im Hintergrund.
+- Medien mit UUID-Dateinamen erhalten langfristige unveränderliche
+  Browser-Cache-Header für schnellere erneute Anzeige.
+- Projektversion von `0.9.1` auf `0.9.2` erhöht.
+
 ## [0.9.1] – 2026-08-08
 
 ### Behoben
