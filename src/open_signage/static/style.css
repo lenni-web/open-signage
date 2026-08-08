@@ -283,6 +283,14 @@ button:disabled { cursor: default; opacity: .35; }
 #text-preview-dialog::backdrop { background: rgb(0 0 0 / 80%); }
 .preview-slide { width: 100%; aspect-ratio: 16 / 9; padding: 6%; }
 #text-preview-close { display: block; margin: 14px 0 0 auto; }
+.form-dialog { width: min(680px, 94vw); border: 1px solid var(--line); border-radius: 16px; padding: 24px; background: var(--panel); color: var(--text); }
+.form-dialog::backdrop { background: rgb(0 0 0 / 80%); }
+.form-dialog fieldset { border: 1px solid var(--line); border-radius: 10px; }
+.weekday-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+.weekday-grid label { display: flex; align-items: center; gap: 5px; }
+.weekday-grid input { width: auto; }
+.time-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.schedule-note { color: var(--muted); font-size: .78rem; }
 .placeholder {
   display: grid;
   place-content: center;

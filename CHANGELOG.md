@@ -8,6 +8,21 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.9.3] – 2026-08-08
+
+### Hinzugefügt
+
+- Optionale Zeitplanung je Playlist-Inhalt mit Start- und Endzeitpunkt,
+  auswählbaren Wochentagen sowie täglichen Zeitfenstern.
+- Zeitfenster über Mitternacht und komfortable Zeitplanverwaltung in der
+  Inhalte-Seite.
+
+### Geändert
+
+- Der Player berücksichtigt die lokale Raspberry-Pi-Zeit und zeigt nur
+  aktuell freigegebene Inhalte an.
+- Projektversion von `0.9.2` auf `0.9.3` erhöht.
+
 ## [0.9.2] – 2026-08-08
 
 ### Hinzugefügt

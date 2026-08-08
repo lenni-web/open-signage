@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -7,7 +8,7 @@ from fastapi.testclient import TestClient
 from open_signage.database import initialize
 from open_signage.application_update import request_update as request_application_update
 from open_signage.application_update import update_status as application_update_status
-from open_signage.main import app
+from open_signage.main import app, scheduled_now
 from open_signage.media_probe import evaluate_video_probe
 from open_signage.system_update import request_update, update_status
 from open_signage.version import __version__
@@ -559,3 +560,42 @@ def test_media_library_is_protected(tmp_path: Path, monkeypatch):
             "/api/media-library",
             files={"file": ("bild.jpg", b"image", "image/jpeg")},
         ).status_code == 401
+
+
+def test_content_schedule_controls_player_playlist(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        created = client.post(
+            "/api/content/website",
+            json={"name": "Termin", "url": "https://example.org"},
+        ).json()
+        future = client.patch(
+            f"/api/content/{created['id']}",
+            json={"schedule_start": "2099-01-01T12:00:00+00:00"},
+        )
+        assert future.status_code == 200
+        assert client.get("/api/player/content").json() == []
+
+        cleared = client.patch(
+            f"/api/content/{created['id']}", json={"clear_schedule": True}
+        )
+        assert cleared.status_code == 200
+        assert cleared.json()["schedule_start"] is None
+        assert len(client.get("/api/player/content").json()) == 1
+
+
+def test_overnight_and_weekday_schedules():
+    monday_late = datetime.fromisoformat("2026-08-10T23:30:00+02:00")
+    tuesday_early = datetime.fromisoformat("2026-08-11T01:30:00+02:00")
+    item = {
+        "schedule_start": None,
+        "schedule_end": None,
+        "schedule_weekdays": [0, 1],
+        "schedule_daily_start": "22:00",
+        "schedule_daily_end": "02:00",
+    }
+    assert scheduled_now(item, monday_late)
+    assert scheduled_now(item, tuesday_early)
+    item["schedule_weekdays"] = [2]
+    assert not scheduled_now(item, monday_late)

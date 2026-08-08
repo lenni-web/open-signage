@@ -15,6 +15,7 @@ Chromium-Kioskfenster an.
   Playlist oder als Freitext-Hintergrund übernommen werden können
 - Owncast-Livestreams direkt per HLS wiedergeben
 - Inhalte aktivieren, sortieren und mit einer Anzeigedauer versehen
+- Inhalte nach Datum, Uhrzeit und Wochentagen zeitgesteuert anzeigen
 - Vollbild-Player mit automatischem Wechsel
 - Livestream-Autoplay, Offline-Anzeige und automatische Wiederverbindung
 - lokale SQLite-Datenbank

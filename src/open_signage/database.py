@@ -76,6 +76,11 @@ def initialize() -> None:
                 muted INTEGER NOT NULL DEFAULT 1,
                 text_config TEXT,
                 media_id INTEGER REFERENCES media_library(id) ON DELETE RESTRICT,
+                schedule_start TEXT,
+                schedule_end TEXT,
+                schedule_weekdays TEXT,
+                schedule_daily_start TEXT,
+                schedule_daily_end TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -115,3 +120,13 @@ def initialize() -> None:
                 ON content(enabled, position, id)
                 """
             )
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(content)")}
+        for name, definition in {
+            "schedule_start": "TEXT",
+            "schedule_end": "TEXT",
+            "schedule_weekdays": "TEXT",
+            "schedule_daily_start": "TEXT",
+            "schedule_daily_end": "TEXT",
+        }.items():
+            if name not in columns:
+                connection.execute(f"ALTER TABLE content ADD COLUMN {name} {definition}")

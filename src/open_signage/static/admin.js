@@ -9,6 +9,7 @@ let previewObjectUrl = null;
 let libraryItems = [];
 let applicationUpdateInProgress = false;
 let applicationReloadScheduled = false;
+let schedulingItem = null;
 
 function notify(text, isError = false) {
   message.textContent = text;
@@ -61,6 +62,33 @@ async function boot() {
 
 function kindLabel(kind) {
   return { image: "Bild", video: "Video", pdf: "PDF", website: "Webseite", stream: "Livestream", text: "Freitext" }[kind] || kind;
+}
+
+function hasSchedule(item) {
+  return Boolean(item.schedule_start || item.schedule_end || item.schedule_daily_start ||
+    item.schedule_daily_end || item.schedule_weekdays?.length);
+}
+
+function localDateTimeValue(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function openSchedule(item) {
+  schedulingItem = item;
+  const form = document.querySelector("#schedule-form");
+  document.querySelector("#schedule-item-name").textContent = item.name;
+  form.elements.schedule_start.value = localDateTimeValue(item.schedule_start);
+  form.elements.schedule_end.value = localDateTimeValue(item.schedule_end);
+  form.elements.schedule_daily_start.value = item.schedule_daily_start || "";
+  form.elements.schedule_daily_end.value = item.schedule_daily_end || "";
+  form.querySelectorAll('[name="weekday"]').forEach((checkbox) => {
+    checkbox.checked = item.schedule_weekdays?.includes(Number(checkbox.value));
+  });
+  document.querySelector("#schedule-clear").disabled = !hasSchedule(item);
+  document.querySelector("#schedule-dialog").showModal();
 }
 
 function renderTextSlide(target, source, config) {
@@ -221,6 +249,7 @@ function render(items) {
         </label>
       ` : ""}
       ${item.kind === "text" ? '<button class="secondary edit-text">Bearbeiten</button>' : ""}
+      <button class="secondary schedule">${hasSchedule(item) ? "Zeitplan ✓" : "Zeitplan"}</button>
       <button class="danger delete">Löschen</button>
     `;
     row.querySelector("strong").textContent = item.name;
@@ -252,6 +281,7 @@ function render(items) {
       } catch (error) { notify(error.message, true); }
     });
     row.querySelector(".edit-text")?.addEventListener("click", () => editTextItem(item));
+    row.querySelector(".schedule").addEventListener("click", () => openSchedule(item));
     row.querySelector(".up").addEventListener("click", () => move(items, index, -1));
     row.querySelector(".down").addEventListener("click", () => move(items, index, 1));
     playlist.append(row);
@@ -704,4 +734,37 @@ textForm.elements.shadow_box.addEventListener("change", () => {
 });
 
 document.querySelector("#refresh").addEventListener("click", load);
+
+document.querySelector("#schedule-cancel").addEventListener("click", () => {
+  document.querySelector("#schedule-dialog").close();
+});
+
+document.querySelector("#schedule-clear").addEventListener("click", async () => {
+  if (!schedulingItem) return;
+  try {
+    await updateItem(schedulingItem.id, { clear_schedule: true });
+    document.querySelector("#schedule-dialog").close();
+    await load();
+    notify("Zeitplan entfernt");
+  } catch (error) { notify(error.message, true); }
+});
+
+document.querySelector("#schedule-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!schedulingItem) return;
+  const form = new FormData(event.target);
+  const payload = {
+    schedule_start: form.get("schedule_start") ? new Date(form.get("schedule_start")).toISOString() : null,
+    schedule_end: form.get("schedule_end") ? new Date(form.get("schedule_end")).toISOString() : null,
+    schedule_weekdays: form.getAll("weekday").map(Number),
+    schedule_daily_start: form.get("schedule_daily_start") || null,
+    schedule_daily_end: form.get("schedule_daily_end") || null,
+  };
+  try {
+    await updateItem(schedulingItem.id, payload);
+    document.querySelector("#schedule-dialog").close();
+    await load();
+    notify("Zeitplan gespeichert");
+  } catch (error) { notify(error.message, true); }
+});
 boot();

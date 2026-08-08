@@ -305,6 +305,43 @@
     <div id="text-preview-stage" class="text-slide preview-slide"></div>
     <button id="text-preview-close" class="secondary" type="button">Vorschau schließen</button>
   </dialog>
+  <dialog id="schedule-dialog" class="form-dialog">
+    <form id="schedule-form">
+      <h2>Zeitplan</h2>
+      <p id="schedule-item-name"></p>
+      <label>Startdatum und Uhrzeit
+        <input name="schedule_start" type="datetime-local">
+      </label>
+      <label>Enddatum und Uhrzeit
+        <input name="schedule_end" type="datetime-local">
+      </label>
+      <fieldset>
+        <legend>Wochentage (keine Auswahl = täglich)</legend>
+        <div class="weekday-grid">
+          <label><input type="checkbox" name="weekday" value="0"> Mo</label>
+          <label><input type="checkbox" name="weekday" value="1"> Di</label>
+          <label><input type="checkbox" name="weekday" value="2"> Mi</label>
+          <label><input type="checkbox" name="weekday" value="3"> Do</label>
+          <label><input type="checkbox" name="weekday" value="4"> Fr</label>
+          <label><input type="checkbox" name="weekday" value="5"> Sa</label>
+          <label><input type="checkbox" name="weekday" value="6"> So</label>
+        </div>
+      </fieldset>
+      <div class="time-grid">
+        <label>Täglich ab
+          <input name="schedule_daily_start" type="time">
+        </label>
+        <label>Täglich bis
+          <input name="schedule_daily_end" type="time">
+        </label>
+      </div>
+      <div class="form-actions">
+        <button id="schedule-clear" class="danger" type="button">Zeitplan entfernen</button>
+        <button id="schedule-cancel" class="secondary" type="button">Abbrechen</button>
+        <button>Speichern</button>
+      </div>
+    </form>
+  </dialog>
   <div id="message" role="status" aria-live="polite"></div>
   <script src="/static/admin.js"></script>
 </body>

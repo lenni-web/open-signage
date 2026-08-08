@@ -4,6 +4,7 @@ import mimetypes
 import json
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlparse
@@ -78,6 +79,12 @@ class ContentUpdate(BaseModel):
     enabled: bool | None = None
     position: int | None = Field(default=None, ge=0)
     muted: bool | None = None
+    schedule_start: str | None = Field(default=None, max_length=32)
+    schedule_end: str | None = Field(default=None, max_length=32)
+    schedule_weekdays: list[int] | None = None
+    schedule_daily_start: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    schedule_daily_end: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    clear_schedule: bool | None = None
 
 
 class LibraryPlaylistCreate(BaseModel):
@@ -89,7 +96,33 @@ def serialize(row) -> dict:
     item["enabled"] = bool(item["enabled"])
     item["muted"] = bool(item["muted"])
     item["text_config"] = json.loads(item["text_config"]) if item.get("text_config") else None
+    item["schedule_weekdays"] = (
+        json.loads(item["schedule_weekdays"]) if item.get("schedule_weekdays") else []
+    )
     return item
+
+
+def scheduled_now(item: dict, now: datetime | None = None) -> bool:
+    now = now or datetime.now().astimezone()
+    if item.get("schedule_start") and now < datetime.fromisoformat(item["schedule_start"]):
+        return False
+    if item.get("schedule_end") and now > datetime.fromisoformat(item["schedule_end"]):
+        return False
+    weekdays = item.get("schedule_weekdays") or []
+    if weekdays and now.weekday() not in weekdays:
+        return False
+    current_time = now.strftime("%H:%M")
+    daily_start = item.get("schedule_daily_start")
+    daily_end = item.get("schedule_daily_end")
+    if daily_start and daily_end:
+        if daily_start <= daily_end:
+            return daily_start <= current_time <= daily_end
+        return current_time >= daily_start or current_time <= daily_end
+    if daily_start and current_time < daily_start:
+        return False
+    if daily_end and current_time > daily_end:
+        return False
+    return True
 
 
 def get_content_or_404(content_id: int):
@@ -211,7 +244,8 @@ def content_rows(enabled_only: bool = False) -> list[dict]:
     query += " ORDER BY position, id"
     with connect() as connection:
         rows = connection.execute(query, params).fetchall()
-    return [serialize(row) for row in rows]
+    items = [serialize(row) for row in rows]
+    return [item for item in items if scheduled_now(item)] if enabled_only else items
 
 
 @app.get("/api/player/content")
@@ -589,12 +623,40 @@ def create_stream(payload: StreamCreate, _: None = Depends(require_system_login)
 def update_content(content_id: int, payload: ContentUpdate, _: None = Depends(require_system_login)):
     get_content_or_404(content_id)
     values = payload.model_dump(exclude_none=True)
+    schedule_fields = {
+        "schedule_start", "schedule_end", "schedule_weekdays",
+        "schedule_daily_start", "schedule_daily_end",
+    }
+    for field in schedule_fields & payload.model_fields_set:
+        values[field] = getattr(payload, field)
+    clear_schedule = values.pop("clear_schedule", False)
+    if clear_schedule:
+        values.update(
+            schedule_start=None,
+            schedule_end=None,
+            schedule_weekdays=None,
+            schedule_daily_start=None,
+            schedule_daily_end=None,
+        )
     if not values:
         return serialize(get_content_or_404(content_id))
     if "enabled" in values:
         values["enabled"] = int(values["enabled"])
     if "muted" in values:
         values["muted"] = int(values["muted"])
+    if "schedule_weekdays" in values:
+        weekdays = values["schedule_weekdays"]
+        if weekdays is not None and any(day < 0 or day > 6 for day in weekdays):
+            raise HTTPException(status_code=422, detail="Ungültiger Wochentag")
+        values["schedule_weekdays"] = (
+            json.dumps(sorted(set(weekdays))) if weekdays else None
+        )
+    for field in ("schedule_start", "schedule_end"):
+        if values.get(field):
+            try:
+                values[field] = datetime.fromisoformat(values[field]).astimezone().isoformat()
+            except ValueError as error:
+                raise HTTPException(status_code=422, detail="Ungültiger Zeitpunkt") from error
     assignments = ", ".join(f"{key} = ?" for key in values)
     with connect() as connection:
         connection.execute(
