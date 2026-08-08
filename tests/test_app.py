@@ -199,13 +199,41 @@ def test_video_upload_returns_compatibility_result(tmp_path: Path, monkeypatch):
         client.post("/api/system/login", json={"password": "open-signage"})
         response = client.post(
             "/api/content/upload",
-            data={"duration_seconds": "10"},
+            data={"duration_seconds": "10", "muted": "false", "play_to_end": "true"},
             files={"file": ("video.mp4", b"test", "video/mp4")},
         )
 
     assert response.status_code == 201
     assert response.json()["kind"] == "video"
+    assert response.json()["muted"] is False
+    assert response.json()["play_to_end"] is True
+    assert response.json()["media_id"] is not None
     assert response.json()["compatibility"] == compatibility
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        library = client.get("/api/media-library").json()
+    assert len(library) == 1
+    assert library[0]["id"] == response.json()["media_id"]
+    assert library[0]["name"] == "video.mp4"
+
+
+def test_direct_image_upload_is_added_to_media_library(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        response = client.post(
+            "/api/content/upload",
+            files={"file": ("foto.png", VALID_PNG, "image/png")},
+        )
+        assert response.status_code == 201
+        content = response.json()
+        library = client.get("/api/media-library").json()
+
+    assert content["kind"] == "image"
+    assert content["media_id"] == library[0]["id"]
+    assert content["source"] == library[0]["source"]
+    assert library[0]["original_source"].endswith(".png")
+    assert library[0]["thumbnail_source"].endswith("-thumb.jpg")
 
 
 def test_system_info_endpoint_has_device_and_network_sections(tmp_path: Path, monkeypatch):
@@ -668,6 +696,13 @@ def test_library_video_gets_thumbnail_and_can_be_transcoded(tmp_path: Path, monk
         )
         assert uploaded.status_code == 201
         media = uploaded.json()
+        playlist = client.post(
+            f"/api/media-library/{media['id']}/playlist",
+            json={"duration_seconds": 12, "muted": False, "play_to_end": True},
+        )
+        assert playlist.status_code == 201
+        assert playlist.json()["muted"] is False
+        assert playlist.json()["play_to_end"] is True
         assert media["thumbnail_source"].endswith("-video-thumb.jpg")
         assert media["metadata"]["width"] == 320
         converted = client.post(f"/api/media-library/{media['id']}/transcode")

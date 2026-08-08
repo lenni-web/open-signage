@@ -222,6 +222,13 @@ function renderLibrary(items) {
       <span class="media-card-meta">${kindLabel(item.kind)} · ${formatBytes(item.size_bytes)}${item.width ? ` · ${item.width}×${item.height}` : ""}${item.metadata?.duration_seconds ? ` · ${item.metadata.duration_seconds}s` : ""} · ${item.usage_count || 0}× verwendet</span>
       <div class="media-card-actions">
         <input class="library-duration" type="number" min="1" max="86400" value="10" title="Anzeigedauer in Sekunden">
+        ${item.kind === "video" ? `
+          <select class="library-muted" aria-label="Videoton">
+            <option value="true">Ohne Ton</option>
+            <option value="false">Mit Ton</option>
+          </select>
+          <label class="inline-check"><input class="library-play-to-end" type="checkbox"><span>Bis Ende</span></label>
+        ` : ""}
         <button class="add-library">Zur Playlist</button>
         ${item.kind === "image" ? '<button class="secondary edit-library-image">Bearbeiten</button>' : ""}
         ${item.kind === "video" ? '<button class="secondary transcode-library-video">In MP4 konvertieren</button>' : ""}
@@ -236,7 +243,11 @@ function renderLibrary(items) {
         await api(`/api/media-library/${item.id}/playlist`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ duration_seconds: duration }),
+          body: JSON.stringify({
+            duration_seconds: duration,
+            muted: item.kind === "video" ? body.querySelector(".library-muted").value === "true" : true,
+            play_to_end: item.kind === "video" ? body.querySelector(".library-play-to-end").checked : false,
+          }),
         });
         notify("Medium zur Playlist hinzugefügt");
       } catch (error) { notify(error.message, true); }
@@ -338,10 +349,16 @@ function render(items) {
         <input type="checkbox" ${item.enabled ? "checked" : ""}>
         <span>Aktiv</span>
       </label>
-      ${item.kind === "stream" ? `
+      ${["stream", "video"].includes(item.kind) ? `
         <label class="toggle sound-toggle">
           <input type="checkbox" ${item.muted ? "" : "checked"}>
           <span>Ton</span>
+        </label>
+      ` : ""}
+      ${item.kind === "video" ? `
+        <label class="toggle end-toggle">
+          <input type="checkbox" ${item.play_to_end ? "checked" : ""}>
+          <span>Bis Ende</span>
         </label>
       ` : ""}
       ${item.kind === "text" ? '<button class="secondary edit-text">Bearbeiten</button>' : ""}
@@ -366,6 +383,12 @@ function render(items) {
       try {
         await updateItem(item.id, { muted: !event.target.checked });
         notify("Toneinstellung gespeichert");
+      } catch (error) { notify(error.message, true); }
+    });
+    row.querySelector(".end-toggle input")?.addEventListener("change", async (event) => {
+      try {
+        await updateItem(item.id, { play_to_end: event.target.checked });
+        notify("Abspielverhalten gespeichert");
       } catch (error) { notify(error.message, true); }
     });
     row.querySelector(".delete").addEventListener("click", async () => {
@@ -905,7 +928,12 @@ document.querySelector("#library-bulk-add").addEventListener("click", async () =
   try {
     await api("/api/media-library/bulk-playlist", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ media_ids: [...selectedMediaIds], duration_seconds: Number(document.querySelector("#library-bulk-duration").value) }),
+      body: JSON.stringify({
+        media_ids: [...selectedMediaIds],
+        duration_seconds: Number(document.querySelector("#library-bulk-duration").value),
+        muted: document.querySelector("#library-bulk-muted").value === "true",
+        play_to_end: document.querySelector("#library-bulk-play-to-end").checked,
+      }),
     });
     selectedMediaIds.clear();
     await Promise.all([loadLibrary(), load()]);

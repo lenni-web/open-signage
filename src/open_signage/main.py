@@ -82,6 +82,7 @@ class ContentUpdate(BaseModel):
     enabled: bool | None = None
     position: int | None = Field(default=None, ge=0)
     muted: bool | None = None
+    play_to_end: bool | None = None
     schedule_start: str | None = Field(default=None, max_length=32)
     schedule_end: str | None = Field(default=None, max_length=32)
     schedule_weekdays: list[int] | None = None
@@ -92,6 +93,8 @@ class ContentUpdate(BaseModel):
 
 class LibraryPlaylistCreate(BaseModel):
     duration_seconds: int = Field(default=10, ge=1, le=86400)
+    muted: bool = True
+    play_to_end: bool = False
 
 
 class PlaylistCreate(BaseModel):
@@ -115,6 +118,8 @@ class MediaLibraryUpdate(BaseModel):
 class MediaBulkPlaylistCreate(BaseModel):
     media_ids: list[int] = Field(min_length=1, max_length=500)
     duration_seconds: int = Field(default=10, ge=1, le=86400)
+    muted: bool = True
+    play_to_end: bool = False
 
 
 class PlayerHeartbeat(BaseModel):
@@ -136,6 +141,7 @@ def serialize(row) -> dict:
     item = dict(row)
     item["enabled"] = bool(item["enabled"])
     item["muted"] = bool(item["muted"])
+    item["play_to_end"] = bool(item["play_to_end"])
     item["text_config"] = json.loads(item["text_config"]) if item.get("text_config") else None
     item["schedule_weekdays"] = (
         json.loads(item["schedule_weekdays"]) if item.get("schedule_weekdays") else []
@@ -416,6 +422,8 @@ def list_content(_: None = Depends(require_system_login)):
 def upload_content(
     file: Annotated[UploadFile, File()],
     duration_seconds: Annotated[int, Form(ge=1, le=86400)] = 10,
+    muted: Annotated[bool, Form()] = True,
+    play_to_end: Annotated[bool, Form()] = False,
     _: None = Depends(require_system_login),
 ):
     media_type = file.content_type
@@ -455,25 +463,73 @@ def upload_content(
                 )
 
     compatibility = inspect_video(destination) if kind == "video" else None
+    source = f"/media/{stored_name}"
+    original_source = None
+    thumbnail_source = None
+    metadata = {}
+    if kind == "image":
+        try:
+            processed = optimize_image(destination, media_dir())
+        except Exception as error:
+            destination.unlink(missing_ok=True)
+            raise HTTPException(status_code=415, detail="Bild konnte nicht verarbeitet werden") from error
+        source = processed["source"]
+        original_source = f"/media/{stored_name}"
+        thumbnail_source = processed["thumbnail_source"]
+        metadata = {"width": processed["width"], "height": processed["height"]}
+    elif kind == "video":
+        try:
+            metadata = video_metadata(destination)
+            thumbnail_source = video_thumbnail(destination, media_dir())
+        except Exception:
+            # Die bereits bestehende Kompatibilitätsprüfung liefert dem Nutzer
+            # die konkrete Warnung; der Upload selbst bleibt weiterhin möglich.
+            metadata = {}
+            thumbnail_source = None
 
     playlist_id = active_playlist_id()
     with connect() as connection:
+        media_id = None
+        if kind in {"image", "video"}:
+            media_cursor = connection.execute(
+                """INSERT INTO media_library(
+                    name, kind, source, size_bytes, original_source, thumbnail_source,
+                    width, height, metadata_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    Path(file.filename or stored_name).name,
+                    kind,
+                    source,
+                    size,
+                    original_source,
+                    thumbnail_source,
+                    metadata.get("width"),
+                    metadata.get("height"),
+                    json.dumps(metadata),
+                ),
+            )
+            media_id = media_cursor.lastrowid
         position = connection.execute(
             "SELECT COALESCE(MAX(position), -1) + 1 FROM content WHERE playlist_id = ?",
             (playlist_id,),
         ).fetchone()[0]
         cursor = connection.execute(
             """
-            INSERT INTO content(name, kind, source, duration_seconds, position, playlist_id)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO content(
+                name, kind, source, duration_seconds, position, playlist_id,
+                muted, play_to_end, media_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 Path(file.filename or stored_name).name,
                 kind,
-                f"/media/{stored_name}",
+                source,
                 duration_seconds,
                 position,
                 playlist_id,
+                int(muted),
+                int(play_to_end),
+                media_id,
             ),
         )
         content_id = cursor.lastrowid
@@ -631,9 +687,9 @@ def add_media_bulk_to_playlist(
                 (playlist_id,),
             ).fetchone()[0]
             cursor = connection.execute(
-                """INSERT INTO content(name, kind, source, duration_seconds, position, media_id, playlist_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (media["name"], media["kind"], media["source"], payload.duration_seconds, position, media_id, playlist_id),
+                """INSERT INTO content(name, kind, source, duration_seconds, position, media_id, playlist_id, muted, play_to_end)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (media["name"], media["kind"], media["source"], payload.duration_seconds, position, media_id, playlist_id, int(payload.muted), int(payload.play_to_end)),
             )
             created.append(cursor.lastrowid)
     return {"created_ids": created}
@@ -713,10 +769,10 @@ def add_library_media_to_playlist(
         ).fetchone()[0]
         cursor = connection.execute(
             """
-            INSERT INTO content(name, kind, source, duration_seconds, position, media_id, playlist_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO content(name, kind, source, duration_seconds, position, media_id, playlist_id, muted, play_to_end)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (media["name"], media["kind"], media["source"], payload.duration_seconds, position, media_id, playlist_id),
+            (media["name"], media["kind"], media["source"], payload.duration_seconds, position, media_id, playlist_id, int(payload.muted), int(payload.play_to_end)),
         )
         content_id = cursor.lastrowid
     return serialize(get_content_or_404(content_id))
@@ -1033,6 +1089,8 @@ def update_content(content_id: int, payload: ContentUpdate, _: None = Depends(re
         values["enabled"] = int(values["enabled"])
     if "muted" in values:
         values["muted"] = int(values["muted"])
+    if "play_to_end" in values:
+        values["play_to_end"] = int(values["play_to_end"])
     if "schedule_weekdays" in values:
         weekdays = values["schedule_weekdays"]
         if weekdays is not None and any(day < 0 or day > 6 for day in weekdays):

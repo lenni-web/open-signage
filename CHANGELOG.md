@@ -8,6 +8,21 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.9.9] – 2026-08-08
+
+### Hinzugefügt
+
+- Bilder und Videos aus dem direkten Inhalts-Upload werden automatisch in die
+  Mediathek übernommen und mit ihrem Playlist-Eintrag verknüpft.
+- Hochgeladene Videos können wahlweise mit oder ohne Ton wiedergegeben werden.
+- Videos lassen sich unabhängig von der eingestellten Anzeigedauer vollständig
+  bis zum Ende abspielen. Die Optionen stehen beim Upload, in der Mediathek und
+  direkt an bestehenden Playlist-Einträgen zur Verfügung.
+
+### Geändert
+
+- Projektversion von `0.9.8` auf `0.9.9` erhöht.
+
 ## [0.9.8] – 2026-08-08
 
 ### Hinzugefügt

@@ -6,7 +6,8 @@ Chromium-Kioskfenster an.
 
 ## Aktueller MVP
 
-- Bilder und Videos hochladen
+- Bilder und Videos hochladen; Videos wahlweise mit Ton und bis zum Dateiende
+  wiedergeben
 - PDF-Dokumente hochladen und im Vollbild anzeigen
 - Webseiten als Inhalte anlegen
 - Freitext mit Hintergrundbild, Überschrift, Unterüberschrift, Text und
@@ -14,7 +15,8 @@ Chromium-Kioskfenster an.
   inklusive Position, Farben, Schriften, Bildfokus, Abdunklung, Logo und
   wiederverwendbaren Designvorlagen
 - Mediathek für dauerhaft gespeicherte Fotos und Videos, die mehrfach in die
-  Playlist oder als Freitext-Hintergrund übernommen werden können
+  Playlist oder als Freitext-Hintergrund übernommen werden können; direkte
+  Bild- und Video-Uploads landen automatisch in der Mediathek
 - Bildeditor mit 16:9-Zuschnitt, Drehung, Fokus, Helligkeit und Kontrast sowie
   automatisch erzeugten Full-HD- und Thumbnail-Dateien
 - Mediathek-Suche, Kategorien, Nutzungsfilter, Mehrfachauswahl, Video-

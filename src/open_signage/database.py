@@ -89,6 +89,7 @@ def initialize() -> None:
                 position INTEGER NOT NULL DEFAULT 0,
                 enabled INTEGER NOT NULL DEFAULT 1,
                 muted INTEGER NOT NULL DEFAULT 1,
+                play_to_end INTEGER NOT NULL DEFAULT 0,
                 text_config TEXT,
                 media_id INTEGER REFERENCES media_library(id) ON DELETE RESTRICT,
                 schedule_start TEXT,
@@ -160,6 +161,7 @@ def initialize() -> None:
             "schedule_daily_start": "TEXT",
             "schedule_daily_end": "TEXT",
             "playlist_id": "INTEGER NOT NULL DEFAULT 1",
+            "play_to_end": "INTEGER NOT NULL DEFAULT 0",
         }.items():
             if name not in columns:
                 connection.execute(f"ALTER TABLE content ADD COLUMN {name} {definition}")

@@ -22,8 +22,8 @@ function sendHeartbeat(state = playerState, error = playerError) {
 }
 
 function signature(value) {
-  return JSON.stringify(value.map(({ id, name, kind, source, duration_seconds, position, muted, text_config }) =>
-    [id, name, kind, source, duration_seconds, position, muted, text_config]));
+  return JSON.stringify(value.map(({ id, name, kind, source, duration_seconds, position, muted, play_to_end, text_config }) =>
+    [id, name, kind, source, duration_seconds, position, muted, play_to_end, text_config]));
 }
 
 function clearStage() {
@@ -99,9 +99,13 @@ function show(item) {
     element = document.createElement("video");
     element.src = item.source;
     element.autoplay = true;
-    element.muted = true;
+    element.muted = item.muted;
     element.playsInline = true;
     element.addEventListener("ended", advance, { once: true });
+    element.addEventListener("error", () => {
+      sendHeartbeat("error", "Video konnte nicht abgespielt werden.");
+      advance();
+    }, { once: true });
   } else if (item.kind === "website") {
     element = document.createElement("iframe");
     element.src = item.source;
@@ -151,7 +155,9 @@ function show(item) {
   }
   element.className = item.kind === "text" ? `content text-slide ${element.dataset.slideClasses}` : "content";
   stage.append(element);
-  timer = window.setTimeout(advance, item.duration_seconds * 1000);
+  if (!(item.kind === "video" && item.play_to_end)) {
+    timer = window.setTimeout(advance, item.duration_seconds * 1000);
+  }
 }
 
 function showStream(item) {

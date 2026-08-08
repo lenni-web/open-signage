@@ -64,6 +64,13 @@
         <label>Dauer in Sekunden
           <input name="duration_seconds" type="number" min="1" max="86400" value="10" required>
         </label>
+        <label>Videoton
+          <select name="muted"><option value="true">Ohne Ton</option><option value="false">Mit Ton</option></select>
+        </label>
+        <label class="inline-check">
+          <input name="play_to_end" type="checkbox">
+          <span>Video vollständig bis zum Ende abspielen</span>
+        </label>
         <button>Hochladen</button>
       </form>
       <div id="upload-warning" class="compat-warning" role="alert" hidden>
@@ -259,6 +266,8 @@
         <div class="bulk-actions">
           <span id="library-selection-count">0 ausgewählt</span>
           <input id="library-bulk-duration" type="number" min="1" max="86400" value="10" title="Dauer">
+          <select id="library-bulk-muted" title="Videoton"><option value="true">Videos ohne Ton</option><option value="false">Videos mit Ton</option></select>
+          <label class="inline-check"><input id="library-bulk-play-to-end" type="checkbox"><span>Videos bis Ende</span></label>
           <button id="library-bulk-add" disabled>Auswahl zur Playlist</button>
         </div>
         <p id="library-empty" class="empty" hidden>Noch keine Medien vorhanden.</p>
