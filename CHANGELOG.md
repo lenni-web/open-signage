@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.9.0] – 2026-08-08
+
 ### Hinzugefügt
 
 - Neue Verwaltungsseite „Mediathek“ zum dauerhaften Speichern von Fotos und
@@ -27,6 +29,7 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
   schreibenden Inhalts-APIs ist nur noch nach Anmeldung erreichbar.
 - Der Player bezieht seine aktive Playlist über einen separaten,
   schreibgeschützten Endpunkt und benötigt weiterhin keine Anmeldung.
+- Projektversion von `0.8.0` auf `0.9.0` erhöht.
 
 ## [0.8.0] – 2026-08-08
 
