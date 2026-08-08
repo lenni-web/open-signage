@@ -8,6 +8,23 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.9.6] – 2026-08-08
+
+### Hinzugefügt
+
+- Verlustarme Bildbearbeitung in der Mediathek mit 90°-Drehungen,
+  16:9-Zuschnitt, Fokuspunkt, Helligkeit und Kontrast.
+- Automatische Erzeugung einer auf Full HD begrenzten Player-Datei und eines
+  kleinen Vorschaubildes über FFmpeg.
+- Unveränderte Aufbewahrung des Originals als Ausgangspunkt für spätere
+  Bearbeitungen ohne kumulativen Qualitätsverlust.
+
+### Geändert
+
+- Bereits in Playlists oder Freitext verwendete Mediathek-Bilder werden nach
+  einer Bearbeitung automatisch auf die neue optimierte Datei umgestellt.
+- Projektversion von `0.9.5` auf `0.9.6` erhöht.
+
 ## [0.9.5] – 2026-08-08
 
 ### Hinzugefügt

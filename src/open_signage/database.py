@@ -70,6 +70,10 @@ def initialize() -> None:
                 kind TEXT NOT NULL CHECK(kind IN ('image', 'video')),
                 source TEXT NOT NULL UNIQUE,
                 size_bytes INTEGER NOT NULL DEFAULT 0,
+                original_source TEXT,
+                thumbnail_source TEXT,
+                width INTEGER,
+                height INTEGER,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -141,3 +145,10 @@ def initialize() -> None:
         }.items():
             if name not in columns:
                 connection.execute(f"ALTER TABLE content ADD COLUMN {name} {definition}")
+        media_columns = {row["name"] for row in connection.execute("PRAGMA table_info(media_library)")}
+        for name, definition in {
+            "original_source": "TEXT", "thumbnail_source": "TEXT",
+            "width": "INTEGER", "height": "INTEGER",
+        }.items():
+            if name not in media_columns:
+                connection.execute(f"ALTER TABLE media_library ADD COLUMN {name} {definition}")

@@ -1,4 +1,5 @@
 import sqlite3
+import base64
 from datetime import datetime
 from pathlib import Path
 
@@ -14,6 +15,9 @@ from open_signage.system_update import request_update, update_status
 from open_signage.version import __version__
 
 PROJECT_ROOT = Path(__file__).parents[1]
+VALID_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
 
 
 def test_health_and_website_crud(tmp_path: Path, monkeypatch):
@@ -537,7 +541,7 @@ def test_media_library_reuses_files_for_playlist_and_text(tmp_path: Path, monkey
         client.post("/api/system/login", json={"password": "open-signage"})
         uploaded = client.post(
             "/api/media-library",
-            files={"file": ("hintergrund.jpg", b"image", "image/jpeg")},
+            files={"file": ("hintergrund.png", VALID_PNG, "image/png")},
         )
         assert uploaded.status_code == 201
         media = uploaded.json()
@@ -583,6 +587,37 @@ def test_media_library_is_protected(tmp_path: Path, monkeypatch):
             "/api/media-library",
             files={"file": ("bild.jpg", b"image", "image/jpeg")},
         ).status_code == 401
+
+
+def test_library_image_is_optimized_and_can_be_edited(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        uploaded = client.post(
+            "/api/media-library",
+            files={"file": ("foto.png", VALID_PNG, "image/png")},
+        )
+        assert uploaded.status_code == 201
+        media = uploaded.json()
+        assert media["original_source"].endswith(".png")
+        assert media["source"].endswith("-display.jpg")
+        assert media["thumbnail_source"].endswith("-thumb.jpg")
+        original = tmp_path / "media" / Path(media["original_source"]).name
+        old_display = tmp_path / "media" / Path(media["source"]).name
+        assert original.exists() and old_display.exists()
+
+        edited = client.post(
+            f"/api/media-library/{media['id']}/edit-image",
+            json={
+                "rotate": 90, "crop_16_9": True, "focus_x": 25, "focus_y": 75,
+                "brightness": 1.1, "contrast": 1.2,
+            },
+        )
+        assert edited.status_code == 200
+        result = edited.json()
+        assert result["source"] != media["source"]
+        assert original.exists()
+        assert not old_display.exists()
 
 
 def test_content_schedule_controls_player_playlist(tmp_path: Path, monkeypatch):

@@ -15,6 +15,8 @@ Chromium-Kioskfenster an.
   wiederverwendbaren Designvorlagen
 - Mediathek für dauerhaft gespeicherte Fotos und Videos, die mehrfach in die
   Playlist oder als Freitext-Hintergrund übernommen werden können
+- Bildeditor mit 16:9-Zuschnitt, Drehung, Fokus, Helligkeit und Kontrast sowie
+  automatisch erzeugten Full-HD- und Thumbnail-Dateien
 - Owncast-Livestreams direkt per HLS wiedergeben
 - Inhalte aktivieren, sortieren und mit einer Anzeigedauer versehen
 - Inhalte nach Datum, Uhrzeit und Wochentagen zeitgesteuert anzeigen

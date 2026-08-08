@@ -20,6 +20,7 @@ from .auth import change_password, create_session, destroy_session, require_syst
 from .application_update import request_update as request_application_update
 from .application_update import update_status as application_update_status
 from .media_probe import inspect_video
+from .image_processing import edit_image, optimize_image
 from .system_info import collect_system_info
 from .system_update import request_update, update_status
 from .version import __version__
@@ -94,6 +95,15 @@ class LibraryPlaylistCreate(BaseModel):
 
 class PlaylistCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
+
+
+class ImageEdit(BaseModel):
+    rotate: int = Field(default=0)
+    crop_16_9: bool = False
+    focus_x: int = Field(default=50, ge=0, le=100)
+    focus_y: int = Field(default=50, ge=0, le=100)
+    brightness: float = Field(default=1.0, ge=0.5, le=1.5)
+    contrast: float = Field(default=1.0, ge=0.5, le=1.5)
 
 
 def active_playlist_id() -> int:
@@ -466,16 +476,66 @@ def upload_library_media(
     finally:
         file.file.close()
     compatibility = inspect_video(destination) if kind == "video" else None
+    processed = None
+    if kind == "image":
+        try:
+            processed = optimize_image(destination, media_dir())
+        except Exception as error:
+            destination.unlink(missing_ok=True)
+            raise HTTPException(status_code=415, detail="Bild konnte nicht verarbeitet werden") from error
+    source = processed["source"] if processed else f"/media/{stored_name}"
     with connect() as connection:
         cursor = connection.execute(
-            "INSERT INTO media_library(name, kind, source, size_bytes) VALUES (?, ?, ?, ?)",
-            (Path(file.filename or stored_name).name, kind, f"/media/{stored_name}", size),
+            """INSERT INTO media_library(
+                name, kind, source, size_bytes, original_source, thumbnail_source, width, height
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                Path(file.filename or stored_name).name, kind, source, size,
+                f"/media/{stored_name}" if processed else None,
+                processed["thumbnail_source"] if processed else None,
+                processed["width"] if processed else None,
+                processed["height"] if processed else None,
+            ),
         )
         media_id = cursor.lastrowid
     response = dict(get_library_media_or_404(media_id))
     if compatibility is not None:
         response["compatibility"] = compatibility
     return response
+
+
+@app.post("/api/media-library/{media_id}/edit-image")
+def process_library_image(
+    media_id: int,
+    payload: ImageEdit,
+    _: None = Depends(require_system_login),
+):
+    media = get_library_media_or_404(media_id)
+    if media["kind"] != "image":
+        raise HTTPException(status_code=422, detail="Nur Bilder können bearbeitet werden")
+    if payload.rotate not in {0, 90, 180, 270}:
+        raise HTTPException(status_code=422, detail="Ungültige Drehung")
+    original_source = media["original_source"] or media["source"]
+    original = media_dir() / Path(original_source).name
+    try:
+        processed = edit_image(original, media_dir(), **payload.model_dump())
+    except Exception as error:
+        raise HTTPException(status_code=500, detail="Bildbearbeitung fehlgeschlagen") from error
+    old_files = [media["source"], media["thumbnail_source"]]
+    with connect() as connection:
+        connection.execute(
+            """UPDATE media_library
+               SET source = ?, thumbnail_source = ?, width = ?, height = ? WHERE id = ?""",
+            (processed["source"], processed["thumbnail_source"], processed["width"], processed["height"], media_id),
+        )
+        connection.execute(
+            "UPDATE content SET source = ? WHERE media_id = ?",
+            (processed["source"], media_id),
+        )
+    for old in old_files:
+        if old and old != original_source:
+            (media_dir() / Path(old).name).unlink(missing_ok=True)
+    return dict(get_library_media_or_404(media_id))
 
 
 @app.post("/api/media-library/{media_id}/playlist", status_code=201)
@@ -515,7 +575,9 @@ def delete_library_media(media_id: int, _: None = Depends(require_system_login))
                 detail="Das Medium wird noch in der Playlist oder einem Freitext verwendet.",
             )
         connection.execute("DELETE FROM media_library WHERE id = ?", (media_id,))
-    (media_dir() / Path(media["source"]).name).unlink(missing_ok=True)
+    for source in {media["source"], media["original_source"], media["thumbnail_source"]}:
+        if source:
+            (media_dir() / Path(source).name).unlink(missing_ok=True)
 
 
 def text_configuration(

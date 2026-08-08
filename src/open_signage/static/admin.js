@@ -11,6 +11,7 @@ let applicationUpdateInProgress = false;
 let applicationReloadScheduled = false;
 let schedulingItem = null;
 let playlists = [];
+let editingLibraryImage = null;
 
 function notify(text, isError = false) {
   message.textContent = text;
@@ -197,7 +198,7 @@ function renderLibrary(items) {
     const card = document.createElement("article");
     card.className = "media-card";
     const preview = document.createElement(item.kind === "image" ? "img" : "video");
-    preview.src = item.source;
+    preview.src = item.thumbnail_source || item.source;
     if (item.kind === "video") {
       preview.muted = true;
       preview.controls = true;
@@ -211,6 +212,7 @@ function renderLibrary(items) {
       <div class="media-card-actions">
         <input class="library-duration" type="number" min="1" max="86400" value="10" title="Anzeigedauer in Sekunden">
         <button class="add-library">Zur Playlist</button>
+        ${item.kind === "image" ? '<button class="secondary edit-library-image">Bearbeiten</button>' : ""}
         <button class="danger delete-library">Löschen</button>
       </div>`;
     body.querySelector("strong").textContent = item.name;
@@ -232,6 +234,13 @@ function renderLibrary(items) {
         await loadLibrary();
         notify("Medium gelöscht");
       } catch (error) { notify(error.message, true); }
+    });
+    body.querySelector(".edit-library-image")?.addEventListener("click", () => {
+      editingLibraryImage = item;
+      const form = document.querySelector("#image-editor-form");
+      form.reset();
+      document.querySelector("#image-editor-preview").src = item.source;
+      document.querySelector("#image-editor-dialog").showModal();
     });
     card.append(preview, body);
     target.append(card);
@@ -806,6 +815,26 @@ document.querySelector("#library-upload-form").addEventListener("submit", async 
 });
 
 document.querySelector("#library-refresh").addEventListener("click", loadLibrary);
+document.querySelector("#image-editor-cancel").addEventListener("click", () => document.querySelector("#image-editor-dialog").close());
+document.querySelector("#image-editor-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!editingLibraryImage) return;
+  const form = new FormData(event.target);
+  try {
+    await api(`/api/media-library/${editingLibraryImage.id}/edit-image`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rotate: Number(form.get("rotate")), crop_16_9: form.get("crop_16_9") === "on",
+        brightness: Number(form.get("brightness")), contrast: Number(form.get("contrast")),
+        focus_x: Number(form.get("focus_x")), focus_y: Number(form.get("focus_y")),
+      }),
+    });
+    document.querySelector("#image-editor-dialog").close();
+    await Promise.all([loadLibrary(), load()]);
+    notify("Bild optimiert und gespeichert");
+  } catch (error) { notify(error.message, true); }
+});
 textForm.elements.background.addEventListener("change", () => {
   if (textForm.elements.background.files.length) textForm.elements.library_media_id.value = "";
 });

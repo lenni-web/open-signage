@@ -400,6 +400,31 @@
       </div>
     </form>
   </dialog>
+  <dialog id="image-editor-dialog" class="form-dialog">
+    <form id="image-editor-form">
+      <h2>Bild bearbeiten</h2>
+      <img id="image-editor-preview" class="editor-preview" alt="Bildvorschau">
+      <div class="style-grid">
+        <label>Drehung
+          <select name="rotate"><option value="0">Keine</option><option value="90">90° rechts</option><option value="180">180°</option><option value="270">90° links</option></select>
+        </label>
+        <label class="inline-check"><input name="crop_16_9" type="checkbox"><span>Auf 16:9 zuschneiden</span></label>
+        <label>Helligkeit
+          <input name="brightness" type="range" min="0.5" max="1.5" step="0.05" value="1">
+        </label>
+        <label>Kontrast
+          <input name="contrast" type="range" min="0.5" max="1.5" step="0.05" value="1">
+        </label>
+        <label>Fokus horizontal
+          <input name="focus_x" type="range" min="0" max="100" value="50">
+        </label>
+        <label>Fokus vertikal
+          <input name="focus_y" type="range" min="0" max="100" value="50">
+        </label>
+      </div>
+      <div class="form-actions"><button id="image-editor-cancel" class="secondary" type="button">Abbrechen</button><button>Bearbeitung speichern</button></div>
+    </form>
+  </dialog>
   <div id="message" role="status" aria-live="polite"></div>
   <script src="/static/admin.js"></script>
 </body>
