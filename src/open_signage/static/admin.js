@@ -50,7 +50,7 @@ async function loadSettings() {
 }
 
 async function openSystemPage() {
-  await Promise.all([loadSystemInfo(), loadUpdateStatus(), loadApplicationUpdateStatus()]);
+  await Promise.all([loadSystemInfo(), loadMonitoring(), loadUpdateStatus(), loadApplicationUpdateStatus()]);
 }
 
 async function boot() {
@@ -524,6 +524,35 @@ async function loadSystemInfo() {
   }
 }
 
+async function loadMonitoring() {
+  try {
+    const status = await api("/api/system/monitoring");
+    const set = (name, value) => { document.querySelector(`[data-monitoring="${name}"]`).textContent = value; };
+    const player = status.player;
+    set("player", player.online ? `Online · ${player.state}` : "Offline");
+    set("content", player.content_name || "–");
+    set("last_seen", player.last_seen ? new Date(player.last_seen).toLocaleString("de-DE") : "Noch kein Kontakt");
+    const free = status.disk.total_bytes - status.disk.used_bytes;
+    set("disk", `${formatBytes(free)} frei`);
+    set("temperature", status.temperature_celsius == null ? "–" : `${status.temperature_celsius} °C`);
+    set("application_update", status.application_update.status);
+    set("system_update", status.system_update.status);
+    const warnings = document.querySelector("#monitoring-warnings");
+    warnings.hidden = !status.warnings.length;
+    warnings.textContent = status.warnings.join(" ");
+    const error = document.querySelector("#player-error");
+    error.hidden = !player.error;
+    error.textContent = player.error ? `Letzter Playerfehler: ${player.error}` : "";
+    const events = document.querySelector("#player-events");
+    events.hidden = !status.events.length;
+    events.querySelector("div").replaceChildren(...status.events.map(item => {
+      const row = document.createElement("p");
+      row.textContent = `${new Date(item.created_at).toLocaleString("de-DE")} · ${item.content_name || "Player"}: ${item.message}`;
+      return row;
+    }));
+  } catch (error) { notify(error.message, true); }
+}
+
 function renderUpdateStatus(status) {
   const state = document.querySelector("#update-state");
   state.className = `update-state ${status.status}`;
@@ -662,7 +691,9 @@ document.querySelector("#system-refresh").addEventListener("click", () => {
   loadSystemInfo();
   loadUpdateStatus();
   loadApplicationUpdateStatus();
+  loadMonitoring();
 });
+document.querySelector("#monitoring-refresh").addEventListener("click", loadMonitoring);
 
 document.querySelector("#application-update").addEventListener("click", async () => {
   const confirmed = window.confirm(
@@ -698,6 +729,7 @@ window.setInterval(() => {
   if (!document.querySelector("#system-page").hidden) {
     loadUpdateStatus();
     loadApplicationUpdateStatus();
+    loadMonitoring();
   }
 }, 5000);
 

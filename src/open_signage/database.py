@@ -112,6 +112,22 @@ def initialize() -> None:
                 token_hash TEXT PRIMARY KEY,
                 expires_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS player_status (
+                id INTEGER PRIMARY KEY CHECK(id = 1),
+                last_seen TEXT NOT NULL,
+                state TEXT NOT NULL,
+                content_id INTEGER,
+                content_name TEXT,
+                error TEXT
+            );
+            CREATE TABLE IF NOT EXISTS player_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                level TEXT NOT NULL,
+                message TEXT NOT NULL,
+                content_name TEXT
+            );
             """
         )
         if existing and connection.execute(

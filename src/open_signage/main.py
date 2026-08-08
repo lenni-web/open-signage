@@ -5,7 +5,7 @@ import json
 import sqlite3
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlparse
@@ -117,6 +117,13 @@ class MediaBulkPlaylistCreate(BaseModel):
     duration_seconds: int = Field(default=10, ge=1, le=86400)
 
 
+class PlayerHeartbeat(BaseModel):
+    state: str = Field(pattern=r"^(playing|idle|buffering|error)$")
+    content_id: int | None = None
+    content_name: str | None = Field(default=None, max_length=200)
+    error: str | None = Field(default=None, max_length=500)
+
+
 def active_playlist_id() -> int:
     with connect() as connection:
         row = connection.execute(
@@ -198,6 +205,57 @@ def player_page():
 @app.get("/api/health")
 def health():
     return {"status": "ok", "version": __version__}
+
+
+@app.post("/api/player/heartbeat", status_code=204)
+def player_heartbeat(payload: PlayerHeartbeat):
+    with connect() as connection:
+        previous = connection.execute("SELECT error FROM player_status WHERE id = 1").fetchone()
+        if payload.error and (not previous or previous["error"] != payload.error):
+            connection.execute(
+                "INSERT INTO player_events(created_at, level, message, content_name) VALUES (?, 'error', ?, ?)",
+                (datetime.now(UTC).isoformat(), payload.error, payload.content_name),
+            )
+        connection.execute(
+            """INSERT INTO player_status(id, last_seen, state, content_id, content_name, error)
+               VALUES (1, ?, ?, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET last_seen = excluded.last_seen,
+               state = excluded.state, content_id = excluded.content_id,
+               content_name = excluded.content_name, error = excluded.error""",
+            (datetime.now(UTC).isoformat(), payload.state, payload.content_id, payload.content_name, payload.error),
+        )
+
+
+@app.get("/api/system/monitoring")
+def monitoring(_: None = Depends(require_system_login)):
+    info = collect_system_info()
+    with connect() as connection:
+        row = connection.execute("SELECT * FROM player_status WHERE id = 1").fetchone()
+        events = connection.execute(
+            "SELECT * FROM player_events ORDER BY id DESC LIMIT 20"
+        ).fetchall()
+    player = dict(row) if row else None
+    if player:
+        age = (datetime.now(UTC) - datetime.fromisoformat(player["last_seen"])).total_seconds()
+        player["online"] = age < 25
+        player["age_seconds"] = round(age)
+    disk = info["disk"]
+    free_ratio = (disk["total_bytes"] - disk["used_bytes"]) / disk["total_bytes"] if disk["total_bytes"] else 0
+    warnings = []
+    if free_ratio < 0.1:
+        warnings.append("Weniger als 10 % Datenspeicher frei.")
+    if info["temperature_celsius"] is not None and info["temperature_celsius"] >= 80:
+        warnings.append("CPU-Temperatur beträgt mindestens 80 °C.")
+    return {
+        "player": player or {"online": False, "state": "unknown", "last_seen": None},
+        "disk": disk,
+        "temperature_celsius": info["temperature_celsius"],
+        "warnings": warnings,
+        "events": [dict(event) for event in events],
+        "system_update": update_status(),
+        "application_update": application_update_status(),
+        "version": __version__,
+    }
 
 
 @app.get("/api/system/info")

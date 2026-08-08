@@ -6,6 +6,20 @@ let playlistSignature = "";
 let activeHls;
 let reconnectTimer;
 const imagePreloads = new Map();
+let currentItem = null;
+let playerState = "idle";
+let playerError = null;
+
+function sendHeartbeat(state = playerState, error = playerError) {
+  playerState = state;
+  playerError = error;
+  fetch("/api/player/heartbeat", {
+    method: "POST", headers: { "Content-Type": "application/json" }, keepalive: true,
+    body: JSON.stringify({
+      state, content_id: currentItem?.id || null, content_name: currentItem?.name || null, error,
+    }),
+  }).catch(() => {});
+}
 
 function signature(value) {
   return JSON.stringify(value.map(({ id, name, kind, source, duration_seconds, position, muted, text_config }) =>
@@ -59,6 +73,8 @@ function showPlaceholder() {
   placeholder.className = "placeholder";
   placeholder.innerHTML = "<strong>Open Signage</strong><span>Warte auf Inhalte …</span>";
   stage.append(placeholder);
+  currentItem = null;
+  sendHeartbeat("idle", null);
 }
 
 function advance() {
@@ -69,6 +85,8 @@ function advance() {
 
 function show(item) {
   clearStage();
+  currentItem = item;
+  sendHeartbeat("playing", null);
   let element;
   if (item.kind === "image") {
     element = document.createElement("img");
@@ -76,6 +94,7 @@ function show(item) {
     element.alt = item.name;
     element.fetchPriority = "high";
     element.decoding = "async";
+    element.addEventListener("error", () => sendHeartbeat("error", "Bild konnte nicht geladen werden."));
   } else if (item.kind === "video") {
     element = document.createElement("video");
     element.src = item.source;
@@ -172,9 +191,9 @@ function showStream(item) {
     }, 5000);
   };
 
-  video.addEventListener("playing", () => setStatus("", false));
-  video.addEventListener("waiting", () => setStatus("Livestream wird gepuffert …"));
-  video.addEventListener("error", reconnect);
+  video.addEventListener("playing", () => { setStatus("", false); sendHeartbeat("playing", null); });
+  video.addEventListener("waiting", () => { setStatus("Livestream wird gepuffert …"); sendHeartbeat("buffering", null); });
+  video.addEventListener("error", () => { sendHeartbeat("error", "Livestream-Verbindung unterbrochen."); reconnect(); });
 
   if (video.canPlayType("application/vnd.apple.mpegurl")) {
     video.src = item.source;
@@ -227,3 +246,4 @@ async function refreshPlaylist() {
 
 refreshPlaylist();
 window.setInterval(refreshPlaylist, 5000);
+window.setInterval(() => sendHeartbeat(), 10000);

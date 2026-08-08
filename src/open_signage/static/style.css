@@ -226,6 +226,10 @@ button:disabled { cursor: default; opacity: .35; }
 }
 .info-list dt { color: var(--muted); }
 .info-list dd { margin: 0; overflow-wrap: anywhere; }
+.monitoring-summary { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 24px; }
+.monitoring-summary div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.monitoring-summary span { color: var(--muted); }
+.monitoring-warnings { margin-top: 14px; padding: 12px; border: 1px solid #d29922; border-radius: 10px; background: #2d250d; color: #f5d56f; }
 .network-list { display: grid; gap: 10px; margin-top: 18px; }
 .network-item { display: grid; gap: 7px; padding: 13px; border: 1px solid var(--line); border-radius: 10px; }
 .network-heading, .network-item > div { display: flex; justify-content: space-between; gap: 14px; }

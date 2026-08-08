@@ -27,6 +27,8 @@ Chromium-Kioskfenster an.
 - Livestream-Autoplay, Offline-Anzeige und automatische Wiederverbindung
 - lokale SQLite-Datenbank
 - Live-Aktualisierung des Players ohne Seitenreload
+- Player-Monitoring mit aktuellem Inhalt, letztem Kontakt, Fehlerprotokoll,
+  Speicher-, Temperatur- und Updatezustand
 
 Weitere SRT-Quellen können später über MediaMTX ergänzt werden.
 

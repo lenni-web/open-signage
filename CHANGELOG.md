@@ -8,6 +8,24 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.9.8] – 2026-08-08
+
+### Hinzugefügt
+
+- Player-Heartbeat mit Online-/Offline-Erkennung, Wiedergabezustand, aktuell
+  angezeigtem Inhalt und letztem Kontakt.
+- Zentrale Monitoring-Karte auf der Systemseite mit freiem Speicher,
+  CPU-Temperatur, Anwendungs- und Systemupdatezustand.
+- Sichtbare Warnungen bei weniger als 10 % freiem Speicher oder mindestens
+  80 °C CPU-Temperatur.
+- Persistentes Protokoll der letzten 20 unterschiedlichen Playerfehler.
+
+### Geändert
+
+- Player- und Monitoringstatus werden auf der geöffneten Systemseite alle fünf
+  Sekunden aktualisiert.
+- Projektversion von `0.9.7` auf `0.9.8` erhöht.
+
 ## [0.9.7] – 2026-08-08
 
 ### Hinzugefügt

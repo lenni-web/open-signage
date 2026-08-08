@@ -279,6 +279,24 @@
           <button>Bildschirmname speichern</button>
         </form>
       </section>
+      <section class="card system-overview monitoring-card">
+        <div class="section-heading">
+          <div><span class="eyebrow">Betriebszustand</span><h2>Player-Monitoring</h2></div>
+          <button id="monitoring-refresh" class="secondary">Aktualisieren</button>
+        </div>
+        <div id="monitoring-summary" class="monitoring-summary">
+          <div><span>Player</span><strong data-monitoring="player">–</strong></div>
+          <div><span>Aktueller Inhalt</span><strong data-monitoring="content">–</strong></div>
+          <div><span>Letzter Kontakt</span><strong data-monitoring="last_seen">–</strong></div>
+          <div><span>Freier Speicher</span><strong data-monitoring="disk">–</strong></div>
+          <div><span>Temperatur</span><strong data-monitoring="temperature">–</strong></div>
+          <div><span>Anwendungsupdate</span><strong data-monitoring="application_update">–</strong></div>
+          <div><span>Systemupdate</span><strong data-monitoring="system_update">–</strong></div>
+        </div>
+        <div id="monitoring-warnings" class="monitoring-warnings" hidden></div>
+        <div id="player-error" class="monitoring-warnings" hidden></div>
+        <details id="player-events" hidden><summary>Player-Fehlerprotokoll</summary><div></div></details>
+      </section>
       <details class="card system-overview collapsible-card">
         <summary class="collapsible-summary">
           <span><span class="eyebrow">Zugangsschutz</span><strong>Sicherheit</strong></span>
