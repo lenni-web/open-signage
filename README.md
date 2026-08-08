@@ -20,8 +20,10 @@ Weitere SRT-Quellen können später über MediaMTX ergänzt werden.
 
 ### Systemverwaltung
 
-Die Seite **System** zeigt Geräte-, Speicher- und Netzwerkinformationen des
-Raspberry Pi. Dort kann außerdem ein Betriebssystemupdate gestartet werden.
+Die passwortgeschützte Seite **System** zeigt Geräte-, Speicher- und
+Netzwerkinformationen des Raspberry Pi. Das initiale Passwort lautet
+`open-signage` und sollte dort direkt geändert werden. Außerdem kann ein
+Bildschirmname vergeben und ein Betriebssystemupdate gestartet werden.
 Im Hintergrund führt ein separater root-Dienst fest definiert Folgendes aus:
 
 ```bash
@@ -33,10 +35,20 @@ beliebigen Befehle übergeben. Der Fortschritt und die letzten Protokollzeilen
 werden auf der Systemseite angezeigt. Ein Neustart wird nach dem Update nicht
 automatisch durchgeführt.
 
-Da Systemupdates derzeit von jedem Gerät mit Zugriff auf die Verwaltung
-ausgelöst werden können, sollte Open Signage nur in einem vertrauenswürdigen
-lokalen Netzwerk betrieben werden. Ein Login-Schutz ist als nächster
-Sicherheitsschritt vorgesehen.
+Die Systeminformationen, Einstellungen und das Auslösen von Systemupdates sind
+nur mit einer gültigen Anmeldung erreichbar.
+
+### Open Signage aktualisieren
+
+Die Systemseite kann den neuesten veröffentlichten Open-Signage-Release
+installieren. Das Installationsskript merkt sich dazu das ursprünglich geklonte
+Git-Repository und dessen Benutzer. Der Updater lädt neue Git-Tags über den
+dort eingerichteten SSH-Zugang, installiert den höchsten Versions-Tag zunächst
+getrennt und prüft nach dem Neustart `/api/health`. Bei einem fehlgeschlagenen
+Healthcheck stellt er automatisch die vorherige Version wieder her.
+
+Nur getaggte Releases werden installiert. Änderungen auf `main`, die noch
+keinen Versionstag besitzen, werden nicht automatisch ausgerollt.
 
 ### Unterstützte Videoformate
 
@@ -138,8 +150,8 @@ Installation ist ein Neustart erforderlich:
 sudo reboot
 ```
 
-Noch geplant sind ein Update-Skript, `open-signage.local`, Login-Schutz und
-MediaMTX für zusätzliche direkte SRT-Quellen.
+Noch geplant sind `open-signage.local` und MediaMTX für zusätzliche direkte
+SRT-Quellen.
 
 ## Owncast-Livestream
 

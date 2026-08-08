@@ -7,6 +7,8 @@ readonly DATA_DIR="/var/lib/open-signage"
 readonly SERVICE_FILE="/etc/systemd/system/open-signage.service"
 readonly KIOSK_COMMAND="/usr/local/bin/open-signage-kiosk"
 readonly UPDATE_COMMAND="/usr/local/sbin/open-signage-system-update"
+readonly APPLICATION_UPDATE_COMMAND="/usr/local/sbin/open-signage-application-update"
+readonly APPLICATION_UPDATE_CONFIG="/etc/default/open-signage-application-update"
 
 PORT=8080
 KIOSK_USER="signage"
@@ -60,6 +62,10 @@ command -v apt-get >/dev/null 2>&1 || fail "Dieses Skript benötigt Raspberry Pi
 [[ "$(dpkg --print-architecture)" == "arm64" ]] || fail "Bitte Raspberry Pi OS Lite 64 Bit verwenden."
 
 readonly PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly SOURCE_USER="${SUDO_USER:-root}"
+git -C "${PROJECT_DIR}" rev-parse --git-dir >/dev/null 2>&1 || \
+  fail "Das Installationsverzeichnis muss ein Git-Repository sein."
+id "${SOURCE_USER}" >/dev/null 2>&1 || fail "Quellbenutzer ${SOURCE_USER} existiert nicht."
 
 printf 'Installiere minimales Wayland-System und Chromium …\n'
 apt-get update
@@ -123,6 +129,18 @@ install -o root -g root -m 0644 \
 install -o root -g root -m 0644 \
   "${PROJECT_DIR}/deploy/open-signage-update.path" \
   "/etc/systemd/system/open-signage-update.path"
+install -o root -g root -m 0755 \
+  "${PROJECT_DIR}/deploy/open-signage-application-update" "${APPLICATION_UPDATE_COMMAND}"
+install -o root -g root -m 0644 \
+  "${PROJECT_DIR}/deploy/open-signage-application-update.service" \
+  "/etc/systemd/system/open-signage-application-update.service"
+install -o root -g root -m 0644 \
+  "${PROJECT_DIR}/deploy/open-signage-application-update.path" \
+  "/etc/systemd/system/open-signage-application-update.path"
+install -d -o root -g root -m 0755 /etc/default
+printf 'SOURCE_REPOSITORY=%q\nSOURCE_USER=%q\nPORT=%q\n' \
+  "${PROJECT_DIR}" "${SOURCE_USER}" "${PORT}" >"${APPLICATION_UPDATE_CONFIG}"
+chmod 0600 "${APPLICATION_UPDATE_CONFIG}"
 
 readonly AUTOSTART_DIR="${KIOSK_HOME}/.config/labwc"
 readonly AUTOSTART_FILE="${AUTOSTART_DIR}/autostart"
@@ -141,6 +159,7 @@ systemctl enable lightdm.service
 
 systemctl daemon-reload
 systemctl enable --now open-signage-update.path
+systemctl enable --now open-signage-application-update.path
 systemctl enable --now open-signage.service
 
 "${PROJECT_DIR}/scripts/verify-installation.sh" --port "${PORT}"

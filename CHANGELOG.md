@@ -8,6 +8,26 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.8.0] – 2026-08-08
+
+### Hinzugefügt
+
+- Frei vergebbarer Bildschirmname auf der Systemseite und Anzeige dieses
+  Namens in der Überschrift der Inhalte-Seite.
+- Passwortgeschützte Systemseite mit zwölf Stunden gültiger Sitzung und einer
+  Funktion zum Ändern des Passworts.
+- Anwendungsupdate über Git-Release-Tags mit neuer virtueller Umgebung,
+  Healthcheck und automatischem Rollback.
+- Status- und Protokollanzeige für Anwendungsupdates auf der Systemseite.
+
+### Geändert
+
+- Standard-Anzeigedauer für neu angelegte Webseiten von 30 auf 12 Sekunden
+  reduziert.
+- Systeminformationen und Systemupdates sind nur noch nach Anmeldung
+  erreichbar.
+- Projektversion von `0.7.0` auf `0.8.0` erhöht.
+
 ## [0.7.0] – 2026-08-08
 
 ### Hinzugefügt

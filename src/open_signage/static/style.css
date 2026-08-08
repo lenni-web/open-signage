@@ -172,7 +172,9 @@ button:disabled { cursor: default; opacity: .35; }
 }
 .inline-check input { width: 20px; height: 20px; }
 .empty { color: var(--muted); text-align: center; padding: 25px; }
+.page-title { margin: 0 0 18px; }
 .system-overview, .update-card { grid-column: 1 / -1; }
+.auth-card { max-width: 560px; justify-self: center; width: 100%; }
 .info-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0 26px; margin: 0; }
 .info-list div {
   display: grid;
@@ -197,8 +199,8 @@ button:disabled { cursor: default; opacity: .35; }
 .update-state.running, .update-state.queued { border-color: #d29922; }
 .update-state.success { border-color: var(--accent); }
 .update-state.failed { border-color: var(--danger); }
-#update-log { margin-top: 16px; }
-#update-log pre { max-height: 320px; overflow: auto; padding: 12px; background: #080b0f; white-space: pre-wrap; }
+#update-log, #application-update-log { margin-top: 16px; }
+#update-log pre, #application-update-log pre { max-height: 320px; overflow: auto; padding: 12px; background: #080b0f; white-space: pre-wrap; }
 #message {
   position: fixed;
   right: 24px;

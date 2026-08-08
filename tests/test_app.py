@@ -5,6 +5,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from open_signage.database import initialize
+from open_signage.application_update import request_update as request_application_update
+from open_signage.application_update import update_status as application_update_status
 from open_signage.main import app
 from open_signage.media_probe import evaluate_video_probe
 from open_signage.system_update import request_update, update_status
@@ -196,6 +198,10 @@ def test_video_upload_returns_compatibility_result(tmp_path: Path, monkeypatch):
 def test_system_info_endpoint_has_device_and_network_sections(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
     with TestClient(app) as client:
+        assert client.get("/api/system/info").status_code == 401
+        assert client.post(
+            "/api/system/login", json={"password": "open-signage"}
+        ).status_code == 200
         response = client.get("/api/system/info")
 
     assert response.status_code == 200
@@ -221,6 +227,7 @@ def test_system_update_api_returns_conflict_while_queued(tmp_path: Path, monkeyp
     monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("OPEN_SIGNAGE_ENABLE_SYSTEM_UPDATE", "1")
     with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
         first = client.post("/api/system/update")
         second = client.post("/api/system/update")
 
@@ -250,6 +257,22 @@ def test_update_service_is_installed_without_sudo_access():
     assert "apt-get upgrade -y" in update_script
     assert "sudo" not in update_script
 
+    application_script = (
+        PROJECT_ROOT / "deploy/open-signage-application-update"
+    ).read_text(encoding="utf-8")
+    application_service = (
+        PROJECT_ROOT / "deploy/open-signage-application-update.service"
+    ).read_text(encoding="utf-8")
+    application_path = (
+        PROJECT_ROOT / "deploy/open-signage-application-update.path"
+    ).read_text(encoding="utf-8")
+    assert "open-signage-application-update.path" in installer
+    assert "git -C" in application_script
+    assert "systemctl stop open-signage.service" in application_script
+    assert "Healthcheck fehlgeschlagen" in application_script
+    assert "ExecStart=/usr/local/sbin/open-signage-application-update" in application_service
+    assert "PathExists=/var/lib/open-signage/application-update.request" in application_path
+
 
 def test_admin_contains_system_navigation_and_update_controls():
     admin = (PROJECT_ROOT / "src/open_signage/static/admin.html").read_text(
@@ -260,6 +283,56 @@ def test_admin_contains_system_navigation_and_update_controls():
     assert 'id="wlan-info"' in admin
     assert 'id="ethernet-info"' in admin
     assert 'id="system-update"' in admin
+    assert 'id="login-form"' in admin
+    assert 'id="screen-settings-form"' in admin
+    assert 'id="application-update"' in admin
+    assert 'value="12"' in admin
+
+
+def test_screen_name_and_password_are_persisted_and_protected(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        assert client.get("/api/settings").json() == {"screen_name": "Open Signage"}
+        assert client.patch(
+            "/api/system/settings", json={"screen_name": "Foyer"}
+        ).status_code == 401
+
+        assert client.post(
+            "/api/system/login", json={"password": "open-signage"}
+        ).status_code == 200
+        changed = client.patch(
+            "/api/system/settings", json={"screen_name": "Foyer"}
+        )
+        assert changed.json() == {"screen_name": "Foyer"}
+        assert client.get("/api/settings").json() == {"screen_name": "Foyer"}
+
+        changed_password = client.post(
+            "/api/system/password",
+            json={
+                "current_password": "open-signage",
+                "new_password": "sicheres-passwort",
+            },
+        )
+        assert changed_password.status_code == 200
+
+    with TestClient(app) as client:
+        assert client.post(
+            "/api/system/login", json={"password": "open-signage"}
+        ).status_code == 401
+        assert client.post(
+            "/api/system/login", json={"password": "sicheres-passwort"}
+        ).status_code == 200
+
+
+def test_website_default_duration_is_twelve_seconds(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/content/website",
+            json={"name": "Web", "url": "https://example.org"},
+        )
+    assert response.status_code == 201
+    assert response.json()["duration_seconds"] == 12
 
 
 def test_pdf_can_be_uploaded_and_deleted(tmp_path: Path, monkeypatch):
@@ -297,3 +370,17 @@ def test_invalid_pdf_is_rejected_and_removed(tmp_path: Path, monkeypatch):
 
     assert response.status_code == 415
     assert list((tmp_path / "media").iterdir()) == []
+
+
+def test_application_update_request_and_api_are_protected(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("OPEN_SIGNAGE_ENABLE_APPLICATION_UPDATE", "1")
+    queued = request_application_update()
+    assert queued["status"] == "queued"
+    assert application_update_status()["status"] == "queued"
+
+    (tmp_path / "application-update.request").unlink()
+    with TestClient(app) as client:
+        assert client.post("/api/system/application-update").status_code == 401
+        client.post("/api/system/login", json={"password": "open-signage"})
+        assert client.post("/api/system/application-update").status_code == 202

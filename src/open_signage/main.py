@@ -7,12 +7,15 @@ from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .database import connect, initialize, media_dir
+from .auth import change_password, create_session, require_system_login, screen_name, set_setting, verify_password
+from .application_update import request_update as request_application_update
+from .application_update import update_status as application_update_status
 from .media_probe import inspect_video
 from .system_info import collect_system_info
 from .system_update import request_update, update_status
@@ -45,7 +48,20 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 class WebsiteCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     url: str = Field(min_length=1, max_length=2048)
-    duration_seconds: int = Field(default=30, ge=1, le=86400)
+    duration_seconds: int = Field(default=12, ge=1, le=86400)
+
+
+class LoginRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=200)
+
+
+class ScreenSettings(BaseModel):
+    screen_name: str = Field(min_length=1, max_length=100)
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(min_length=1, max_length=200)
+    new_password: str = Field(min_length=8, max_length=200)
 
 
 class StreamCreate(BaseModel):
@@ -96,23 +112,73 @@ def health():
 
 
 @app.get("/api/system/info")
-def system_info():
+def system_info(_: None = Depends(require_system_login)):
     return collect_system_info()
 
 
 @app.get("/api/system/update")
-def get_system_update():
+def get_system_update(_: None = Depends(require_system_login)):
     return update_status()
 
 
 @app.post("/api/system/update", status_code=202)
-def start_system_update():
+def start_system_update(_: None = Depends(require_system_login)):
     try:
         return request_update()
     except FileNotFoundError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     except RuntimeError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@app.get("/api/system/application-update")
+def get_application_update(_: None = Depends(require_system_login)):
+    return application_update_status()
+
+
+@app.post("/api/system/application-update", status_code=202)
+def start_application_update(_: None = Depends(require_system_login)):
+    try:
+        return request_application_update()
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@app.get("/api/settings")
+def get_public_settings():
+    return {"screen_name": screen_name()}
+
+
+@app.get("/api/system/session")
+def system_session(_: None = Depends(require_system_login)):
+    return {"authenticated": True, "screen_name": screen_name()}
+
+
+@app.post("/api/system/login")
+def system_login(payload: LoginRequest, response: Response):
+    if not verify_password(payload.password):
+        raise HTTPException(status_code=401, detail="Falsches Passwort")
+    create_session(response)
+    return {"authenticated": True, "screen_name": screen_name()}
+
+
+@app.patch("/api/system/settings")
+def update_system_settings(payload: ScreenSettings, _: None = Depends(require_system_login)):
+    name = payload.screen_name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Der Bildschirmname darf nicht leer sein")
+    set_setting("screen_name", name)
+    return {"screen_name": name}
+
+
+@app.post("/api/system/password")
+def update_system_password(payload: PasswordChange, response: Response, _: None = Depends(require_system_login)):
+    if not verify_password(payload.current_password):
+        raise HTTPException(status_code=400, detail="Das aktuelle Passwort ist falsch")
+    change_password(payload.new_password, response)
+    return {"changed": True}
 
 
 @app.get("/api/content")

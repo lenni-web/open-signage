@@ -18,6 +18,35 @@ async function api(path, options = {}) {
   return response.status === 204 ? null : response.json();
 }
 
+function showSystemLogin() {
+  document.querySelector("#system-login").hidden = false;
+  document.querySelector("#system-content").hidden = true;
+}
+
+function showSystemContent(settings) {
+  document.querySelector("#system-login").hidden = true;
+  document.querySelector("#system-content").hidden = false;
+  document.querySelector('#screen-settings-form [name="screen_name"]').value = settings.screen_name;
+}
+
+async function loadSettings() {
+  try {
+    const settings = await api("/api/settings");
+    document.querySelector("#content-heading").textContent = `Inhalte – ${settings.screen_name}`;
+  } catch (error) { notify(error.message, true); }
+}
+
+async function openSystemPage() {
+  try {
+    const session = await api("/api/system/session");
+    showSystemContent(session);
+    await Promise.all([loadSystemInfo(), loadUpdateStatus(), loadApplicationUpdateStatus()]);
+  } catch (error) {
+    showSystemLogin();
+    if (error.message !== "Anmeldung erforderlich") notify(error.message, true);
+  }
+}
+
 function kindLabel(kind) {
   return { image: "Bild", video: "Video", pdf: "PDF", website: "Webseite", stream: "Livestream" }[kind] || kind;
 }
@@ -214,9 +243,33 @@ function renderUpdateStatus(status) {
   details.querySelector("pre").textContent = status.log?.join("\n") || "";
 }
 
+function renderApplicationUpdateStatus(status) {
+  const state = document.querySelector("#application-update-state");
+  state.className = `update-state ${status.status}`;
+  state.querySelector("strong").textContent = status.message;
+  const times = [status.started_at ? `Start: ${status.started_at}` : "", status.finished_at ? `Ende: ${status.finished_at}` : ""];
+  state.querySelector("span").textContent = times.filter(Boolean).join(" · ");
+  const button = document.querySelector("#application-update");
+  button.disabled = !status.available || ["queued", "running"].includes(status.status);
+  if (!status.available) {
+    state.querySelector("strong").textContent = "Anwendungsupdate auf diesem Gerät nicht verfügbar.";
+  }
+  const details = document.querySelector("#application-update-log");
+  details.hidden = !status.log?.length;
+  details.querySelector("pre").textContent = status.log?.join("\n") || "";
+}
+
 async function loadUpdateStatus() {
   try {
     renderUpdateStatus(await api("/api/system/update"));
+  } catch (error) {
+    notify(error.message, true);
+  }
+}
+
+async function loadApplicationUpdateStatus() {
+  try {
+    renderApplicationUpdateStatus(await api("/api/system/application-update"));
   } catch (error) {
     notify(error.message, true);
   }
@@ -229,14 +282,79 @@ document.querySelectorAll(".nav-button").forEach((button) => {
     button.classList.add("active");
     document.querySelector(`#${button.dataset.page}`).hidden = false;
     if (button.dataset.page === "system-page") {
-      await Promise.all([loadSystemInfo(), loadUpdateStatus()]);
+      await openSystemPage();
     }
   });
+});
+
+document.querySelector("#login-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const password = new FormData(event.target).get("password");
+  try {
+    const session = await api("/api/system/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    event.target.reset();
+    showSystemContent(session);
+    await Promise.all([loadSystemInfo(), loadUpdateStatus(), loadApplicationUpdateStatus()]);
+    notify("Anmeldung erfolgreich");
+  } catch (error) { notify(error.message, true); }
+});
+
+document.querySelector("#screen-settings-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const screenName = new FormData(event.target).get("screen_name");
+  try {
+    await api("/api/system/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ screen_name: screenName }),
+    });
+    await loadSettings();
+    notify("Bildschirmname gespeichert");
+  } catch (error) { notify(error.message, true); }
+});
+
+document.querySelector("#password-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = new FormData(event.target);
+  if (form.get("new_password") !== form.get("confirm_password")) {
+    notify("Die neuen Passwörter stimmen nicht überein", true);
+    return;
+  }
+  try {
+    await api("/api/system/password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        current_password: form.get("current_password"),
+        new_password: form.get("new_password"),
+      }),
+    });
+    event.target.reset();
+    notify("Passwort geändert");
+  } catch (error) { notify(error.message, true); }
 });
 
 document.querySelector("#system-refresh").addEventListener("click", () => {
   loadSystemInfo();
   loadUpdateStatus();
+  loadApplicationUpdateStatus();
+});
+
+document.querySelector("#application-update").addEventListener("click", async () => {
+  const confirmed = window.confirm(
+    "Jetzt den neuesten veröffentlichten Open-Signage-Release installieren?"
+  );
+  if (!confirmed) return;
+  try {
+    renderApplicationUpdateStatus(await api("/api/system/application-update", { method: "POST" }));
+    notify("Anwendungsupdate wurde im Hintergrund gestartet");
+  } catch (error) {
+    notify(error.message, true);
+  }
 });
 
 document.querySelector("#system-update").addEventListener("click", async () => {
@@ -253,7 +371,10 @@ document.querySelector("#system-update").addEventListener("click", async () => {
 });
 
 window.setInterval(() => {
-  if (!document.querySelector("#system-page").hidden) loadUpdateStatus();
+  if (!document.querySelector("#system-page").hidden) {
+    loadUpdateStatus();
+    loadApplicationUpdateStatus();
+  }
 }, 5000);
 
 document.querySelector("#upload-form").addEventListener("submit", async (event) => {
@@ -331,4 +452,5 @@ document.querySelector("#stream-form").addEventListener("submit", async (event) 
 
 document.querySelector("#refresh").addEventListener("click", load);
 loadVersion();
+loadSettings();
 load();

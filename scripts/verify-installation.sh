@@ -31,6 +31,10 @@ if command -v systemctl >/dev/null 2>&1; then
     printf 'Systemupdate-Überwachung ist nicht aktiv.\n' >&2
     exit 1
   }
+  systemctl is-active --quiet open-signage-application-update.path || {
+    printf 'Anwendungsupdate-Überwachung ist nicht aktiv.\n' >&2
+    exit 1
+  }
 fi
 
 readonly BASE_URL="http://127.0.0.1:${PORT}"

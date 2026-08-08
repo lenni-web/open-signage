@@ -64,6 +64,11 @@ def initialize() -> None:
 
             CREATE INDEX IF NOT EXISTS idx_content_playlist
             ON content(enabled, position, id);
+
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
             """
         )
         if existing and connection.execute(

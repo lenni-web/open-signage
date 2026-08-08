@@ -24,6 +24,7 @@
   </nav>
 
   <section id="content-page" class="page">
+  <h2 id="content-heading" class="page-title">Inhalte</h2>
   <main>
     <section class="card">
       <h2>Medium hochladen</h2>
@@ -44,7 +45,7 @@
     </section>
 
     <section class="card">
-      <h2>Webseite hinzufügen</h2>
+          <h2>Webseite hinzufügen</h2>
       <form id="website-form">
         <label>Name
           <input name="name" placeholder="Nachrichten" required>
@@ -53,7 +54,7 @@
           <input name="url" type="url" placeholder="https://example.org" required>
         </label>
         <label>Dauer in Sekunden
-          <input name="duration_seconds" type="number" min="1" max="86400" value="30" required>
+          <input name="duration_seconds" type="number" min="1" max="86400" value="12" required>
         </label>
         <button>Hinzufügen</button>
       </form>
@@ -94,7 +95,45 @@
   </section>
 
   <section id="system-page" class="page" hidden>
-    <main class="system-grid">
+    <main id="system-login" class="system-grid" hidden>
+      <section class="card system-overview auth-card">
+        <span class="eyebrow">Geschützter Bereich</span>
+        <h2>System anmelden</h2>
+        <form id="login-form">
+          <label>Passwort
+            <input name="password" type="password" autocomplete="current-password" required autofocus>
+          </label>
+          <button>Anmelden</button>
+        </form>
+      </section>
+    </main>
+    <main id="system-content" class="system-grid" hidden>
+      <section class="card system-overview">
+        <span class="eyebrow">Anzeige</span>
+        <h2>Bildschirm</h2>
+        <form id="screen-settings-form">
+          <label>Bildschirmname
+            <input name="screen_name" maxlength="100" required>
+          </label>
+          <button>Bildschirmname speichern</button>
+        </form>
+      </section>
+      <section class="card system-overview">
+        <span class="eyebrow">Sicherheit</span>
+        <h2>Passwort ändern</h2>
+        <form id="password-form">
+          <label>Aktuelles Passwort
+            <input name="current_password" type="password" autocomplete="current-password" required>
+          </label>
+          <label>Neues Passwort (mindestens 8 Zeichen)
+            <input name="new_password" type="password" minlength="8" autocomplete="new-password" required>
+          </label>
+          <label>Neues Passwort wiederholen
+            <input name="confirm_password" type="password" minlength="8" autocomplete="new-password" required>
+          </label>
+          <button>Passwort ändern</button>
+        </form>
+      </section>
       <section class="card system-overview">
         <div class="section-heading">
           <div>
@@ -126,6 +165,21 @@
         <span class="eyebrow">Netzwerk</span>
         <h2>Ethernet</h2>
         <div id="ethernet-info" class="network-list"><p class="empty">Wird geladen …</p></div>
+      </section>
+
+      <section class="card update-card">
+        <span class="eyebrow">Open Signage</span>
+        <h2>Anwendungsupdate</h2>
+        <p>Installiert den neuesten mit einem Git-Tag veröffentlichten Release. Bei einem fehlgeschlagenen Start wird automatisch zurückgerollt.</p>
+        <div id="application-update-state" class="update-state idle">
+          <strong>Noch kein Anwendungsupdate ausgeführt.</strong>
+          <span></span>
+        </div>
+        <button id="application-update">Open Signage jetzt aktualisieren</button>
+        <details id="application-update-log" hidden>
+          <summary>Update-Protokoll</summary>
+          <pre></pre>
+        </details>
       </section>
 
       <section class="card update-card">
