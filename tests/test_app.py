@@ -303,6 +303,8 @@ def test_admin_contains_system_navigation_and_update_controls():
     assert 'id="media-library"' in admin
     assert 'id="text-library-image"' in admin
     assert 'name="shadow_intensity"' in admin
+    assert 'id="playlist-select"' in admin
+    assert 'id="playlist-create"' in admin
     assert admin.count('class="card update-card collapsible-card"') == 2
     assert 'class="card system-overview collapsible-card"' in admin
     assert 'value="12"' in admin
@@ -599,3 +601,29 @@ def test_overnight_and_weekday_schedules():
     assert scheduled_now(item, tuesday_early)
     item["schedule_weekdays"] = [2]
     assert not scheduled_now(item, monday_late)
+
+
+def test_multiple_playlists_are_isolated_and_switch_player(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        first = client.post(
+            "/api/content/website", json={"name": "Standardinhalt", "url": "https://one.example"}
+        ).json()
+        default_playlist = next(item for item in client.get("/api/playlists").json() if item["active"])
+
+        second_playlist = client.post("/api/playlists", json={"name": "Abend"})
+        assert second_playlist.status_code == 201
+        second_id = second_playlist.json()["id"]
+        client.post(f"/api/playlists/{second_id}/activate")
+        assert client.get("/api/content").json() == []
+        second = client.post(
+            "/api/content/website", json={"name": "Abendinhalt", "url": "https://two.example"}
+        ).json()
+        assert [item["id"] for item in client.get("/api/player/content").json()] == [second["id"]]
+        assert client.delete(f"/api/playlists/{second_id}").status_code == 409
+
+        client.post(f"/api/playlists/{default_playlist['id']}/activate")
+        assert [item["id"] for item in client.get("/api/player/content").json()] == [first["id"]]
+        assert client.delete(f"/api/playlists/{second_id}").status_code == 204
+        assert len(client.get("/api/playlists").json()) == 1

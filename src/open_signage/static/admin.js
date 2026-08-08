@@ -10,6 +10,7 @@ let libraryItems = [];
 let applicationUpdateInProgress = false;
 let applicationReloadScheduled = false;
 let schedulingItem = null;
+let playlists = [];
 
 function notify(text, isError = false) {
   message.textContent = text;
@@ -54,7 +55,7 @@ async function boot() {
   try {
     const session = await api("/api/system/session");
     showApplication(session);
-    await Promise.all([loadVersion(), load(), loadLibrary()]);
+    await Promise.all([loadVersion(), load(), loadLibrary(), loadPlaylists()]);
   } catch (_) {
     showLogin();
   }
@@ -306,6 +307,44 @@ async function load() {
   } catch (error) { notify(error.message, true); }
 }
 
+function renderPlaylists() {
+  const select = document.querySelector("#playlist-select");
+  select.replaceChildren();
+  playlists.forEach((playlist) => {
+    const option = new Option(`${playlist.name} (${playlist.content_count})`, playlist.id);
+    option.selected = playlist.active;
+    select.append(option);
+  });
+  const list = document.querySelector("#playlist-list");
+  list.replaceChildren();
+  playlists.forEach((playlist) => {
+    const row = document.createElement("article");
+    const label = document.createElement("span");
+    label.textContent = `${playlist.name} · ${playlist.content_count} Inhalte${playlist.active ? " · aktiv" : ""}`;
+    const button = document.createElement("button");
+    button.className = "danger";
+    button.textContent = "Löschen";
+    button.disabled = playlist.active || playlists.length <= 1;
+    button.addEventListener("click", async () => {
+      if (!window.confirm(`Playlist „${playlist.name}“ einschließlich ihrer Inhalte löschen?`)) return;
+      try {
+        await api(`/api/playlists/${playlist.id}`, { method: "DELETE" });
+        await loadPlaylists();
+        notify("Playlist gelöscht");
+      } catch (error) { notify(error.message, true); }
+    });
+    row.append(label, button);
+    list.append(row);
+  });
+}
+
+async function loadPlaylists() {
+  try {
+    playlists = await api("/api/playlists");
+    renderPlaylists();
+  } catch (error) { notify(error.message, true); }
+}
+
 async function loadVersion() {
   try {
     const health = await api("/api/health");
@@ -479,7 +518,7 @@ document.querySelector("#login-form").addEventListener("submit", async (event) =
     });
     event.target.reset();
     showApplication(session);
-    await Promise.all([loadVersion(), load(), loadLibrary()]);
+    await Promise.all([loadVersion(), load(), loadLibrary(), loadPlaylists()]);
     notify("Anmeldung erfolgreich");
   } catch (error) { notify(error.message, true); }
 });
@@ -734,6 +773,29 @@ textForm.elements.shadow_box.addEventListener("change", () => {
 });
 
 document.querySelector("#refresh").addEventListener("click", load);
+
+document.querySelector("#playlist-select").addEventListener("change", async (event) => {
+  try {
+    await api(`/api/playlists/${event.target.value}/activate`, { method: "POST" });
+    await Promise.all([loadPlaylists(), load()]);
+    notify("Aktive Playlist gewechselt");
+  } catch (error) { notify(error.message, true); }
+});
+
+document.querySelector("#playlist-create").addEventListener("click", async () => {
+  const name = window.prompt("Name der neuen Playlist:");
+  if (!name?.trim()) return;
+  try {
+    const created = await api("/api/playlists", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    await api(`/api/playlists/${created.id}/activate`, { method: "POST" });
+    await Promise.all([loadPlaylists(), load()]);
+    notify("Playlist erstellt und aktiviert");
+  } catch (error) { notify(error.message, true); }
+});
 
 document.querySelector("#schedule-cancel").addEventListener("click", () => {
   document.querySelector("#schedule-dialog").close();

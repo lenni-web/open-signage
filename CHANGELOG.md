@@ -8,6 +8,21 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.9.4] – 2026-08-08
+
+### Hinzugefügt
+
+- Verwaltung mehrerer voneinander getrennter Playlists mit Inhaltsanzahl,
+  Aktivierung und sicherem Löschen inaktiver Playlists.
+- Sofortige Umschaltung der aktiven Playlist für den Vollbild-Player.
+
+### Geändert
+
+- Bestehende Inhalte werden bei der Migration automatisch der Playlist
+  „Standard“ zugeordnet.
+- Neue Inhalte und Mediathek-Übernahmen landen in der jeweils aktiven Playlist.
+- Projektversion von `0.9.3` auf `0.9.4` erhöht.
+
 ## [0.9.3] – 2026-08-08
 
 ### Hinzugefügt

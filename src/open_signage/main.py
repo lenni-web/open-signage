@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import mimetypes
 import json
+import sqlite3
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -89,6 +90,18 @@ class ContentUpdate(BaseModel):
 
 class LibraryPlaylistCreate(BaseModel):
     duration_seconds: int = Field(default=10, ge=1, le=86400)
+
+
+class PlaylistCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
+def active_playlist_id() -> int:
+    with connect() as connection:
+        row = connection.execute(
+            "SELECT id FROM playlists WHERE active = 1 ORDER BY id LIMIT 1"
+        ).fetchone()
+    return row["id"] if row else 1
 
 
 def serialize(row) -> dict:
@@ -236,11 +249,11 @@ def update_system_password(payload: PasswordChange, response: Response, _: None 
 
 
 def content_rows(enabled_only: bool = False) -> list[dict]:
-    query = "SELECT * FROM content"
-    params: tuple = ()
+    query = "SELECT * FROM content WHERE playlist_id = ?"
+    params: tuple = (active_playlist_id(),)
     if enabled_only:
-        query += " WHERE enabled = ?"
-        params = (1,)
+        query += " AND enabled = ?"
+        params = (*params, 1)
     query += " ORDER BY position, id"
     with connect() as connection:
         rows = connection.execute(query, params).fetchall()
@@ -251,6 +264,62 @@ def content_rows(enabled_only: bool = False) -> list[dict]:
 @app.get("/api/player/content")
 def player_content():
     return content_rows(enabled_only=True)
+
+
+@app.get("/api/playlists")
+def list_playlists(_: None = Depends(require_system_login)):
+    with connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT playlists.*, COUNT(content.id) AS content_count
+            FROM playlists LEFT JOIN content ON content.playlist_id = playlists.id
+            GROUP BY playlists.id ORDER BY playlists.name COLLATE NOCASE
+            """
+        ).fetchall()
+    return [{**dict(row), "active": bool(row["active"])} for row in rows]
+
+
+@app.post("/api/playlists", status_code=201)
+def create_playlist(payload: PlaylistCreate, _: None = Depends(require_system_login)):
+    try:
+        with connect() as connection:
+            cursor = connection.execute(
+                "INSERT INTO playlists(name, active) VALUES (?, 0)", (payload.name.strip(),)
+            )
+            playlist_id = cursor.lastrowid
+    except sqlite3.IntegrityError as error:
+        raise HTTPException(status_code=409, detail="Eine Playlist mit diesem Namen existiert bereits") from error
+    return {"id": playlist_id, "name": payload.name.strip(), "active": False, "content_count": 0}
+
+
+@app.post("/api/playlists/{playlist_id}/activate")
+def activate_playlist(playlist_id: int, _: None = Depends(require_system_login)):
+    with connect() as connection:
+        exists = connection.execute("SELECT 1 FROM playlists WHERE id = ?", (playlist_id,)).fetchone()
+        if not exists:
+            raise HTTPException(status_code=404, detail="Playlist nicht gefunden")
+        connection.execute("UPDATE playlists SET active = 0")
+        connection.execute("UPDATE playlists SET active = 1 WHERE id = ?", (playlist_id,))
+    return {"active_playlist_id": playlist_id}
+
+
+@app.delete("/api/playlists/{playlist_id}", status_code=204)
+def delete_playlist(playlist_id: int, _: None = Depends(require_system_login)):
+    with connect() as connection:
+        row = connection.execute("SELECT * FROM playlists WHERE id = ?", (playlist_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Playlist nicht gefunden")
+        if connection.execute("SELECT COUNT(*) FROM playlists").fetchone()[0] <= 1:
+            raise HTTPException(status_code=409, detail="Die letzte Playlist kann nicht gelöscht werden")
+        if row["active"]:
+            raise HTTPException(status_code=409, detail="Die aktive Playlist kann nicht gelöscht werden")
+        media_rows = connection.execute(
+            "SELECT source, media_id, kind FROM content WHERE playlist_id = ?", (playlist_id,)
+        ).fetchall()
+        connection.execute("DELETE FROM playlists WHERE id = ?", (playlist_id,))
+    for media in media_rows:
+        if media["media_id"] is None and media["kind"] in {"image", "video", "pdf", "text"}:
+            (media_dir() / Path(media["source"]).name).unlink(missing_ok=True)
 
 
 @app.get("/api/content")
@@ -302,14 +371,16 @@ def upload_content(
 
     compatibility = inspect_video(destination) if kind == "video" else None
 
+    playlist_id = active_playlist_id()
     with connect() as connection:
         position = connection.execute(
-            "SELECT COALESCE(MAX(position), -1) + 1 FROM content"
+            "SELECT COALESCE(MAX(position), -1) + 1 FROM content WHERE playlist_id = ?",
+            (playlist_id,),
         ).fetchone()[0]
         cursor = connection.execute(
             """
-            INSERT INTO content(name, kind, source, duration_seconds, position)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO content(name, kind, source, duration_seconds, position, playlist_id)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 Path(file.filename or stored_name).name,
@@ -317,6 +388,7 @@ def upload_content(
                 f"/media/{stored_name}",
                 duration_seconds,
                 position,
+                playlist_id,
             ),
         )
         content_id = cursor.lastrowid
@@ -413,16 +485,18 @@ def add_library_media_to_playlist(
     _: None = Depends(require_system_login),
 ):
     media = get_library_media_or_404(media_id)
+    playlist_id = active_playlist_id()
     with connect() as connection:
         position = connection.execute(
-            "SELECT COALESCE(MAX(position), -1) + 1 FROM content"
+            "SELECT COALESCE(MAX(position), -1) + 1 FROM content WHERE playlist_id = ?",
+            (playlist_id,),
         ).fetchone()[0]
         cursor = connection.execute(
             """
-            INSERT INTO content(name, kind, source, duration_seconds, position, media_id)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO content(name, kind, source, duration_seconds, position, media_id, playlist_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (media["name"], media["kind"], media["source"], payload.duration_seconds, position, media_id),
+            (media["name"], media["kind"], media["source"], payload.duration_seconds, position, media_id, playlist_id),
         )
         content_id = cursor.lastrowid
     return serialize(get_content_or_404(content_id))
@@ -492,16 +566,18 @@ def create_text_content(
     else:
         raise HTTPException(status_code=422, detail="Bitte ein Hintergrundbild auswählen")
     try:
+        playlist_id = active_playlist_id()
         with connect() as connection:
             position = connection.execute(
-                "SELECT COALESCE(MAX(position), -1) + 1 FROM content"
+                "SELECT COALESCE(MAX(position), -1) + 1 FROM content WHERE playlist_id = ?",
+                (playlist_id,),
             ).fetchone()[0]
             cursor = connection.execute(
                 """
-                INSERT INTO content(name, kind, source, duration_seconds, position, text_config, media_id)
-                VALUES (?, 'text', ?, ?, ?, ?, ?)
+                INSERT INTO content(name, kind, source, duration_seconds, position, text_config, media_id, playlist_id)
+                VALUES (?, 'text', ?, ?, ?, ?, ?, ?)
                 """,
-                (name.strip(), source, duration_seconds, position, config, library_media_id),
+                (name.strip(), source, duration_seconds, position, config, library_media_id, playlist_id),
             )
             content_id = cursor.lastrowid
     except Exception:
@@ -565,16 +641,18 @@ def create_website(payload: WebsiteCreate, _: None = Depends(require_system_logi
     parsed = urlparse(payload.url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise HTTPException(status_code=422, detail="Ungültige HTTP(S)-Adresse")
+    playlist_id = active_playlist_id()
     with connect() as connection:
         position = connection.execute(
-            "SELECT COALESCE(MAX(position), -1) + 1 FROM content"
+            "SELECT COALESCE(MAX(position), -1) + 1 FROM content WHERE playlist_id = ?",
+            (playlist_id,),
         ).fetchone()[0]
         cursor = connection.execute(
             """
-            INSERT INTO content(name, kind, source, duration_seconds, position)
-            VALUES (?, 'website', ?, ?, ?)
+            INSERT INTO content(name, kind, source, duration_seconds, position, playlist_id)
+            VALUES (?, 'website', ?, ?, ?, ?)
             """,
-            (payload.name, payload.url, payload.duration_seconds, position),
+            (payload.name, payload.url, payload.duration_seconds, position, playlist_id),
         )
         content_id = cursor.lastrowid
     return serialize(get_content_or_404(content_id))
@@ -596,16 +674,18 @@ def normalize_owncast_url(url: str) -> str:
 @app.post("/api/content/stream", status_code=201)
 def create_stream(payload: StreamCreate, _: None = Depends(require_system_login)):
     stream_url = normalize_owncast_url(payload.url)
+    playlist_id = active_playlist_id()
     with connect() as connection:
         position = connection.execute(
-            "SELECT COALESCE(MAX(position), -1) + 1 FROM content"
+            "SELECT COALESCE(MAX(position), -1) + 1 FROM content WHERE playlist_id = ?",
+            (playlist_id,),
         ).fetchone()[0]
         cursor = connection.execute(
             """
             INSERT INTO content(
-                name, kind, source, duration_seconds, position, muted
+                name, kind, source, duration_seconds, position, muted, playlist_id
             )
-            VALUES (?, 'stream', ?, ?, ?, ?)
+            VALUES (?, 'stream', ?, ?, ?, ?, ?)
             """,
             (
                 payload.name,
@@ -613,6 +693,7 @@ def create_stream(payload: StreamCreate, _: None = Depends(require_system_login)
                 payload.duration_seconds,
                 position,
                 int(payload.muted),
+                playlist_id,
             ),
         )
         content_id = cursor.lastrowid
