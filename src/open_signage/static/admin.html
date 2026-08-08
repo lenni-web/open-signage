@@ -18,18 +18,29 @@
     </div>
   </header>
 
+  <nav class="admin-nav" aria-label="Verwaltung">
+    <button class="nav-button active" data-page="content-page">Inhalte</button>
+    <button class="nav-button" data-page="system-page">System</button>
+  </nav>
+
+  <section id="content-page" class="page">
   <main>
     <section class="card">
       <h2>Medium hochladen</h2>
       <form id="upload-form">
         <label>Datei
-          <input name="file" type="file" accept="image/*,video/mp4,video/webm" required>
+          <input name="file" type="file" accept="image/*,video/mp4,video/webm,application/pdf,.pdf" required>
         </label>
         <label>Dauer in Sekunden
           <input name="duration_seconds" type="number" min="1" max="86400" value="10" required>
         </label>
         <button>Hochladen</button>
       </form>
+      <div id="upload-warning" class="compat-warning" role="alert" hidden>
+        <strong>Video möglicherweise nicht kompatibel</strong>
+        <ul></ul>
+        <p></p>
+      </div>
     </section>
 
     <section class="card">
@@ -80,6 +91,59 @@
       <div id="playlist" class="playlist"></div>
     </section>
   </main>
+  </section>
+
+  <section id="system-page" class="page" hidden>
+    <main class="system-grid">
+      <section class="card system-overview">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Raspberry Pi</span>
+            <h2>Systeminformationen</h2>
+          </div>
+          <button id="system-refresh" class="secondary">Aktualisieren</button>
+        </div>
+        <dl class="info-list">
+          <div><dt>Hostname</dt><dd data-system="hostname">–</dd></div>
+          <div><dt>Modell</dt><dd data-system="model">–</dd></div>
+          <div><dt>Betriebssystem</dt><dd data-system="operating_system">–</dd></div>
+          <div><dt>Kernel</dt><dd data-system="kernel">–</dd></div>
+          <div><dt>Laufzeit</dt><dd data-system="uptime">–</dd></div>
+          <div><dt>Temperatur</dt><dd data-system="temperature">–</dd></div>
+          <div><dt>Auslastung</dt><dd data-system="load">–</dd></div>
+          <div><dt>Arbeitsspeicher</dt><dd data-system="memory">–</dd></div>
+          <div><dt>Datenspeicher</dt><dd data-system="disk">–</dd></div>
+        </dl>
+      </section>
+
+      <section class="card network-card">
+        <span class="eyebrow">Netzwerk</span>
+        <h2>WLAN</h2>
+        <div id="wlan-info" class="network-list"><p class="empty">Wird geladen …</p></div>
+      </section>
+
+      <section class="card network-card">
+        <span class="eyebrow">Netzwerk</span>
+        <h2>Ethernet</h2>
+        <div id="ethernet-info" class="network-list"><p class="empty">Wird geladen …</p></div>
+      </section>
+
+      <section class="card update-card">
+        <span class="eyebrow">Betriebssystem</span>
+        <h2>Systemupdate</h2>
+        <p>Aktualisiert die Paketlisten und installiert verfügbare Updates im Hintergrund.</p>
+        <div id="update-state" class="update-state idle">
+          <strong>Noch kein Systemupdate ausgeführt.</strong>
+          <span></span>
+        </div>
+        <button id="system-update">System jetzt aktualisieren</button>
+        <details id="update-log" hidden>
+          <summary>Update-Protokoll</summary>
+          <pre></pre>
+        </details>
+      </section>
+    </main>
+  </section>
   <div id="message" role="status" aria-live="polite"></div>
   <script src="/static/admin.js"></script>
 </body>

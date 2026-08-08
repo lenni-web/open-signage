@@ -54,6 +54,10 @@ function show(item) {
     element.src = item.source;
     element.title = item.name;
     element.allow = "autoplay; fullscreen";
+  } else if (item.kind === "pdf") {
+    element = document.createElement("iframe");
+    element.src = `${item.source}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
+    element.title = item.name;
   } else if (item.kind === "stream") {
     showStream(item);
     return;

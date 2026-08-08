@@ -6,6 +6,7 @@ readonly APP_DIR="/opt/open-signage"
 readonly DATA_DIR="/var/lib/open-signage"
 readonly SERVICE_FILE="/etc/systemd/system/open-signage.service"
 readonly KIOSK_COMMAND="/usr/local/bin/open-signage-kiosk"
+readonly UPDATE_COMMAND="/usr/local/sbin/open-signage-system-update"
 
 PORT=8080
 KIOSK_USER="signage"
@@ -65,8 +66,10 @@ apt-get update
 apt-get install --no-install-recommends -y \
   chromium \
   curl \
+  ffmpeg \
   fonts-dejavu-core \
   fonts-liberation \
+  iw \
   python3 \
   python3-pip \
   python3-venv \
@@ -112,6 +115,15 @@ sed \
   "${PROJECT_DIR}/deploy/open-signage-kiosk" >"${KIOSK_COMMAND}"
 chmod 0755 "${KIOSK_COMMAND}"
 
+install -o root -g root -m 0755 \
+  "${PROJECT_DIR}/deploy/open-signage-system-update" "${UPDATE_COMMAND}"
+install -o root -g root -m 0644 \
+  "${PROJECT_DIR}/deploy/open-signage-update.service" \
+  "/etc/systemd/system/open-signage-update.service"
+install -o root -g root -m 0644 \
+  "${PROJECT_DIR}/deploy/open-signage-update.path" \
+  "/etc/systemd/system/open-signage-update.path"
+
 readonly AUTOSTART_DIR="${KIOSK_HOME}/.config/labwc"
 readonly AUTOSTART_FILE="${AUTOSTART_DIR}/autostart"
 install -d -o "${KIOSK_USER}" -g "${KIOSK_USER}" -m 0755 "${AUTOSTART_DIR}"
@@ -128,6 +140,7 @@ systemctl set-default graphical.target
 systemctl enable lightdm.service
 
 systemctl daemon-reload
+systemctl enable --now open-signage-update.path
 systemctl enable --now open-signage.service
 
 "${PROJECT_DIR}/scripts/verify-installation.sh" --port "${PORT}"

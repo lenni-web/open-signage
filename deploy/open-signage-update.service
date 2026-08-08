@@ -1,0 +1,11 @@
+[Unit]
+Description=Open Signage operating system update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/open-signage-system-update
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

@@ -42,6 +42,7 @@ def initialize() -> None:
         ).fetchone()
         if existing and (
             "'stream'" not in existing["sql"]
+            or "'pdf'" not in existing["sql"]
             or "muted" not in {row["name"] for row in connection.execute("PRAGMA table_info(content)")}
         ):
             connection.execute("ALTER TABLE content RENAME TO content_legacy")
@@ -51,7 +52,7 @@ def initialize() -> None:
             CREATE TABLE IF NOT EXISTS content (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
-                kind TEXT NOT NULL CHECK(kind IN ('image', 'video', 'website', 'stream')),
+                kind TEXT NOT NULL CHECK(kind IN ('image', 'video', 'pdf', 'website', 'stream')),
                 source TEXT NOT NULL,
                 duration_seconds INTEGER NOT NULL DEFAULT 10
                     CHECK(duration_seconds BETWEEN 1 AND 86400),

@@ -8,6 +8,52 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.7.0] – 2026-08-08
+
+### Hinzugefügt
+
+- Upload und Playlistunterstützung für PDF-Dokumente.
+- Prüfung der tatsächlichen PDF-Dateisignatur beim Upload.
+- Vollbilddarstellung von PDFs im Chromium-Player ohne sichtbare Werkzeugleisten.
+
+### Geändert
+
+- Projektversion von `0.6.0` auf `0.7.0` erhöht.
+
+## [0.6.0] – 2026-08-08
+
+### Hinzugefügt
+
+- Eigene Verwaltungsseite „System“ mit Raspberry-Pi-Modell, Betriebssystem,
+  Kernel, Laufzeit, Temperatur, Last, Arbeitsspeicher und Datenspeicher.
+- Übersicht für WLAN- und Ethernet-Schnittstellen mit Verbindungsstatus,
+  IP-Adressen, Gateway, MAC-Adresse und WLAN-SSID.
+- Hintergrund-Systemupdate über eine fest definierte, privilegierte
+  `systemd`-Path-/Service-Kombination.
+- Anzeige von Updatezustand, Zeitpunkten und den letzten Protokollzeilen.
+- Schutz vor mehrfach gleichzeitig gestarteten Systemupdates.
+
+### Geändert
+
+- Das Installations- und Prüfskript richtet die Systemupdate-Überwachung ein.
+- Projektversion von `0.5.0` auf `0.6.0` erhöht.
+
+## [0.5.0] – 2026-08-08
+
+### Hinzugefügt
+
+- Serverseitige Erkennung von Container-, Video- und Audio-Codecs bei
+  Video-Uploads über `ffprobe`.
+- Sichtbare Kompatibilitätswarnung mit konkreten Codecdetails und empfohlenen
+  Zielformaten in der Verwaltungsoberfläche.
+- Automatische Installation von FFmpeg/ffprobe auf dem Raspberry Pi.
+
+### Geändert
+
+- Uploads mit unbekanntem MIME-Typ werden zusätzlich anhand ihrer Dateiendung
+  erkannt.
+- Projektversion von `0.4.0` auf `0.5.0` erhöht.
+
 ## [0.4.0] – 2026-07-29
 
 ### Hinzugefügt

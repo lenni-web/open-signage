@@ -7,6 +7,7 @@ Chromium-Kioskfenster an.
 ## Aktueller MVP
 
 - Bilder und Videos hochladen
+- PDF-Dokumente hochladen und im Vollbild anzeigen
 - Webseiten als Inhalte anlegen
 - Owncast-Livestreams direkt per HLS wiedergeben
 - Inhalte aktivieren, sortieren und mit einer Anzeigedauer versehen
@@ -16,6 +17,48 @@ Chromium-Kioskfenster an.
 - Live-Aktualisierung des Players ohne Seitenreload
 
 Weitere SRT-Quellen können später über MediaMTX ergänzt werden.
+
+### Systemverwaltung
+
+Die Seite **System** zeigt Geräte-, Speicher- und Netzwerkinformationen des
+Raspberry Pi. Dort kann außerdem ein Betriebssystemupdate gestartet werden.
+Im Hintergrund führt ein separater root-Dienst fest definiert Folgendes aus:
+
+```bash
+apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+```
+
+Die Webanwendung selbst besitzt keine allgemeinen `sudo`-Rechte und kann keine
+beliebigen Befehle übergeben. Der Fortschritt und die letzten Protokollzeilen
+werden auf der Systemseite angezeigt. Ein Neustart wird nach dem Update nicht
+automatisch durchgeführt.
+
+Da Systemupdates derzeit von jedem Gerät mit Zugriff auf die Verwaltung
+ausgelöst werden können, sollte Open Signage nur in einem vertrauenswürdigen
+lokalen Netzwerk betrieben werden. Ein Login-Schutz ist als nächster
+Sicherheitsschritt vorgesehen.
+
+### Unterstützte Videoformate
+
+Beim Upload prüft Open Signage den tatsächlichen Container sowie die Video-
+und Audio-Codecs mit `ffprobe`. Zuverlässig unterstützt werden:
+
+- MP4 mit H.264/AVC und optional AAC-Audio;
+- WebM mit VP8 oder VP9 und optional Opus- oder Vorbis-Audio.
+
+Abweichende Dateien werden weiterhin hochgeladen, aber in der Verwaltung mit
+einer deutlichen Kompatibilitätswarnung gekennzeichnet. Für lokale Entwicklung
+muss FFmpeg installiert sein; das Raspberry-Pi-Installationsskript übernimmt
+dies automatisch.
+
+### PDF-Dokumente
+
+PDF-Dateien können wie Bilder oder Videos hochgeladen, sortiert und mit einer
+Anzeigedauer versehen werden. Der Player öffnet das Dokument im integrierten
+Chromium-PDF-Viewer ohne Werkzeugleisten und passt es an die Bildschirmbreite
+an. Mehrseitige Dokumente werden als zusammenhängende Dokumentansicht
+dargestellt; ein automatischer Wechsel der einzelnen PDF-Seiten ist noch nicht
+enthalten.
 
 ## Lokal starten
 

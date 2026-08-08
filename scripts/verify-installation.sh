@@ -27,6 +27,10 @@ if command -v systemctl >/dev/null 2>&1; then
     systemctl status open-signage.service --no-pager >&2 || true
     exit 1
   }
+  systemctl is-active --quiet open-signage-update.path || {
+    printf 'Systemupdate-Überwachung ist nicht aktiv.\n' >&2
+    exit 1
+  }
 fi
 
 readonly BASE_URL="http://127.0.0.1:${PORT}"

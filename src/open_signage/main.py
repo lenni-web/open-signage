@@ -13,6 +13,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .database import connect, initialize, media_dir
+from .media_probe import inspect_video
+from .system_info import collect_system_info
+from .system_update import request_update, update_status
 from .version import __version__
 
 PACKAGE_DIR = Path(__file__).parent
@@ -24,6 +27,7 @@ ALLOWED_MEDIA_TYPES = {
     "image/gif": "image",
     "video/mp4": "video",
     "video/webm": "video",
+    "application/pdf": "pdf",
 }
 MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
 
@@ -91,6 +95,26 @@ def health():
     return {"status": "ok", "version": __version__}
 
 
+@app.get("/api/system/info")
+def system_info():
+    return collect_system_info()
+
+
+@app.get("/api/system/update")
+def get_system_update():
+    return update_status()
+
+
+@app.post("/api/system/update", status_code=202)
+def start_system_update():
+    try:
+        return request_update()
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
 @app.get("/api/content")
 def list_content(enabled_only: bool = False):
     query = "SELECT * FROM content"
@@ -109,12 +133,14 @@ def upload_content(
     file: Annotated[UploadFile, File()],
     duration_seconds: Annotated[int, Form(ge=1, le=86400)] = 10,
 ):
-    media_type = file.content_type or mimetypes.guess_type(file.filename or "")[0]
+    media_type = file.content_type
+    if media_type not in ALLOWED_MEDIA_TYPES:
+        media_type = mimetypes.guess_type(file.filename or "")[0]
     kind = ALLOWED_MEDIA_TYPES.get(media_type or "")
     if kind is None:
         raise HTTPException(
             status_code=415,
-            detail="Erlaubt sind JPG, PNG, WebP, GIF, MP4 und WebM",
+            detail="Erlaubt sind JPG, PNG, WebP, GIF, MP4, WebM und PDF",
         )
 
     suffix = Path(file.filename or "").suffix.lower()
@@ -134,6 +160,17 @@ def upload_content(
     finally:
         file.file.close()
 
+    if kind == "pdf":
+        with destination.open("rb") as uploaded_pdf:
+            if uploaded_pdf.read(5) != b"%PDF-":
+                destination.unlink(missing_ok=True)
+                raise HTTPException(
+                    status_code=415,
+                    detail="Die Datei ist kein gültiges PDF-Dokument.",
+                )
+
+    compatibility = inspect_video(destination) if kind == "video" else None
+
     with connect() as connection:
         position = connection.execute(
             "SELECT COALESCE(MAX(position), -1) + 1 FROM content"
@@ -152,7 +189,10 @@ def upload_content(
             ),
         )
         content_id = cursor.lastrowid
-    return serialize(get_content_or_404(content_id))
+    response = serialize(get_content_or_404(content_id))
+    if compatibility is not None:
+        response["compatibility"] = compatibility
+    return response
 
 
 @app.post("/api/content/website", status_code=201)
@@ -238,7 +278,7 @@ def delete_content(content_id: int):
     row = get_content_or_404(content_id)
     with connect() as connection:
         connection.execute("DELETE FROM content WHERE id = ?", (content_id,))
-    if row["kind"] in {"image", "video"}:
+    if row["kind"] in {"image", "video", "pdf"}:
         stored_name = Path(row["source"]).name
         (media_dir() / stored_name).unlink(missing_ok=True)
 
