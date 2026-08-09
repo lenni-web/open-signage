@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly REQUEST="/var/lib/open-signage/system-action-request"
+[[ -f "${REQUEST}" ]] || exit 0
+action="$(tr -d '\r\n' <"${REQUEST}")"
+rm -f "${REQUEST}"
+
+case "${action}" in
+  restart_service) systemctl restart open-signage.service ;;
+  reboot) systemctl reboot ;;
+  poweroff) systemctl poweroff ;;
+  *) printf 'Unbekannte Systemaktion: %s\n' "${action}" >&2; exit 2 ;;
+esac

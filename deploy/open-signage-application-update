@@ -73,7 +73,17 @@ fi
   install -o root -g root -m 0644 \
     "${release_dir}/deploy/open-signage-application-update.path" \
     /etc/systemd/system/open-signage-application-update.path
+  install -o root -g root -m 0755 \
+    "${release_dir}/deploy/open-signage-system-action" \
+    /usr/local/sbin/open-signage-system-action
+  install -o root -g root -m 0644 \
+    "${release_dir}/deploy/open-signage-system-action.service" \
+    /etc/systemd/system/open-signage-system-action.service
+  install -o root -g root -m 0644 \
+    "${release_dir}/deploy/open-signage-system-action.path" \
+    /etc/systemd/system/open-signage-system-action.path
   systemctl daemon-reload
+  systemctl enable --now open-signage-system-action.path
 
   systemctl stop open-signage.service
   mv "${APP_DIR}" "${backup_dir}"

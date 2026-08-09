@@ -35,6 +35,10 @@ def set_setting(key: str, value: str) -> None:
         )
 
 
+def get_setting(key: str, default: str | None = None) -> str | None:
+    return _setting(key) or default
+
+
 def screen_name() -> str:
     return _setting("screen_name") or "Open Signage"
 

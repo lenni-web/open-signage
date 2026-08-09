@@ -204,6 +204,7 @@ button:disabled { cursor: default; opacity: .35; }
 .playlist-manager details { grid-column: 1 / -1; }
 .playlist-list { display: grid; gap: 8px; margin-top: 12px; }
 .playlist-list article { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px; border: 1px solid var(--line); border-radius: 9px; }
+.playlist-actions, .system-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .system-overview, .update-card { grid-column: 1 / -1; }
 .collapsible-card { padding: 0; }
 .collapsible-summary { display: flex; align-items: center; padding: 22px; cursor: pointer; list-style: none; }

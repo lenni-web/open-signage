@@ -9,6 +9,7 @@ readonly KIOSK_COMMAND="/usr/local/bin/open-signage-kiosk"
 readonly UPDATE_COMMAND="/usr/local/sbin/open-signage-system-update"
 readonly APPLICATION_UPDATE_COMMAND="/usr/local/sbin/open-signage-application-update"
 readonly APPLICATION_UPDATE_CONFIG="/etc/default/open-signage-application-update"
+readonly SYSTEM_ACTION_COMMAND="/usr/local/sbin/open-signage-system-action"
 
 PORT=8080
 KIOSK_USER="signage"
@@ -141,6 +142,12 @@ install -d -o root -g root -m 0755 /etc/default
 printf 'SOURCE_REPOSITORY=%q\nSOURCE_USER=%q\nPORT=%q\n' \
   "${PROJECT_DIR}" "${SOURCE_USER}" "${PORT}" >"${APPLICATION_UPDATE_CONFIG}"
 chmod 0600 "${APPLICATION_UPDATE_CONFIG}"
+install -o root -g root -m 0755 \
+  "${PROJECT_DIR}/deploy/open-signage-system-action" "${SYSTEM_ACTION_COMMAND}"
+install -o root -g root -m 0644 \
+  "${PROJECT_DIR}/deploy/open-signage-system-action.service" "/etc/systemd/system/open-signage-system-action.service"
+install -o root -g root -m 0644 \
+  "${PROJECT_DIR}/deploy/open-signage-system-action.path" "/etc/systemd/system/open-signage-system-action.path"
 
 readonly AUTOSTART_DIR="${KIOSK_HOME}/.config/labwc"
 readonly AUTOSTART_FILE="${AUTOSTART_DIR}/autostart"
@@ -160,6 +167,7 @@ systemctl enable lightdm.service
 systemctl daemon-reload
 systemctl enable --now open-signage-update.path
 systemctl enable --now open-signage-application-update.path
+systemctl enable --now open-signage-system-action.path
 systemctl enable --now open-signage.service
 
 "${PROJECT_DIR}/scripts/verify-installation.sh" --port "${PORT}"

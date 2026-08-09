@@ -1,0 +1,6 @@
+[Unit]
+Description=Open Signage requested system action
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/open-signage-system-action

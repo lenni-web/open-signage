@@ -9,6 +9,8 @@ const imagePreloads = new Map();
 let currentItem = null;
 let playerState = "idle";
 let playerError = null;
+const CACHE_KEY = "open-signage-playlist-v1";
+const CURRENT_KEY = "open-signage-current-content";
 
 function sendHeartbeat(state = playerState, error = playerError) {
   playerState = state;
@@ -86,6 +88,7 @@ function advance() {
 function show(item) {
   clearStage();
   currentItem = item;
+  try { localStorage.setItem(CURRENT_KEY, String(item.id)); } catch (_) {}
   sendHeartbeat("playing", null);
   let element;
   if (item.kind === "image") {
@@ -94,7 +97,10 @@ function show(item) {
     element.alt = item.name;
     element.fetchPriority = "high";
     element.decoding = "async";
-    element.addEventListener("error", () => sendHeartbeat("error", "Bild konnte nicht geladen werden."));
+    element.addEventListener("error", () => {
+      sendHeartbeat("error", "Bild konnte nicht geladen werden.");
+      advance();
+    }, { once: true });
   } else if (item.kind === "video") {
     element = document.createElement("video");
     element.src = item.source;
@@ -238,6 +244,7 @@ async function refreshPlaylist() {
     if (nextSignature !== playlistSignature) {
       const currentId = items[currentIndex]?.id;
       items = nextItems;
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(nextItems)); } catch (_) {}
       playlistSignature = nextSignature;
       const preservedIndex = items.findIndex(item => item.id === currentId);
       currentIndex = preservedIndex >= 0 ? preservedIndex - 1 : -1;
@@ -250,6 +257,16 @@ async function refreshPlaylist() {
   }
 }
 
+try {
+  const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "[]");
+  if (Array.isArray(cached) && cached.length) {
+    items = cached;
+    playlistSignature = signature(cached);
+    const rememberedId = Number(localStorage.getItem(CURRENT_KEY));
+    currentIndex = Math.max(-1, cached.findIndex(item => item.id === rememberedId) - 1);
+    preloadPlaylist(items, Math.max(0, currentIndex + 1)).then(advance);
+  }
+} catch (_) {}
 refreshPlaylist();
 window.setInterval(refreshPlaylist, 5000);
 window.setInterval(() => sendHeartbeat(), 10000);

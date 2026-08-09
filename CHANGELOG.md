@@ -8,6 +8,25 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.11.0] – 2026-08-09
+
+### Hinzugefügt
+
+- Lokaler Player-Cache mit Wiederaufnahme des zuletzt gezeigten Inhalts bei
+  vorübergehend nicht erreichbarem Server sowie automatisches Überspringen
+  defekter Bild- und Videodateien.
+- Speicherübersicht und sichere Bereinigung ungenutzter Mediathek-Einträge.
+- Zeitpläne für ganze Playlists nach Gültigkeitszeitraum, Wochentagen und
+  täglichen Uhrzeiten; aktive Zeitpläne übersteuern die manuelle Auswahl.
+- Geschützte Systemaktionen zum Neustart des Dienstes, Neustarten und
+  Herunterfahren des Raspberry Pi über einen systemd-Helfer.
+- Stabile Geräte-ID sowie Rollen Standalone, Master und Slave mit Master-Adresse
+  und vorbereitetem Synchronisationsstatus.
+
+### Geändert
+
+- Projektversion von `0.10.0` auf `0.11.0` erhöht.
+
 ## [0.10.0] – 2026-08-08
 
 ### Hinzugefügt

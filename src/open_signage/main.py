@@ -15,8 +15,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .database import connect, initialize, media_dir
-from .auth import change_password, create_session, destroy_session, require_system_login, screen_name, set_setting, verify_password
+from .database import connect, data_dir, initialize, media_dir
+from .auth import change_password, create_session, destroy_session, get_setting, require_system_login, screen_name, set_setting, verify_password
 from .application_update import request_update as request_application_update
 from .application_update import update_status as application_update_status
 from .media_probe import inspect_video
@@ -101,6 +101,24 @@ class PlaylistCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
 
 
+class PlaylistScheduleUpdate(BaseModel):
+    schedule_enabled: bool = False
+    schedule_start: str | None = Field(default=None, max_length=32)
+    schedule_end: str | None = Field(default=None, max_length=32)
+    schedule_weekdays: list[int] = Field(default_factory=list)
+    schedule_daily_start: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    schedule_daily_end: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+class DeviceSettings(BaseModel):
+    role: str = Field(pattern=r"^(standalone|master|slave)$")
+    master_url: str = Field(default="", max_length=2048)
+
+
+class SystemAction(BaseModel):
+    action: str = Field(pattern=r"^(restart_service|reboot|poweroff)$")
+
+
 class ImageEdit(BaseModel):
     rotate: int = Field(default=0)
     crop_16_9: bool = False
@@ -129,8 +147,16 @@ class PlayerHeartbeat(BaseModel):
     error: str | None = Field(default=None, max_length=500)
 
 
-def active_playlist_id() -> int:
+def active_playlist_id(now: datetime | None = None) -> int:
     with connect() as connection:
+        scheduled = connection.execute(
+            "SELECT * FROM playlists WHERE schedule_enabled = 1 ORDER BY id DESC"
+        ).fetchall()
+        for candidate in scheduled:
+            item = dict(candidate)
+            item["schedule_weekdays"] = json.loads(item["schedule_weekdays"] or "[]")
+            if scheduled_now(item, now):
+                return item["id"]
         row = connection.execute(
             "SELECT id FROM playlists WHERE active = 1 ORDER BY id LIMIT 1"
         ).fetchone()
@@ -151,9 +177,13 @@ def serialize(row) -> dict:
 
 def scheduled_now(item: dict, now: datetime | None = None) -> bool:
     now = now or datetime.now().astimezone()
-    if item.get("schedule_start") and now < datetime.fromisoformat(item["schedule_start"]):
+    def schedule_moment(value: str) -> datetime:
+        moment = datetime.fromisoformat(value)
+        return moment.replace(tzinfo=now.tzinfo) if moment.tzinfo is None else moment
+
+    if item.get("schedule_start") and now < schedule_moment(item["schedule_start"]):
         return False
-    if item.get("schedule_end") and now > datetime.fromisoformat(item["schedule_end"]):
+    if item.get("schedule_end") and now > schedule_moment(item["schedule_end"]):
         return False
     weekdays = item.get("schedule_weekdays") or []
     if weekdays and now.weekday() not in weekdays:
@@ -195,6 +225,15 @@ def get_library_media_or_404(media_id: int):
 def serialize_library_media(row) -> dict:
     item = dict(row)
     item["metadata"] = json.loads(item.pop("metadata_json") or "{}")
+    return item
+
+
+def serialize_playlist(row) -> dict:
+    item = dict(row)
+    item["active"] = bool(item["active"])
+    item["schedule_enabled"] = bool(item["schedule_enabled"])
+    item["schedule_weekdays"] = json.loads(item["schedule_weekdays"] or "[]")
+    item["effective"] = item["id"] == active_playlist_id()
     return item
 
 
@@ -304,6 +343,61 @@ def get_public_settings():
     return {"screen_name": screen_name()}
 
 
+@app.get("/api/system/device")
+def get_device_settings(_: None = Depends(require_system_login)):
+    device_id = get_setting("device_id")
+    if not device_id:
+        device_id = str(uuid.uuid4())
+        set_setting("device_id", device_id)
+    role = get_setting("device_role", "standalone")
+    master_url = get_setting("master_url", "")
+    return {"device_id": device_id, "role": role, "master_url": master_url,
+            "sync_status": "bereit" if role != "slave" else "noch nicht verbunden"}
+
+
+@app.patch("/api/system/device")
+def update_device_settings(payload: DeviceSettings, _: None = Depends(require_system_login)):
+    if payload.role == "slave" and not payload.master_url.strip():
+        raise HTTPException(status_code=422, detail="Für einen Slave ist die Master-Adresse erforderlich")
+    set_setting("device_role", payload.role)
+    set_setting("master_url", payload.master_url.strip())
+    return get_device_settings(_)
+
+
+@app.get("/api/system/storage")
+def storage_status(_: None = Depends(require_system_login)):
+    with connect() as connection:
+        rows = connection.execute("SELECT * FROM media_library").fetchall()
+        used = {row[0] for row in connection.execute("SELECT DISTINCT media_id FROM content WHERE media_id IS NOT NULL")}
+    files = [path for path in media_dir().iterdir() if path.is_file()]
+    return {"media_count": len(rows), "unused_media_count": sum(row["id"] not in used for row in rows),
+            "media_bytes": sum(path.stat().st_size for path in files), "file_count": len(files)}
+
+
+@app.post("/api/system/storage/cleanup")
+def cleanup_storage(_: None = Depends(require_system_login)):
+    removed_media = 0
+    removed_files = 0
+    with connect() as connection:
+        rows = connection.execute(
+            "SELECT * FROM media_library WHERE id NOT IN (SELECT DISTINCT media_id FROM content WHERE media_id IS NOT NULL)"
+        ).fetchall()
+        for row in rows:
+            for source in {row["source"], row["original_source"], row["thumbnail_source"]}:
+                if source:
+                    path = media_dir() / Path(source).name
+                    if path.exists(): path.unlink(); removed_files += 1
+            connection.execute("DELETE FROM media_library WHERE id = ?", (row["id"],))
+            removed_media += 1
+    return {"removed_media": removed_media, "removed_files": removed_files}
+
+
+@app.post("/api/system/action", status_code=202)
+def request_system_action(payload: SystemAction, _: None = Depends(require_system_login)):
+    (data_dir() / "system-action-request").write_text(payload.action, encoding="utf-8")
+    return {"queued": True, "action": payload.action}
+
+
 @app.get("/api/system/session")
 def system_session(_: None = Depends(require_system_login)):
     return {"authenticated": True, "screen_name": screen_name()}
@@ -367,7 +461,27 @@ def list_playlists(_: None = Depends(require_system_login)):
             GROUP BY playlists.id ORDER BY playlists.name COLLATE NOCASE
             """
         ).fetchall()
-    return [{**dict(row), "active": bool(row["active"])} for row in rows]
+    return [serialize_playlist(row) for row in rows]
+
+
+@app.patch("/api/playlists/{playlist_id}/schedule")
+def update_playlist_schedule(playlist_id: int, payload: PlaylistScheduleUpdate, _: None = Depends(require_system_login)):
+    if any(day < 0 or day > 6 for day in payload.schedule_weekdays):
+        raise HTTPException(status_code=422, detail="Ungültiger Wochentag")
+    for value in (payload.schedule_start, payload.schedule_end):
+        if value:
+            try: datetime.fromisoformat(value)
+            except ValueError as error: raise HTTPException(status_code=422, detail="Ungültiges Datum") from error
+    with connect() as connection:
+        if not connection.execute("SELECT 1 FROM playlists WHERE id = ?", (playlist_id,)).fetchone():
+            raise HTTPException(status_code=404, detail="Playlist nicht gefunden")
+        connection.execute("""UPDATE playlists SET schedule_enabled=?, schedule_start=?, schedule_end=?,
+            schedule_weekdays=?, schedule_daily_start=?, schedule_daily_end=? WHERE id=?""",
+            (int(payload.schedule_enabled), payload.schedule_start, payload.schedule_end,
+             json.dumps(sorted(set(payload.schedule_weekdays))), payload.schedule_daily_start,
+             payload.schedule_daily_end, playlist_id))
+    with connect() as connection:
+        return serialize_playlist(connection.execute("SELECT playlists.*, (SELECT COUNT(*) FROM content WHERE playlist_id=playlists.id) content_count FROM playlists WHERE id=?", (playlist_id,)).fetchone())
 
 
 @app.post("/api/playlists", status_code=201)

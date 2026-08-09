@@ -353,6 +353,41 @@
         <div id="wlan-info" class="network-list"><p class="empty">Wird geladen …</p></div>
       </section>
 
+      <section class="card system-overview">
+        <span class="eyebrow">Datenspeicher</span><h2>Speicherverwaltung</h2>
+        <div class="monitoring-summary">
+          <div><span>Mediathek</span><strong id="storage-media">–</strong></div>
+          <div><span>Dateien</span><strong id="storage-files">–</strong></div>
+          <div><span>Ungenutzt</span><strong id="storage-unused">–</strong></div>
+          <div><span>Speicherbedarf</span><strong id="storage-size">–</strong></div>
+        </div>
+        <button id="storage-cleanup" class="danger">Ungenutzte Medien sicher löschen</button>
+      </section>
+
+      <section class="card system-overview">
+        <span class="eyebrow">Geräteverbund</span><h2>Master-/Slave-Grundlage</h2>
+        <p>Bereitet dieses Gerät für eine spätere zentrale Synchronisation vor.</p>
+        <form id="device-form">
+          <label>Geräte-ID<input name="device_id" readonly></label>
+          <label>Rolle<select name="role"><option value="standalone">Standalone</option><option value="master">Master</option><option value="slave">Slave</option></select></label>
+          <label>Master-Adresse<input name="master_url" type="url" placeholder="http://open-signage-master.local:8080"></label>
+          <small id="sync-status">Synchronisationsstatus: –</small>
+          <button>Gerätekonfiguration speichern</button>
+        </form>
+      </section>
+
+      <details class="card system-overview collapsible-card">
+        <summary class="collapsible-summary"><span><span class="eyebrow">Steuerung</span><strong>Systemaktionen</strong></span></summary>
+        <div class="collapsible-body">
+          <p>Diese Aktionen können die Anzeige kurzzeitig oder bis zum nächsten Einschalten unterbrechen.</p>
+          <div class="form-actions system-actions">
+            <button class="secondary" data-system-action="restart_service">Open Signage neu starten</button>
+            <button class="secondary" data-system-action="reboot">Raspberry Pi neu starten</button>
+            <button class="danger" data-system-action="poweroff">Raspberry Pi herunterfahren</button>
+          </div>
+        </div>
+      </details>
+
       <section class="card network-card">
         <span class="eyebrow">Netzwerk</span>
         <h2>Ethernet</h2>
@@ -436,6 +471,22 @@
         <button id="schedule-cancel" class="secondary" type="button">Abbrechen</button>
         <button>Speichern</button>
       </div>
+    </form>
+  </dialog>
+  <dialog id="playlist-schedule-dialog" class="form-dialog">
+    <form id="playlist-schedule-form">
+      <h2>Playlist planen</h2><p id="playlist-schedule-name"></p>
+      <label class="inline-check"><input name="schedule_enabled" type="checkbox"><span>Zeitplan aktivieren</span></label>
+      <label>Gültig ab<input name="schedule_start" type="datetime-local"></label>
+      <label>Gültig bis<input name="schedule_end" type="datetime-local"></label>
+      <fieldset><legend>Wochentage (keine Auswahl = täglich)</legend><div class="weekday-grid">
+        <label><input type="checkbox" name="weekday" value="0"> Mo</label><label><input type="checkbox" name="weekday" value="1"> Di</label>
+        <label><input type="checkbox" name="weekday" value="2"> Mi</label><label><input type="checkbox" name="weekday" value="3"> Do</label>
+        <label><input type="checkbox" name="weekday" value="4"> Fr</label><label><input type="checkbox" name="weekday" value="5"> Sa</label>
+        <label><input type="checkbox" name="weekday" value="6"> So</label>
+      </div></fieldset>
+      <div class="time-grid"><label>Täglich ab<input name="schedule_daily_start" type="time"></label><label>Täglich bis<input name="schedule_daily_end" type="time"></label></div>
+      <div class="form-actions"><button id="playlist-schedule-cancel" class="secondary" type="button">Abbrechen</button><button>Speichern</button></div>
     </form>
   </dialog>
   <dialog id="image-editor-dialog" class="form-dialog">

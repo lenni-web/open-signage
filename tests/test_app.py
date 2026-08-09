@@ -812,3 +812,46 @@ def test_player_heartbeat_rejects_unknown_state(tmp_path: Path, monkeypatch):
         assert client.post(
             "/api/player/heartbeat", json={"state": "compromised"}
         ).status_code == 422
+
+
+def test_playlist_schedule_can_override_manual_playlist(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        client.post("/api/content/website", json={"name": "Standard", "url": "https://example.org", "duration_seconds": 12})
+        scheduled = client.post("/api/playlists", json={"name": "Abend"}).json()
+        client.post(f"/api/playlists/{scheduled['id']}/activate")
+        special = client.post("/api/content/website", json={"name": "Geplant", "url": "https://example.net", "duration_seconds": 12}).json()
+        client.post("/api/playlists/1/activate")
+        response = client.patch(f"/api/playlists/{scheduled['id']}/schedule", json={
+            "schedule_enabled": True, "schedule_weekdays": [datetime.now().astimezone().weekday()],
+            "schedule_daily_start": "00:00", "schedule_daily_end": "23:59",
+        })
+        assert response.status_code == 200
+        shown = client.get("/api/player/content").json()
+    assert [item["id"] for item in shown] == [special["id"]]
+
+
+def test_storage_cleanup_removes_unused_library_media(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        media = client.post("/api/media-library", files={"file": ("unused.png", VALID_PNG, "image/png")}).json()
+        assert client.get("/api/system/storage").json()["unused_media_count"] == 1
+        cleaned = client.post("/api/system/storage/cleanup").json()
+        assert cleaned["removed_media"] == 1
+        assert client.get("/api/media-library").json() == []
+    assert not (tmp_path / "media" / Path(media["source"]).name).exists()
+
+
+def test_device_role_and_system_action_are_persisted(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        first = client.get("/api/system/device").json()
+        assert first["role"] == "standalone"
+        updated = client.patch("/api/system/device", json={"role": "slave", "master_url": "http://master.local:8080"})
+        assert updated.status_code == 200
+        assert updated.json()["device_id"] == first["device_id"]
+        assert client.post("/api/system/action", json={"action": "reboot"}).status_code == 202
+    assert (tmp_path / "system-action-request").read_text() == "reboot"

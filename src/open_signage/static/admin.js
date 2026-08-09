@@ -10,6 +10,7 @@ let libraryItems = [];
 let applicationUpdateInProgress = false;
 let applicationReloadScheduled = false;
 let schedulingItem = null;
+let schedulingPlaylist = null;
 let playlists = [];
 let editingLibraryImage = null;
 const selectedMediaIds = new Set();
@@ -50,7 +51,7 @@ async function loadSettings() {
 }
 
 async function openSystemPage() {
-  await Promise.all([loadSystemInfo(), loadMonitoring(), loadUpdateStatus(), loadApplicationUpdateStatus()]);
+  await Promise.all([loadSystemInfo(), loadMonitoring(), loadUpdateStatus(), loadApplicationUpdateStatus(), loadStorage(), loadDevice()]);
 }
 
 async function boot() {
@@ -438,7 +439,11 @@ function renderPlaylists() {
   playlists.forEach((playlist) => {
     const row = document.createElement("article");
     const label = document.createElement("span");
-    label.textContent = `${playlist.name} · ${playlist.content_count} Inhalte${playlist.active ? " · aktiv" : ""}`;
+    label.textContent = `${playlist.name} · ${playlist.content_count} Inhalte${playlist.active ? " · manuell aktiv" : ""}${playlist.effective ? " · aktuell angezeigt" : ""}${playlist.schedule_enabled ? " · geplant" : ""}`;
+    const schedule = document.createElement("button");
+    schedule.className = "secondary";
+    schedule.textContent = playlist.schedule_enabled ? "Zeitplan ✓" : "Zeitplan";
+    schedule.addEventListener("click", () => openPlaylistSchedule(playlist));
     const button = document.createElement("button");
     button.className = "danger";
     button.textContent = "Löschen";
@@ -451,7 +456,10 @@ function renderPlaylists() {
         notify("Playlist gelöscht");
       } catch (error) { notify(error.message, true); }
     });
-    row.append(label, button);
+    const actions = document.createElement("div");
+    actions.className = "playlist-actions";
+    actions.append(schedule, button);
+    row.append(label, actions);
     list.append(row);
   });
 }
@@ -470,6 +478,37 @@ async function loadVersion() {
   } catch (_) {
     document.querySelector("#app-version").textContent = "Version unbekannt";
   }
+}
+
+async function loadStorage() {
+  const status = await api("/api/system/storage");
+  document.querySelector("#storage-media").textContent = `${status.media_count} Medien`;
+  document.querySelector("#storage-files").textContent = `${status.file_count} Dateien`;
+  document.querySelector("#storage-unused").textContent = `${status.unused_media_count} Medien`;
+  document.querySelector("#storage-size").textContent = formatBytes(status.media_bytes);
+  document.querySelector("#storage-cleanup").disabled = status.unused_media_count === 0;
+}
+
+async function loadDevice() {
+  const device = await api("/api/system/device");
+  const form = document.querySelector("#device-form");
+  form.elements.device_id.value = device.device_id;
+  form.elements.role.value = device.role;
+  form.elements.master_url.value = device.master_url;
+  document.querySelector("#sync-status").textContent = `Synchronisationsstatus: ${device.sync_status}`;
+}
+
+function openPlaylistSchedule(item) {
+  schedulingPlaylist = item;
+  const form = document.querySelector("#playlist-schedule-form");
+  document.querySelector("#playlist-schedule-name").textContent = item.name;
+  form.elements.schedule_enabled.checked = item.schedule_enabled;
+  form.elements.schedule_start.value = localDateTimeValue(item.schedule_start);
+  form.elements.schedule_end.value = localDateTimeValue(item.schedule_end);
+  form.elements.schedule_daily_start.value = item.schedule_daily_start || "";
+  form.elements.schedule_daily_end.value = item.schedule_daily_end || "";
+  form.querySelectorAll('[name="weekday"]').forEach(box => { box.checked = item.schedule_weekdays?.includes(Number(box.value)); });
+  document.querySelector("#playlist-schedule-dialog").showModal();
 }
 
 function formatBytes(bytes) {
@@ -1040,4 +1079,56 @@ document.querySelector("#schedule-form").addEventListener("submit", async (event
     notify("Zeitplan gespeichert");
   } catch (error) { notify(error.message, true); }
 });
+
+document.querySelector("#playlist-schedule-cancel").addEventListener("click", () => document.querySelector("#playlist-schedule-dialog").close());
+document.querySelector("#playlist-schedule-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!schedulingPlaylist) return;
+  const form = new FormData(event.target);
+  try {
+    await api(`/api/playlists/${schedulingPlaylist.id}/schedule`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        schedule_enabled: form.get("schedule_enabled") === "on",
+        schedule_start: form.get("schedule_start") ? new Date(form.get("schedule_start")).toISOString() : null,
+        schedule_end: form.get("schedule_end") ? new Date(form.get("schedule_end")).toISOString() : null,
+        schedule_weekdays: form.getAll("weekday").map(Number),
+        schedule_daily_start: form.get("schedule_daily_start") || null,
+        schedule_daily_end: form.get("schedule_daily_end") || null,
+      }),
+    });
+    document.querySelector("#playlist-schedule-dialog").close();
+    await Promise.all([loadPlaylists(), load()]);
+    notify("Playlist-Zeitplan gespeichert");
+  } catch (error) { notify(error.message, true); }
+});
+
+document.querySelector("#storage-cleanup").addEventListener("click", async () => {
+  if (!window.confirm("Alle ungenutzten Mediathek-Einträge und deren Dateien dauerhaft löschen?")) return;
+  try {
+    const result = await api("/api/system/storage/cleanup", { method: "POST" });
+    await Promise.all([loadStorage(), loadLibrary()]);
+    notify(`${result.removed_media} ungenutzte Medien gelöscht`);
+  } catch (error) { notify(error.message, true); }
+});
+
+document.querySelector("#device-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = new FormData(event.target);
+  try {
+    await api("/api/system/device", { method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: form.get("role"), master_url: form.get("master_url") }) });
+    await loadDevice(); notify("Gerätekonfiguration gespeichert");
+  } catch (error) { notify(error.message, true); }
+});
+
+document.querySelectorAll("[data-system-action]").forEach(button => button.addEventListener("click", async () => {
+  const action = button.dataset.systemAction;
+  const labels = { restart_service: "Open Signage neu starten", reboot: "den Raspberry Pi neu starten", poweroff: "den Raspberry Pi herunterfahren" };
+  if (!window.confirm(`${labels[action]}?`)) return;
+  try {
+    await api("/api/system/action", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+    notify("Systemaktion wurde angefordert");
+  } catch (error) { notify(error.message, true); }
+}));
 boot();

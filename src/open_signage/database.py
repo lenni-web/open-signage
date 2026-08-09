@@ -59,6 +59,12 @@ def initialize() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
                 active INTEGER NOT NULL DEFAULT 0,
+                schedule_enabled INTEGER NOT NULL DEFAULT 0,
+                schedule_start TEXT,
+                schedule_end TEXT,
+                schedule_weekdays TEXT,
+                schedule_daily_start TEXT,
+                schedule_daily_end TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             INSERT OR IGNORE INTO playlists(id, name, active)
@@ -173,3 +179,11 @@ def initialize() -> None:
         }.items():
             if name not in media_columns:
                 connection.execute(f"ALTER TABLE media_library ADD COLUMN {name} {definition}")
+        playlist_columns = {row["name"] for row in connection.execute("PRAGMA table_info(playlists)")}
+        for name, definition in {
+            "schedule_enabled": "INTEGER NOT NULL DEFAULT 0", "schedule_start": "TEXT",
+            "schedule_end": "TEXT", "schedule_weekdays": "TEXT",
+            "schedule_daily_start": "TEXT", "schedule_daily_end": "TEXT",
+        }.items():
+            if name not in playlist_columns:
+                connection.execute(f"ALTER TABLE playlists ADD COLUMN {name} {definition}")
