@@ -17,10 +17,13 @@ from open_signage.database import connect, integrity_check_if_due
 from open_signage.application_update import request_update as request_application_update
 from open_signage.application_update import update_status as application_update_status
 from open_signage.main import app, scheduled_now
+from open_signage.display_control import schedule_analysis
 from open_signage.media_probe import evaluate_video_probe
 from open_signage.system_update import request_update, update_status
 from open_signage.version import __version__
 from open_signage.upload_security import detect_media_type, ensure_free_space
+from open_signage.auth import get_setting, set_setting
+from open_signage.sync import safe_sync_from_master, snapshot as sync_snapshot
 
 PROJECT_ROOT = Path(__file__).parents[1]
 VALID_PNG = base64.b64decode(
@@ -1117,3 +1120,102 @@ def test_privileged_display_helper_sanitizes_its_configuration(tmp_path: Path):
         {"weekday": 1, "on": "19:30", "off": "21:30"},
     ]
     assert config["activate_source"] is False
+
+
+def test_backup_can_be_created_downloaded_and_restored(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        created = client.post("/api/content/website", json={"name": "Gesichert", "url": "https://example.org"})
+        backup = client.post("/api/system/backups", json={"include_media": False})
+        assert backup.status_code == 201
+        archive = client.get(f"/api/system/backups/{backup.json()['name']}")
+        assert archive.status_code == 200
+        client.delete(f"/api/content/{created.json()['id']}")
+        restored = client.post(
+            "/api/system/backups/restore",
+            files={"file": ("backup.zip", archive.content, "application/zip")},
+        )
+        assert restored.status_code == 200
+        assert [item["name"] for item in client.get("/api/content").json()] == ["Gesichert"]
+
+
+def test_security_status_reports_integrity_and_backup(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        status = client.get("/api/system/security-status")
+    assert status.status_code == 200
+    assert status.json()["checks"]["database_integrity_ok"] is True
+    assert status.json()["checks"]["backup_available"] is True
+
+
+def test_storage_audit_finds_duplicates_missing_and_orphans(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        first = client.post("/api/media-library", files={"file": ("a.png", VALID_PNG, "image/png")}).json()
+        second = client.post("/api/media-library", files={"file": ("b.png", VALID_PNG, "image/png")}).json()
+        third = client.post("/api/media-library", files={"file": ("c.png", VALID_PNG, "image/png")}).json()
+        (tmp_path / "media" / Path(first["source"]).name).unlink()
+        (tmp_path / "media" / "orphan.bin").write_bytes(b"orphan")
+        audit = client.get("/api/system/storage").json()
+        assert first["id"] in audit["missing_media_ids"]
+        assert audit["orphan_file_count"] == 1
+        assert any({second["id"], third["id"]}.issubset(group) for group in map(set, audit["duplicate_groups"]))
+        cleaned = client.post("/api/system/storage/orphans/cleanup").json()
+        assert cleaned["removed_files"] == 1
+
+
+def test_schedule_analysis_detects_overlap_and_next_action():
+    now = datetime(2026, 8, 11, 7, 0).astimezone()
+    result = schedule_analysis({"schedule_entries": [
+        {"weekday": 1, "on": "08:00", "off": "10:00"},
+        {"weekday": 1, "on": "09:00", "off": "11:00"},
+    ]}, now)
+    assert result["conflicts"] == [{"first": 0, "second": 1}]
+    assert result["next_action"]["action"] == "on"
+
+
+def test_master_registers_device_and_protects_snapshot(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        client.patch("/api/system/device", json={"role": "master", "master_url": ""})
+        pairing = client.get("/api/system/device").json()["pairing_code"]
+        assert client.get("/api/sync/snapshot").status_code == 401
+        registration = client.post("/api/sync/register", json={
+            "device_id": "slave-1", "name": "Foyer", "pairing_token": pairing,
+        })
+        assert registration.status_code == 200
+        token = registration.json()["device_token"]
+        snapshot = client.get("/api/sync/snapshot", headers={"Authorization": f"Bearer {token}"})
+        assert snapshot.status_code == 200
+        assert snapshot.json()["format"] == 1
+        devices = client.get("/api/system/device").json()["registered_devices"]
+        assert devices[0]["device_id"] == "slave-1"
+
+
+def test_slave_applies_snapshot_and_keeps_device_specific_settings(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    initialize()
+    set_setting("device_id", "local-slave")
+    set_setting("device_role", "slave")
+    set_setting("master_url", "http://master.local:8080")
+    set_setting("sync_pairing_code", "pair-me")
+    master_data = sync_snapshot()
+    master_data["settings"]["screen_name"] = "Vom Master"
+    master_data["playlists"][0]["name"] = "Master-Playlist"
+
+    def fake_request(url, method="GET", data=None, token=""):
+        return {"device_token": "individual-device-token"} if url.endswith("/register") else master_data
+
+    monkeypatch.setattr("open_signage.sync._request_json", fake_request)
+    result = safe_sync_from_master()
+    assert result["status"] == "synchronized"
+    assert get_setting("screen_name") == "Vom Master"
+    assert get_setting("device_id") == "local-slave"
+    assert get_setting("device_role") == "slave"
+    assert get_setting("sync_device_token") == "individual-device-token"
+    with connect() as connection:
+        assert connection.execute("SELECT name FROM playlists WHERE id = 1").fetchone()[0] == "Master-Playlist"

@@ -142,6 +142,13 @@ def initialize() -> None:
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS registered_devices (
+                device_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                token_hash TEXT NOT NULL UNIQUE,
+                registered_at TEXT NOT NULL,
+                last_seen TEXT
+            );
 
             CREATE TABLE IF NOT EXISTS player_status (
                 id INTEGER PRIMARY KEY CHECK(id = 1),

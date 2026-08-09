@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import hashlib
 import sqlite3
 import uuid
+import zipfile
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,13 +18,16 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .database import connect, data_dir, initialize, integrity_check_if_due, media_dir
-from .display_control import display_config, display_status, request_display_action, save_display_config
+from .display_control import (display_config, display_status, request_display_action,
+                              save_display_config, schedule_analysis)
 from .auth import (change_password, clear_login_failures, create_session, destroy_session,
                    ensure_login_allowed, get_setting, password_change_required, player_token,
                    record_login_failure, require_player, require_system_login, screen_name,
                    session_is_authenticated, set_setting, verify_password)
 from .application_update import request_update as request_application_update
 from .application_update import update_status as application_update_status
+from .backup import (automatic_backup_if_due, backup_dir, create_backup, list_backups,
+                     restore_backup, validate_backup)
 from .conversion_jobs import conversion_status, queue_conversion
 from .media_probe import inspect_video, validate_video
 from .upload_security import ensure_free_space, save_upload
@@ -30,6 +35,8 @@ from .image_processing import edit_image, optimize_image
 from .video_processing import video_metadata, video_thumbnail
 from .system_info import collect_system_info
 from .system_update import request_update, update_status
+from .sync import (authenticate_device, pairing_token, register_device, safe_sync_from_master,
+                   snapshot as sync_snapshot)
 from .version import __version__
 
 PACKAGE_DIR = Path(__file__).parent
@@ -40,10 +47,17 @@ STATIC_DIR = PACKAGE_DIR / "static"
 async def lifespan(_: FastAPI):
     initialize()
     integrity_check_if_due()
+    await asyncio.to_thread(automatic_backup_if_due)
     async def database_maintenance() -> None:
+        ticks = 0
         while True:
-            await asyncio.sleep(24 * 60 * 60)
-            await asyncio.to_thread(integrity_check_if_due)
+            await asyncio.sleep(60)
+            ticks += 1
+            if get_setting("device_role") == "slave": await asyncio.to_thread(safe_sync_from_master)
+            if ticks >= 24 * 60:
+                ticks = 0
+                await asyncio.to_thread(integrity_check_if_due)
+                await asyncio.to_thread(automatic_backup_if_due)
     maintenance_task = asyncio.create_task(database_maintenance())
     try:
         yield
@@ -63,6 +77,10 @@ class WebsiteCreate(BaseModel):
 
 class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=200)
+
+
+class BackupCreate(BaseModel):
+    include_media: bool = False
 
 
 class ScreenSettings(BaseModel):
@@ -118,6 +136,13 @@ class PlaylistScheduleUpdate(BaseModel):
 class DeviceSettings(BaseModel):
     role: str = Field(pattern=r"^(standalone|master|slave)$")
     master_url: str = Field(default="", max_length=2048)
+    pairing_code: str = Field(default="", max_length=200)
+
+
+class SyncRegistration(BaseModel):
+    device_id: str = Field(min_length=1, max_length=100)
+    name: str = Field(min_length=1, max_length=100)
+    pairing_token: str = Field(min_length=1, max_length=200)
 
 
 class SystemAction(BaseModel):
@@ -249,6 +274,9 @@ def serialize_library_media(row) -> dict:
     item = dict(row)
     item["metadata"] = json.loads(item.pop("metadata_json") or "{}")
     item["file_exists"] = local_media_exists(item.get("source"))
+    paths = {media_dir() / Path(source).name for source in
+             (item.get("source"), item.get("original_source"), item.get("thumbnail_source")) if source}
+    item["storage_bytes"] = sum(path.stat().st_size for path in paths if path.is_file())
     return item
 
 
@@ -259,6 +287,13 @@ def local_media_exists(source: str | None) -> bool:
     if parsed.scheme or parsed.netloc:
         return True
     return (media_dir() / Path(parsed.path).name).is_file()
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        while chunk := source.read(1024 * 1024): digest.update(chunk)
+    return digest.hexdigest()
 
 
 def serialize_playlist(row) -> dict:
@@ -341,6 +376,30 @@ def system_info(_: None = Depends(require_system_login)):
     return collect_system_info()
 
 
+@app.get("/api/system/security-status")
+def security_status(request: Request, _: None = Depends(require_system_login)):
+    with connect() as connection:
+        integrity_at = connection.execute(
+            "SELECT value FROM maintenance_state WHERE key = 'last_integrity_check'"
+        ).fetchone()
+        integrity_result = connection.execute(
+            "SELECT value FROM maintenance_state WHERE key = 'last_integrity_result'"
+        ).fetchone()
+    backups = list_backups()
+    info = collect_system_info()
+    checks = {
+        "initial_password_changed": not password_change_required(),
+        "player_token_available": bool(get_setting("player_token")),
+        "database_integrity_ok": bool(integrity_result and json.loads(integrity_result["value"]) == ["ok"]),
+        "backup_available": bool(backups),
+        "storage_healthy": info["disk"]["used_bytes"] < info["disk"]["total_bytes"] * 0.9,
+        "https": request.url.scheme == "https",
+    }
+    return {"checks": checks, "integrity_checked_at": integrity_at["value"] if integrity_at else None,
+            "last_backup_at": backups[0]["created_at"] if backups else None,
+            "warnings": [name for name, ok in checks.items() if not ok]}
+
+
 @app.get("/api/system/update")
 def get_system_update(_: None = Depends(require_system_login)):
     return update_status()
@@ -384,8 +443,17 @@ def get_device_settings(_: None = Depends(require_system_login)):
         set_setting("device_id", device_id)
     role = get_setting("device_role", "standalone")
     master_url = get_setting("master_url", "")
+    with connect() as connection:
+        devices = [dict(row) for row in connection.execute(
+            "SELECT device_id, name, registered_at, last_seen FROM registered_devices ORDER BY name"
+        )] if role == "master" else []
+    last_success = get_setting("sync_last_success", "")
+    last_error = get_setting("sync_last_error", "")
     return {"device_id": device_id, "role": role, "master_url": master_url,
-            "sync_status": "bereit" if role != "slave" else "noch nicht verbunden"}
+            "pairing_code": pairing_token() if role == "master" else "",
+            "registered_devices": devices, "last_success": last_success, "last_error": last_error,
+            "sync_status": "bereit" if role != "slave" else
+                (f"zuletzt {last_success}" if last_success else f"offline: {last_error}" if last_error else "noch nicht verbunden")}
 
 
 @app.patch("/api/system/device")
@@ -394,7 +462,49 @@ def update_device_settings(payload: DeviceSettings, _: None = Depends(require_sy
         raise HTTPException(status_code=422, detail="Für einen Slave ist die Master-Adresse erforderlich")
     set_setting("device_role", payload.role)
     set_setting("master_url", payload.master_url.strip())
+    if payload.pairing_code.strip():
+        set_setting("sync_pairing_code", payload.pairing_code.strip())
+        set_setting("sync_device_token", "")
     return get_device_settings(_)
+
+
+@app.post("/api/system/device/sync")
+def sync_device_now(_: None = Depends(require_system_login)):
+    if get_setting("device_role") != "slave":
+        raise HTTPException(status_code=409, detail="Nur ein Slave kann vom Master synchronisieren")
+    result = safe_sync_from_master()
+    if result["status"] == "offline": raise HTTPException(status_code=502, detail=result["error"])
+    return result
+
+
+def require_sync_device(request: Request) -> None:
+    authorization = request.headers.get("Authorization", "")
+    token = authorization.removeprefix("Bearer ") if authorization.startswith("Bearer ") else ""
+    if not authenticate_device(token): raise HTTPException(status_code=401, detail="Ungültiger Geräte-Token")
+
+
+@app.post("/api/sync/register")
+def sync_register(payload: SyncRegistration):
+    if get_setting("device_role") != "master": raise HTTPException(status_code=409, detail="Gerät ist kein Master")
+    try:
+        token = register_device(payload.device_id, payload.name, payload.pairing_token)
+    except PermissionError as error:
+        raise HTTPException(status_code=401, detail=str(error)) from error
+    return {"device_token": token}
+
+
+@app.get("/api/sync/snapshot")
+def get_sync_snapshot(_: None = Depends(require_sync_device)):
+    if get_setting("device_role") != "master": raise HTTPException(status_code=409, detail="Gerät ist kein Master")
+    return sync_snapshot()
+
+
+@app.get("/api/sync/media/{filename}")
+def get_sync_media(filename: str, _: None = Depends(require_sync_device)):
+    if Path(filename).name != filename: raise HTTPException(status_code=404)
+    path = media_dir() / filename
+    if not path.is_file(): raise HTTPException(status_code=404)
+    return FileResponse(path)
 
 
 @app.get("/api/system/storage")
@@ -403,8 +513,65 @@ def storage_status(_: None = Depends(require_system_login)):
         rows = connection.execute("SELECT * FROM media_library").fetchall()
         used = {row[0] for row in connection.execute("SELECT DISTINCT media_id FROM content WHERE media_id IS NOT NULL")}
     files = [path for path in media_dir().iterdir() if path.is_file()]
+    known = {Path(source).name for row in rows for source in
+             (row["source"], row["original_source"], row["thumbnail_source"]) if source}
+    missing = [row["id"] for row in rows if not local_media_exists(row["source"])]
+    orphan = [path for path in files if path.name not in known]
+    hashes: dict[str, list[int]] = {}
+    for row in rows:
+        path = media_dir() / Path(row["source"]).name
+        if path.is_file():
+            digest = file_sha256(path)
+            hashes.setdefault(digest, []).append(row["id"])
+    duplicates = [ids for ids in hashes.values() if len(ids) > 1]
     return {"media_count": len(rows), "unused_media_count": sum(row["id"] not in used for row in rows),
-            "media_bytes": sum(path.stat().st_size for path in files), "file_count": len(files)}
+            "media_bytes": sum(path.stat().st_size for path in files), "file_count": len(files),
+            "missing_media_ids": missing, "orphan_file_count": len(orphan),
+            "orphan_bytes": sum(path.stat().st_size for path in orphan), "duplicate_groups": duplicates}
+
+
+@app.get("/api/system/backups")
+def get_backups(_: None = Depends(require_system_login)):
+    return list_backups()
+
+
+@app.post("/api/system/backups", status_code=201)
+def start_backup(payload: BackupCreate, _: None = Depends(require_system_login)):
+    try:
+        return create_backup(include_media=payload.include_media)
+    except (OSError, RuntimeError) as error:
+        raise HTTPException(status_code=500, detail=f"Backup fehlgeschlagen: {error}") from error
+
+
+@app.get("/api/system/backups/{filename}")
+def download_backup(filename: str, _: None = Depends(require_system_login)):
+    if Path(filename).name != filename:
+        raise HTTPException(status_code=404)
+    path = backup_dir() / filename
+    if not path.is_file(): raise HTTPException(status_code=404, detail="Backup nicht gefunden")
+    return FileResponse(path, filename=filename, media_type="application/zip")
+
+
+@app.post("/api/system/backups/restore")
+def restore_uploaded_backup(
+    file: Annotated[UploadFile, File()], _: None = Depends(require_system_login)
+):
+    temporary = data_dir() / ".restore-upload.zip"
+    try:
+        size = 0
+        with temporary.open("wb") as output:
+            while chunk := file.file.read(1024 * 1024):
+                size += len(chunk)
+                if size > 5 * 1024 * 1024 * 1024:
+                    raise HTTPException(status_code=413, detail="Backup ist zu groß")
+                output.write(chunk)
+        validate_backup(temporary)
+        restore_backup(temporary)
+    except (ValueError, zipfile.BadZipFile, json.JSONDecodeError) as error:
+        raise HTTPException(status_code=415, detail=f"Ungültiges Backup: {error}") from error
+    finally:
+        file.file.close(); temporary.unlink(missing_ok=True)
+    return {"restored": True, "message": "Backup wiederhergestellt. Anwendung bitte neu starten."}
 
 
 @app.post("/api/system/storage/cleanup")
@@ -425,6 +592,18 @@ def cleanup_storage(_: None = Depends(require_system_login)):
     return {"removed_media": removed_media, "removed_files": removed_files}
 
 
+@app.post("/api/system/storage/orphans/cleanup")
+def cleanup_orphan_files(_: None = Depends(require_system_login)):
+    with connect() as connection:
+        rows = connection.execute("SELECT source, original_source, thumbnail_source FROM media_library").fetchall()
+    known = {Path(source).name for row in rows for source in row if source}
+    removed = 0; removed_bytes = 0
+    for path in media_dir().iterdir():
+        if path.is_file() and path.name not in known:
+            removed_bytes += path.stat().st_size; path.unlink(); removed += 1
+    return {"removed_files": removed, "removed_bytes": removed_bytes}
+
+
 @app.post("/api/system/action", status_code=202)
 def request_system_action(payload: SystemAction, _: None = Depends(require_system_login)):
     (data_dir() / "system-action-request").write_text(payload.action, encoding="utf-8")
@@ -433,7 +612,8 @@ def request_system_action(payload: SystemAction, _: None = Depends(require_syste
 
 @app.get("/api/system/display-control")
 def get_display_control(_: None = Depends(require_system_login)):
-    return {"config": display_config(), "status": display_status()}
+    config = display_config()
+    return {"config": config, "status": display_status(), "schedule": schedule_analysis(config)}
 
 
 @app.patch("/api/system/display-control")
@@ -447,7 +627,7 @@ def update_display_control(payload: DisplayControlSettings, _: None = Depends(re
     )
     save_display_config(config)
     request_display_action("status")
-    return {"config": config, "status": display_status()}
+    return {"config": config, "status": display_status(), "schedule": schedule_analysis(config)}
 
 
 @app.post("/api/system/display-control/action", status_code=202)
@@ -805,6 +985,44 @@ def update_library_media(
                 "UPDATE content SET name = ? WHERE media_id = ?", (values["name"], media_id)
             )
     return serialize_library_media(get_library_media_or_404(media_id))
+
+
+@app.post("/api/media-library/{media_id}/replace")
+def replace_library_file(
+    media_id: int, file: Annotated[UploadFile, File()], _: None = Depends(require_system_login)
+):
+    media = get_library_media_or_404(media_id)
+    destination, kind, size = save_upload(file, media_dir(), {media["kind"]})
+    processed = None; metadata = {}; thumbnail = None
+    try:
+        if kind == "image":
+            processed = optimize_image(destination, media_dir())
+            metadata = {"width": processed["width"], "height": processed["height"]}
+        else:
+            compatibility = validate_video(destination)
+            metadata = video_metadata(destination)
+            thumbnail = video_thumbnail(destination, media_dir())
+    except Exception as error:
+        destination.unlink(missing_ok=True)
+        raise HTTPException(status_code=415, detail="Ersatzdatei konnte nicht verarbeitet werden") from error
+    source = processed["source"] if processed else f"/media/{destination.name}"
+    original = f"/media/{destination.name}" if processed else None
+    thumbnail = processed["thumbnail_source"] if processed else thumbnail
+    old = {media["source"], media["original_source"], media["thumbnail_source"]}
+    with connect() as connection:
+        connection.execute(
+            "UPDATE media_library SET source=?, size_bytes=?, original_source=?, thumbnail_source=?, "
+            "width=?, height=?, metadata_json=? WHERE id=?",
+            (source, size, original, thumbnail, metadata.get("width"), metadata.get("height"),
+             json.dumps(metadata), media_id),
+        )
+        connection.execute("UPDATE content SET source=? WHERE media_id=?", (source, media_id))
+    for old_source in old:
+        if old_source and old_source not in {source, original, thumbnail}:
+            (media_dir() / Path(old_source).name).unlink(missing_ok=True)
+    result = serialize_library_media(get_library_media_or_404(media_id))
+    if kind == "video": result["compatibility"] = compatibility
+    return result
 
 
 @app.post("/api/media-library/bulk-playlist", status_code=201)

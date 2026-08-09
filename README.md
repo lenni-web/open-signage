@@ -39,6 +39,9 @@ Chromium-Kioskfenster an.
 - Live-Aktualisierung des Players ohne Seitenreload
 - Player-Monitoring mit aktuellem Inhalt, letztem Kontakt, Fehlerprotokoll,
   Speicher-, Temperatur- und Updatezustand
+- tägliche geprüfte SQLite-Backups, manuelle Komplettsicherungen und Restore
+- Sicherheitsstatus und Mediathek-Audit für fehlende, verwaiste und doppelte Medien
+- Master-/Slave-Synchronisierung mit Geräte-Pairing und lokalem Offline-Stand
 
 Weitere SRT-Quellen können später über MediaMTX ergänzt werden.
 
@@ -78,6 +81,30 @@ automatisch durchgeführt.
 
 Die Systeminformationen, Einstellungen und das Auslösen von Systemupdates sind
 nur mit einer gültigen Anmeldung erreichbar.
+
+### Backup und Wiederherstellung
+
+Open Signage erstellt beim Start und anschließend täglich eine konsistente
+SQLite-Onlinekopie. Automatische Sicherungen bewahren sieben tägliche Stände und
+bis zu vier zusätzliche Wochenstände auf. Auf der Systemseite können manuelle
+Backups wahlweise mit allen Medien erzeugt, heruntergeladen und wiederhergestellt
+werden. Vor jeder Wiederherstellung wird automatisch eine vollständige
+Sicherheitssicherung des aktuellen Zustands angelegt. Nach einem Restore sollte
+der Open-Signage-Dienst neu gestartet werden.
+
+### Master und Slaves
+
+Auf dem Master wird unter **System → Master-/Slave-Synchronisierung** die Rolle
+`Master` gewählt. Der danach angezeigte Pairing-Code wird einmalig auf dem Slave
+zusammen mit der Master-Adresse eingetragen. Bei der ersten Synchronisierung
+registriert der Master das Gerät und vergibt einen eigenen zufälligen Token.
+
+Synchronisiert werden Bildschirmname, Bildschirmsteuerung, Playlists, Inhalte
+und Mediathek-Dateien. Der Slave prüft minütlich auf Änderungen; über „Jetzt
+synchronisieren“ lässt sich der Vorgang sofort auslösen. Ist der Master nicht
+erreichbar, spielt der Slave seinen zuletzt vollständig synchronisierten lokalen
+Stand weiter. Verwaltungspasswörter, Geräterollen und Geräte-Tokens bleiben
+absichtlich gerätespezifisch.
 
 ### Open Signage aktualisieren
 

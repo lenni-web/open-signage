@@ -8,6 +8,35 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.12.0] – 2026-08-09
+
+### Hinzugefügt
+
+- Automatische tägliche, SQLite-konsistente Backups mit sieben täglichen und
+  vier zusätzlichen wöchentlichen Aufbewahrungspunkten sowie Integritätsprüfung.
+- Manuelle Backups mit optionalen Medien, Download, validiertem Upload und
+  Wiederherstellung einschließlich automatisch angelegter Sicherheitssicherung.
+- Sicherheitsstatus für Initialpasswort, Player-Token, Datenbankintegrität,
+  Backups, Speicherreserve und HTTPS.
+- Komfortfunktionen für den Bildschirm-Schaltplan: Tagesplan kopieren,
+  Zeitfenster duplizieren, Gruppierung, Überschneidungswarnungen und Anzeige des
+  nächsten Schaltvorgangs.
+- Speicher-Audit für fehlende Medien, verwaiste Dateien, Speicherverbrauch und
+  inhaltsgleiche Dubletten sowie Reparatur fehlender Mediathek-Dateien.
+- Sichtbarer Uploadfortschritt für direkte Medien- und Mediathek-Uploads.
+- Master-/Slave-Synchronisierung für Bildschirmname, Bildschirmsteuerung,
+  Playlists, Inhalte und Medien mit Pairing-Code, individuellem Geräte-Token,
+  manueller und minütlicher Synchronisierung sowie Offline-Weiterbetrieb.
+
+### Sicherheit
+
+- Master-Snapshots und Mediendateien sind ausschließlich für registrierte
+  Geräte mit eigenem zufälligem Token erreichbar.
+
+### Geändert
+
+- Projektversion von `0.11.4` auf `0.12.0` erhöht.
+
 ## [0.11.4] – 2026-08-09
 
 ### Hinzugefügt

@@ -47,6 +47,30 @@ async function api(path, options = {}) {
   return response.status === 204 ? null : response.json();
 }
 
+function uploadWithProgress(path, formData, onProgress) {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", path);
+    request.upload.addEventListener("progress", event => {
+      if (event.lengthComputable) onProgress(Math.round(event.loaded / event.total * 100));
+    });
+    request.addEventListener("load", () => {
+      const body = (() => { try { return JSON.parse(request.responseText); } catch (_) { return {}; } })();
+      if (request.status >= 200 && request.status < 300) resolve(body);
+      else reject(new Error(body.detail || `Fehler ${request.status}`));
+    });
+    request.addEventListener("error", () => reject(new Error("Upload-Verbindung fehlgeschlagen")));
+    request.send(formData);
+  });
+}
+
+function uploadProgress(form) {
+  let progress = form.querySelector("progress");
+  if (!progress) { progress = document.createElement("progress"); progress.max = 100; form.append(progress); }
+  progress.hidden = false; progress.value = 0;
+  return { update: value => { progress.value = value; }, finish: () => { progress.hidden = true; } };
+}
+
 function showLogin() {
   document.querySelector("#login-screen").hidden = false;
   document.querySelector("#admin-app").hidden = true;
@@ -71,7 +95,7 @@ async function loadSettings() {
 }
 
 async function openSystemPage() {
-  await Promise.all([loadSystemInfo(), loadMonitoring(), loadUpdateStatus(), loadApplicationUpdateStatus(), loadStorage(), loadDevice(), loadDisplayControl()]);
+  await Promise.all([loadSystemInfo(), loadMonitoring(), loadUpdateStatus(), loadApplicationUpdateStatus(), loadStorage(), loadBackups(), loadSecurityStatus(), loadDevice(), loadDisplayControl()]);
 }
 
 async function boot() {
@@ -270,7 +294,7 @@ function renderLibrary(items) {
     body.innerHTML = `
       <input class="media-name" value="" aria-label="Medienname">
       <input class="media-category" value="" placeholder="Kategorie" aria-label="Kategorie">
-      <span class="media-card-meta">${kindLabel(item.kind)} · ${formatBytes(item.size_bytes)}${item.width ? ` · ${item.width}×${item.height}` : ""}${item.metadata?.duration_seconds ? ` · ${item.metadata.duration_seconds}s` : ""} · ${item.usage_count || 0}× verwendet</span>
+      <span class="media-card-meta">${kindLabel(item.kind)} · ${formatBytes(item.storage_bytes ?? item.size_bytes)} Speicher${item.width ? ` · ${item.width}×${item.height}` : ""}${item.metadata?.duration_seconds ? ` · ${item.metadata.duration_seconds}s` : ""} · ${item.usage_count || 0}× verwendet</span>
       <div class="media-card-actions">
         <input class="library-duration" type="number" min="1" max="86400" value="10" title="Anzeigedauer in Sekunden">
         ${item.kind === "video" ? `
@@ -283,11 +307,23 @@ function renderLibrary(items) {
         <button class="add-library">Zur Playlist</button>
         ${item.kind === "image" ? '<button class="secondary edit-library-image">Bearbeiten</button>' : ""}
         ${item.kind === "video" ? '<button class="secondary transcode-library-video">Optimal konvertieren</button><span class="transcode-status" hidden></span>' : ""}
+        ${item.file_exists === false ? '<button class="secondary repair-library-file">Datei ersetzen</button>' : ""}
         <button class="secondary save-library-meta">Speichern</button>
         <button class="danger delete-library">Löschen</button>
       </div>`;
     body.querySelector(".media-name").value = item.name;
     body.querySelector(".media-category").value = item.category || "";
+    body.querySelector(".repair-library-file")?.addEventListener("click", () => {
+      const input = document.createElement("input"); input.type = "file";
+      input.accept = item.kind === "image" ? "image/*" : "video/mp4,video/webm";
+      input.addEventListener("change", async () => {
+        if (!input.files[0]) return;
+        const form = new FormData(); form.append("file", input.files[0]);
+        try { await uploadWithProgress(`/api/media-library/${item.id}/replace`, form, () => {}); await loadLibrary(); notify("Mediendatei ersetzt"); }
+        catch (error) { notify(error.message, true); }
+      });
+      input.click();
+    });
     const previewError = document.createElement("p");
     previewError.className = "media-preview-error";
     previewError.hidden = item.file_exists !== false;
@@ -569,6 +605,35 @@ async function loadStorage() {
   document.querySelector("#storage-unused").textContent = `${status.unused_media_count} Medien`;
   document.querySelector("#storage-size").textContent = formatBytes(status.media_bytes);
   document.querySelector("#storage-cleanup").disabled = status.unused_media_count === 0;
+  document.querySelector("#storage-orphan-cleanup").disabled = status.orphan_file_count === 0;
+  document.querySelector("#storage-audit").textContent = `${status.missing_media_ids.length} fehlende Medien · ${status.orphan_file_count} verwaiste Dateien (${formatBytes(status.orphan_bytes)}) · ${status.duplicate_groups.length} Dublettengruppen`;
+}
+
+async function loadBackups() {
+  const backups = await api("/api/system/backups");
+  const target = document.querySelector("#backup-list");
+  target.replaceChildren(...backups.map(backup => {
+    const row = document.createElement("article");
+    const label = document.createElement("span");
+    label.textContent = `${new Date(backup.created_at).toLocaleString("de-DE")} · ${formatBytes(backup.size_bytes)}`;
+    const link = document.createElement("a"); link.className = "button secondary";
+    link.href = `/api/system/backups/${encodeURIComponent(backup.name)}`; link.textContent = "Herunterladen";
+    row.append(label, link); return row;
+  }));
+  if (!backups.length) target.innerHTML = '<p class="empty">Noch kein Backup vorhanden.</p>';
+}
+
+async function loadSecurityStatus() {
+  const status = await api("/api/system/security-status");
+  const labels = { initial_password_changed: "Initialpasswort geändert", player_token_available: "Player-Schlüssel vorhanden", database_integrity_ok: "SQLite-Integrität", backup_available: "Backup vorhanden", storage_healthy: "Speicherreserve", https: "HTTPS-Verbindung" };
+  const target = document.querySelector("#security-status");
+  target.replaceChildren(...Object.entries(status.checks).map(([key, ok]) => {
+    const row = document.createElement("p"); row.className = ok ? "security-ok" : "security-warning";
+    row.textContent = `${ok ? "✓" : "!"} ${labels[key] || key}`; return row;
+  }));
+  const details = document.createElement("small");
+  details.textContent = `Integritätsprüfung: ${status.integrity_checked_at ? new Date(status.integrity_checked_at).toLocaleString("de-DE") : "nie"} · Backup: ${status.last_backup_at ? new Date(status.last_backup_at).toLocaleString("de-DE") : "nie"}`;
+  target.append(details);
 }
 
 async function loadDevice() {
@@ -577,7 +642,18 @@ async function loadDevice() {
   form.elements.device_id.value = device.device_id;
   form.elements.role.value = device.role;
   form.elements.master_url.value = device.master_url;
+  form.elements.master_pairing_code.value = device.pairing_code || "";
+  form.elements.pairing_code.value = "";
+  form.elements.master_pairing_code.closest("label").hidden = device.role !== "master";
+  form.elements.pairing_code.closest("label").hidden = device.role !== "slave";
+  document.querySelector("#sync-now").hidden = device.role !== "slave";
   document.querySelector("#sync-status").textContent = `Synchronisationsstatus: ${device.sync_status}`;
+  const registered = document.querySelector("#registered-devices");
+  registered.replaceChildren(...(device.registered_devices || []).map(item => {
+    const row = document.createElement("article");
+    row.textContent = `${item.name} · zuletzt ${item.last_seen ? new Date(item.last_seen).toLocaleString("de-DE") : "nie"}`;
+    return row;
+  }));
 }
 
 function renderDisplayControl(data, updateForm = !displayControlDirty) {
@@ -591,8 +667,21 @@ function renderDisplayControl(data, updateForm = !displayControlDirty) {
     form.elements.fallback_hdmi_signal.checked = config.fallback_hdmi_signal;
     form.elements.schedule_enabled.checked = config.schedule_enabled;
     const target = document.querySelector("#display-schedule-entries");
-    target.replaceChildren(...scheduleEntries.map(createDisplayScheduleRow));
+    target.replaceChildren(...scheduleEntries.map((entry, index) => {
+      const row = createDisplayScheduleRow(entry);
+      if (index === 0 || scheduleEntries[index - 1].weekday !== entry.weekday) row.classList.add("day-group-start");
+      if ((data.schedule?.conflicts || []).some(conflict => conflict.first === index || conflict.second === index)) row.classList.add("schedule-conflict");
+      return row;
+    }));
   }
+  const next = data.schedule?.next_action;
+  document.querySelector("#display-schedule-next").textContent = next
+    ? `Nächster Schaltvorgang: ${next.action === "on" ? "Einschalten" : "Ausschalten"} · ${new Date(next.at).toLocaleString("de-DE")}`
+    : "Nächster Schaltvorgang: keiner geplant";
+  const conflict = document.querySelector("#display-schedule-conflicts");
+  const conflictCount = data.schedule?.conflicts?.length || 0;
+  conflict.hidden = conflictCount === 0;
+  conflict.textContent = conflictCount ? `${conflictCount} überlappende Zeitfenster erkannt. Sie werden gemeinsam als Einschaltzeit behandelt.` : "";
   document.querySelector("#display-cec-status").textContent = status.cec_available == null ? "Noch unbekannt" : status.cec_available ? "Verfügbar" : "Nicht verfügbar";
   document.querySelector("#display-fallback-status").textContent = status.hdmi_fallback_available == null ? "Noch unbekannt" : status.hdmi_fallback_available ? "Verfügbar" : "Nicht verfügbar";
   document.querySelector("#display-power-status").textContent = { on: "Eingeschaltet", off: "Ausgeschaltet", unknown: "Unbekannt" }[status.power_status] || "Unbekannt";
@@ -618,7 +707,10 @@ function createDisplayScheduleRow(entry = { weekday: 0, on: "08:00", off: "22:00
   off.setAttribute("aria-label", "Ausschaltzeit");
   const remove = document.createElement("button");
   remove.type = "button"; remove.className = "danger display-schedule-remove"; remove.textContent = "Entfernen";
-  row.append(weekday, on, off, remove);
+  const duplicate = document.createElement("button");
+  duplicate.type = "button"; duplicate.className = "secondary display-schedule-duplicate"; duplicate.textContent = "Duplizieren";
+  const actions = document.createElement("span"); actions.className = "schedule-row-actions"; actions.append(duplicate, remove);
+  row.append(weekday, on, off, actions);
   return row;
 }
 
@@ -931,10 +1023,9 @@ document.querySelector("#upload-form").addEventListener("submit", async (event) 
   button.disabled = true;
   uploadWarning.hidden = true;
   try {
-    const item = await api("/api/content/upload", {
-      method: "POST",
-      body: new FormData(event.target),
-    });
+    const progress = uploadProgress(event.target);
+    const item = await uploadWithProgress("/api/content/upload", new FormData(event.target), progress.update);
+    progress.finish();
     event.target.reset();
     await load();
     if (item.compatibility?.warnings?.length) {
@@ -1080,7 +1171,9 @@ document.querySelector("#library-upload-form").addEventListener("submit", async 
   button.disabled = true;
   warning.hidden = true;
   try {
-    const item = await api("/api/media-library", { method: "POST", body: new FormData(event.target) });
+    const progress = uploadProgress(event.target);
+    const item = await uploadWithProgress("/api/media-library", new FormData(event.target), progress.update);
+    progress.finish();
     event.target.reset();
     await loadLibrary();
     if (item.compatibility?.warnings?.length) {
@@ -1252,14 +1345,48 @@ document.querySelector("#storage-cleanup").addEventListener("click", async () =>
   } catch (error) { notify(error.message, true); }
 });
 
+document.querySelector("#storage-orphan-cleanup").addEventListener("click", async () => {
+  if (!window.confirm("Alle Dateien löschen, die keinem Mediathek-Eintrag zugeordnet sind?")) return;
+  try {
+    const result = await api("/api/system/storage/orphans/cleanup", { method: "POST" });
+    await loadStorage(); notify(`${result.removed_files} verwaiste Dateien gelöscht`);
+  } catch (error) { notify(error.message, true); }
+});
+
+document.querySelector("#backup-create").addEventListener("click", async () => {
+  const button = document.querySelector("#backup-create"); button.disabled = true;
+  try {
+    await api("/api/system/backups", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ include_media: document.querySelector("#backup-include-media").checked }) });
+    await Promise.all([loadBackups(), loadSecurityStatus()]); notify("Backup erfolgreich erstellt");
+  } catch (error) { notify(error.message, true); }
+  finally { button.disabled = false; }
+});
+
+document.querySelector("#backup-restore-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!window.confirm("Das Backup ersetzt Playlists, Einstellungen und gegebenenfalls Medien. Fortfahren?")) return;
+  try {
+    const result = await api("/api/system/backups/restore", { method: "POST", body: new FormData(event.target) });
+    notify(result.message, false, 10000); event.target.reset();
+  } catch (error) { notify(error.message, true); }
+});
+
 document.querySelector("#device-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = new FormData(event.target);
   try {
     await api("/api/system/device", { method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role: form.get("role"), master_url: form.get("master_url") }) });
+      body: JSON.stringify({ role: form.get("role"), master_url: form.get("master_url"), pairing_code: form.get("pairing_code") }) });
     await loadDevice(); notify("Gerätekonfiguration gespeichert");
   } catch (error) { notify(error.message, true); }
+});
+
+document.querySelector("#sync-now").addEventListener("click", async () => {
+  const button = document.querySelector("#sync-now"); button.disabled = true;
+  try { await api("/api/system/device/sync", { method: "POST" }); await Promise.all([loadDevice(), load(), loadLibrary(), loadPlaylists()]); notify("Synchronisierung abgeschlossen"); }
+  catch (error) { notify(error.message, true); }
+  finally { button.disabled = false; }
 });
 
 document.querySelector("#display-control-form").addEventListener("submit", async (event) => {
@@ -1293,8 +1420,31 @@ document.querySelector("#display-schedule-add").addEventListener("click", () => 
 });
 
 document.querySelector("#display-schedule-entries").addEventListener("click", event => {
-  if (!event.target.closest(".display-schedule-remove")) return;
-  event.target.closest(".display-schedule-row").remove();
+  const row = event.target.closest(".display-schedule-row");
+  if (event.target.closest(".display-schedule-remove")) row.remove();
+  else if (event.target.closest(".display-schedule-duplicate")) {
+    row.after(createDisplayScheduleRow({ weekday: Number(row.querySelector(".schedule-weekday").value), on: row.querySelector(".day-on").value, off: row.querySelector(".day-off").value }));
+  } else return;
+  displayControlDirty = true;
+});
+
+["display-schedule-copy-source", "display-schedule-copy-target"].forEach((id, selectIndex) => {
+  const select = document.querySelector(`#${id}`);
+  displayWeekdays.forEach((name, index) => select.append(new Option(`${selectIndex ? "Nach" : "Von"}: ${name}`, index)));
+  if (selectIndex) select.value = "1";
+});
+
+document.querySelector("#display-schedule-copy").addEventListener("click", () => {
+  const source = Number(document.querySelector("#display-schedule-copy-source").value);
+  const targetDay = Number(document.querySelector("#display-schedule-copy-target").value);
+  if (source === targetDay) { notify("Bitte zwei unterschiedliche Wochentage auswählen", true); return; }
+  const target = document.querySelector("#display-schedule-entries");
+  target.querySelectorAll(".display-schedule-row").forEach(row => {
+    if (Number(row.querySelector(".schedule-weekday").value) === targetDay) row.remove();
+  });
+  [...target.querySelectorAll(".display-schedule-row")]
+    .filter(row => Number(row.querySelector(".schedule-weekday").value) === source)
+    .forEach(row => target.append(createDisplayScheduleRow({ weekday: targetDay, on: row.querySelector(".day-on").value, off: row.querySelector(".day-off").value })));
   displayControlDirty = true;
 });
 

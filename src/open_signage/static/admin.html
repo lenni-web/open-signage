@@ -375,18 +375,41 @@
           <div><span>Speicherbedarf</span><strong id="storage-size">–</strong></div>
         </div>
         <button id="storage-cleanup" class="danger">Ungenutzte Medien sicher löschen</button>
+        <button id="storage-orphan-cleanup" class="secondary">Verwaiste Dateien löschen</button>
+        <p id="storage-audit" class="schedule-note"></p>
       </section>
 
       <section class="card system-overview">
-        <span class="eyebrow">Geräteverbund</span><h2>Master-/Slave-Grundlage</h2>
-        <p>Bereitet dieses Gerät für eine spätere zentrale Synchronisation vor.</p>
+        <span class="eyebrow">Datensicherung</span><h2>Backup und Wiederherstellung</h2>
+        <p>Täglich wird automatisch eine geprüfte Datenbanksicherung erstellt. Manuelle Sicherungen können optional alle Medien enthalten.</p>
+        <label class="inline-check"><input id="backup-include-media" type="checkbox"><span>Medien in manuelles Backup aufnehmen</span></label>
+        <div class="form-actions"><button id="backup-create">Backup jetzt erstellen</button></div>
+        <div id="backup-list" class="playlist-list"></div>
+        <form id="backup-restore-form">
+          <label>Backup wiederherstellen<input name="file" type="file" accept="application/zip,.zip" required></label>
+          <button class="danger">Backup prüfen und wiederherstellen</button>
+        </form>
+      </section>
+
+      <section class="card system-overview">
+        <span class="eyebrow">Prüfungen</span><h2>Sicherheitsstatus</h2>
+        <div id="security-status" class="security-checks"><p>Wird geprüft …</p></div>
+      </section>
+
+      <section class="card system-overview">
+        <span class="eyebrow">Geräteverbund</span><h2>Master-/Slave-Synchronisierung</h2>
+        <p>Ein Master verteilt Einstellungen, Playlists und Medien. Slaves behalten bei Ausfall den zuletzt synchronisierten Stand.</p>
         <form id="device-form">
           <label>Geräte-ID<input name="device_id" readonly></label>
           <label>Rolle<select name="role"><option value="standalone">Standalone</option><option value="master">Master</option><option value="slave">Slave</option></select></label>
           <label>Master-Adresse<input name="master_url" type="url" placeholder="http://open-signage-master.local:8080"></label>
+          <label>Pairing-Code<input name="pairing_code" autocomplete="off" placeholder="Beim Master angezeigten Code eingeben"></label>
+          <label>Pairing-Code dieses Masters<input name="master_pairing_code" readonly></label>
           <small id="sync-status">Synchronisationsstatus: –</small>
           <button>Gerätekonfiguration speichern</button>
+          <button id="sync-now" type="button" class="secondary">Jetzt synchronisieren</button>
         </form>
+        <div id="registered-devices" class="playlist-list"></div>
       </section>
 
       <details class="card system-overview collapsible-card">
@@ -415,11 +438,18 @@
             <fieldset>
               <legend>Schaltplan</legend>
               <p class="schedule-note">Lege beliebig viele Einschaltfenster an. Außerhalb aller Zeitfenster wird der Bildschirm ausgeschaltet.</p>
+              <p id="display-schedule-next" class="schedule-note">Nächster Schaltvorgang: –</p>
+              <p id="display-schedule-conflicts" class="compat-warning" hidden></p>
               <div class="display-schedule-grid">
                 <div class="display-schedule-heading"><span>Wochentag</span><span>Ein</span><span>Aus</span><span></span></div>
                 <div id="display-schedule-entries"></div>
               </div>
-              <button id="display-schedule-add" type="button" class="secondary">Zeitfenster hinzufügen</button>
+              <div class="form-actions">
+                <button id="display-schedule-add" type="button" class="secondary">Zeitfenster hinzufügen</button>
+                <select id="display-schedule-copy-source" aria-label="Quelltag"></select>
+                <select id="display-schedule-copy-target" aria-label="Zieltag"></select>
+                <button id="display-schedule-copy" type="button" class="secondary">Tagesplan kopieren</button>
+              </div>
             </fieldset>
             <button>Bildschirmsteuerung speichern</button>
           </form>
