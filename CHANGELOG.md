@@ -8,6 +8,30 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.11.4] – 2026-08-09
+
+### Hinzugefügt
+
+- Der Bildschirm-Schaltplan ist eine frei erweiterbare Liste mit bis zu 100
+  Zeitfenstern. Dadurch sind mehrere Ein- und Ausschaltphasen am selben
+  Wochentag sowie weiterhin Zeitfenster über Mitternacht möglich.
+
+### Behoben
+
+- Ältere oder unvollständige Bildschirmkonfigurationen mit fehlenden oder
+  leeren `schedule_entries` werden im Backend und in der Verwaltungsoberfläche
+  sicher als leerer Wochenplan behandelt.
+- Die Sitzungsprüfung liefert im abgemeldeten Zustand eine reguläre Antwort,
+  wodurch kein erwartbarer `401`-Fehler mehr in der Browserkonsole erscheint.
+- Ein eingebettetes Favicon verhindert unnötige `favicon.ico`-Anfragen.
+- Fehlende Dateien aus älteren Mediathek- oder Playlist-Einträgen werden als
+  solche gekennzeichnet und vom Player übersprungen, statt wiederholt eine
+  nicht vorhandene Medien-URL abzurufen.
+
+### Geändert
+
+- Projektversion von `0.11.3` auf `0.11.4` erhöht.
+
 ## [0.11.3] – 2026-08-09
 
 ### Hinzugefügt

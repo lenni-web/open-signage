@@ -20,7 +20,7 @@ from .display_control import display_config, display_status, request_display_act
 from .auth import (change_password, clear_login_failures, create_session, destroy_session,
                    ensure_login_allowed, get_setting, password_change_required, player_token,
                    record_login_failure, require_player, require_system_login, screen_name,
-                   set_setting, verify_password)
+                   session_is_authenticated, set_setting, verify_password)
 from .application_update import request_update as request_application_update
 from .application_update import update_status as application_update_status
 from .conversion_jobs import conversion_status, queue_conversion
@@ -135,7 +135,7 @@ class DisplayControlSettings(BaseModel):
     activate_source: bool = True
     fallback_hdmi_signal: bool = True
     schedule_enabled: bool = False
-    schedule_entries: list[DisplayScheduleEntry] = Field(default_factory=list, max_length=7)
+    schedule_entries: list[DisplayScheduleEntry] = Field(default_factory=list, max_length=100)
 
 
 class DisplayAction(BaseModel):
@@ -248,7 +248,17 @@ def get_library_media_or_404(media_id: int):
 def serialize_library_media(row) -> dict:
     item = dict(row)
     item["metadata"] = json.loads(item.pop("metadata_json") or "{}")
+    item["file_exists"] = local_media_exists(item.get("source"))
     return item
+
+
+def local_media_exists(source: str | None) -> bool:
+    if not source:
+        return False
+    parsed = urlparse(source)
+    if parsed.scheme or parsed.netloc:
+        return True
+    return (media_dir() / Path(parsed.path).name).is_file()
 
 
 def serialize_playlist(row) -> dict:
@@ -428,14 +438,13 @@ def get_display_control(_: None = Depends(require_system_login)):
 
 @app.patch("/api/system/display-control")
 def update_display_control(payload: DisplayControlSettings, _: None = Depends(require_system_login)):
-    weekdays = [entry.weekday for entry in payload.schedule_entries]
-    if len(weekdays) != len(set(weekdays)):
-        raise HTTPException(status_code=422, detail="Jeder Wochentag darf nur einmal vorkommen")
     if any(entry.on == entry.off for entry in payload.schedule_entries):
         raise HTTPException(status_code=422, detail="Ein- und Ausschaltzeit müssen unterschiedlich sein")
     config = payload.model_dump()
     config["cec_address"] = config["cec_address"].upper()
-    config["schedule_entries"] = sorted(config["schedule_entries"], key=lambda entry: entry["weekday"])
+    config["schedule_entries"] = sorted(
+        config["schedule_entries"], key=lambda entry: (entry["weekday"], entry["on"], entry["off"])
+    )
     save_display_config(config)
     request_display_action("status")
     return {"config": config, "status": display_status()}
@@ -448,7 +457,9 @@ def start_display_action(payload: DisplayAction, _: None = Depends(require_syste
 
 
 @app.get("/api/system/session")
-def system_session(_: None = Depends(require_system_login)):
+def system_session(request: Request):
+    if not session_is_authenticated(request):
+        return {"authenticated": False}
     return {"authenticated": True, "screen_name": screen_name(),
             "password_change_required": password_change_required()}
 
@@ -497,7 +508,13 @@ def content_rows(enabled_only: bool = False) -> list[dict]:
     with connect() as connection:
         rows = connection.execute(query, params).fetchall()
     items = [serialize(row) for row in rows]
-    return [item for item in items if scheduled_now(item)] if enabled_only else items
+    if not enabled_only:
+        return items
+    return [
+        item for item in items
+        if scheduled_now(item)
+        and (item["kind"] not in {"image", "video", "pdf", "text"} or local_media_exists(item["source"]))
+    ]
 
 
 @app.get("/api/player/bootstrap")

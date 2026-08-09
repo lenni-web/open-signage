@@ -54,24 +54,22 @@ def sanitized_config() -> dict:
         entries = [{"weekday": day, "on": raw.get("schedule_on"), "off": raw.get("schedule_off")}
                    for day in (raw.get("schedule_weekdays") or range(7))]
     clean_entries = []
-    seen = set()
-    for entry in entries:
+    for entry in entries[:100]:
         if not isinstance(entry, dict) or not isinstance(entry.get("weekday"), int):
             continue
         day = entry["weekday"]
         on_time, off_time = entry.get("on"), entry.get("off")
-        if day in seen or not 0 <= day <= 6 or not isinstance(on_time, str) or not isinstance(off_time, str):
+        if not 0 <= day <= 6 or not isinstance(on_time, str) or not isinstance(off_time, str):
             continue
         if not time_pattern.fullmatch(on_time) or not time_pattern.fullmatch(off_time) or on_time == off_time:
             continue
         clean_entries.append({"weekday": day, "on": on_time, "off": off_time})
-        seen.add(day)
     return {
         "cec_address": address,
         "activate_source": raw.get("activate_source") is True,
         "fallback_hdmi_signal": raw.get("fallback_hdmi_signal") is True,
         "schedule_enabled": raw.get("schedule_enabled") is True,
-        "schedule_entries": sorted(clean_entries, key=lambda entry: entry["weekday"]),
+        "schedule_entries": sorted(clean_entries, key=lambda entry: (entry["weekday"], entry["on"], entry["off"])),
     }
 
 

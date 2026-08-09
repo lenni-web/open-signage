@@ -166,6 +166,18 @@ def require_system_login(request: Request) -> None:
         )
 
 
+def session_is_authenticated(request: Request) -> bool:
+    token = request.cookies.get(SESSION_COOKIE, "")
+    if not token:
+        return False
+    with connect() as connection:
+        row = connection.execute(
+            "SELECT expires_at FROM admin_sessions WHERE token_hash = ?",
+            (hashlib.sha256(token.encode()).hexdigest(),),
+        ).fetchone()
+    return bool(row and datetime.fromisoformat(row["expires_at"]) > datetime.now(UTC))
+
+
 def create_session(response: Response) -> None:
     token = secrets.token_urlsafe(32)
     expires = datetime.now(UTC) + SESSION_LIFETIME

@@ -77,6 +77,10 @@ async function openSystemPage() {
 async function boot() {
   try {
     const session = await api("/api/system/session");
+    if (!session.authenticated) {
+      showLogin();
+      return;
+    }
     showApplication(session);
     await Promise.all([loadVersion(), load(), loadLibrary(), loadPlaylists()]);
   } catch (_) {
@@ -250,7 +254,9 @@ function renderLibrary(items) {
       card.classList.toggle("selected", selector.checked);
     });
     const preview = document.createElement(item.kind === "image" ? "img" : "video");
-    if (item.kind === "video") {
+    if (item.file_exists === false) {
+      preview.hidden = true;
+    } else if (item.kind === "video") {
       preview.src = item.source;
       if (item.thumbnail_source) preview.poster = item.thumbnail_source;
       preview.muted = true;
@@ -284,7 +290,8 @@ function renderLibrary(items) {
     body.querySelector(".media-category").value = item.category || "";
     const previewError = document.createElement("p");
     previewError.className = "media-preview-error";
-    previewError.hidden = true;
+    previewError.hidden = item.file_exists !== false;
+    if (item.file_exists === false) previewError.textContent = "Datei fehlt im Medienspeicher.";
     if (item.kind === "video") {
       preview.addEventListener("error", () => {
         previewError.textContent = "Vorschau nicht abspielbar – bitte „Optimal konvertieren“ verwenden.";
@@ -574,27 +581,45 @@ async function loadDevice() {
 }
 
 function renderDisplayControl(data, updateForm = !displayControlDirty) {
-  const config = data.config;
-  const status = data.status;
+  const config = data?.config || {};
+  const status = data?.status || {};
+  const scheduleEntries = Array.isArray(config.schedule_entries) ? config.schedule_entries : [];
   const form = document.querySelector("#display-control-form");
   if (updateForm) {
     form.elements.cec_address.value = config.cec_address;
     form.elements.activate_source.checked = config.activate_source;
     form.elements.fallback_hdmi_signal.checked = config.fallback_hdmi_signal;
     form.elements.schedule_enabled.checked = config.schedule_enabled;
-    form.querySelectorAll(".display-schedule-row").forEach(row => {
-      const entry = config.schedule_entries.find(item => item.weekday === Number(row.dataset.weekday));
-      row.querySelector(".day-enabled").checked = Boolean(entry);
-      row.querySelector(".day-on").value = entry?.on || "08:00";
-      row.querySelector(".day-off").value = entry?.off || "22:00";
-      row.classList.toggle("enabled", Boolean(entry));
-    });
+    const target = document.querySelector("#display-schedule-entries");
+    target.replaceChildren(...scheduleEntries.map(createDisplayScheduleRow));
   }
   document.querySelector("#display-cec-status").textContent = status.cec_available == null ? "Noch unbekannt" : status.cec_available ? "Verfügbar" : "Nicht verfügbar";
   document.querySelector("#display-fallback-status").textContent = status.hdmi_fallback_available == null ? "Noch unbekannt" : status.hdmi_fallback_available ? "Verfügbar" : "Nicht verfügbar";
   document.querySelector("#display-power-status").textContent = { on: "Eingeschaltet", off: "Ausgeschaltet", unknown: "Unbekannt" }[status.power_status] || "Unbekannt";
   document.querySelector("#display-updated-at").textContent = status.updated_at ? new Date(status.updated_at).toLocaleString("de-DE") : "Noch nie";
   document.querySelector("#display-status-message").textContent = status.message || "";
+}
+
+const displayWeekdays = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
+
+function createDisplayScheduleRow(entry = { weekday: 0, on: "08:00", off: "22:00" }) {
+  const row = document.createElement("div");
+  row.className = "display-schedule-row";
+  const weekday = document.createElement("select");
+  weekday.className = "schedule-weekday";
+  weekday.setAttribute("aria-label", "Wochentag");
+  displayWeekdays.forEach((name, index) => weekday.append(new Option(name, index)));
+  weekday.value = String(entry.weekday);
+  const on = document.createElement("input");
+  on.className = "day-on"; on.type = "time"; on.required = true; on.value = entry.on || "08:00";
+  on.setAttribute("aria-label", "Einschaltzeit");
+  const off = document.createElement("input");
+  off.className = "day-off"; off.type = "time"; off.required = true; off.value = entry.off || "22:00";
+  off.setAttribute("aria-label", "Ausschaltzeit");
+  const remove = document.createElement("button");
+  remove.type = "button"; remove.className = "danger display-schedule-remove"; remove.textContent = "Entfernen";
+  row.append(weekday, on, off, remove);
+  return row;
 }
 
 async function loadDisplayControl() {
@@ -1249,8 +1274,7 @@ document.querySelector("#display-control-form").addEventListener("submit", async
         fallback_hdmi_signal: form.get("fallback_hdmi_signal") === "on",
         schedule_enabled: form.get("schedule_enabled") === "on",
         schedule_entries: [...event.target.querySelectorAll(".display-schedule-row")]
-          .filter(row => row.querySelector(".day-enabled").checked)
-          .map(row => ({ weekday: Number(row.dataset.weekday), on: row.querySelector(".day-on").value, off: row.querySelector(".day-off").value })),
+          .map(row => ({ weekday: Number(row.querySelector(".schedule-weekday").value), on: row.querySelector(".day-on").value, off: row.querySelector(".day-off").value })),
       }),
     });
     displayControlDirty = false;
@@ -1261,8 +1285,17 @@ document.querySelector("#display-control-form").addEventListener("submit", async
 
 document.querySelector("#display-control-form").addEventListener("input", event => {
   displayControlDirty = true;
-  const row = event.target.closest(".display-schedule-row");
-  if (row) row.classList.toggle("enabled", row.querySelector(".day-enabled").checked);
+});
+
+document.querySelector("#display-schedule-add").addEventListener("click", () => {
+  document.querySelector("#display-schedule-entries").append(createDisplayScheduleRow());
+  displayControlDirty = true;
+});
+
+document.querySelector("#display-schedule-entries").addEventListener("click", event => {
+  if (!event.target.closest(".display-schedule-remove")) return;
+  event.target.closest(".display-schedule-row").remove();
+  displayControlDirty = true;
 });
 
 document.querySelectorAll("[data-display-action]").forEach(button => button.addEventListener("click", async () => {

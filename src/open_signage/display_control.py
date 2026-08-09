@@ -31,6 +31,8 @@ def display_config() -> dict:
              "off": config.get("schedule_off", "22:00")}
             for day in weekdays
         ]
+    if not isinstance(config.get("schedule_entries"), list):
+        config["schedule_entries"] = []
     for legacy in ("schedule_weekdays", "schedule_on", "schedule_off"):
         config.pop(legacy, None)
     return config

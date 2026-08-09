@@ -74,6 +74,23 @@ def test_player_endpoints_require_device_token(tmp_path: Path, monkeypatch):
         ).status_code == 204
 
 
+def test_player_skips_missing_local_media_file(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        with connect() as connection:
+            connection.execute(
+                "INSERT INTO content(name, kind, source, position) VALUES (?, 'image', ?, 0)",
+                ("Fehlendes Bild", "192.168.142.22.png"),
+            )
+        token = client.get("/api/player/bootstrap").json()["token"]
+        response = client.get(
+            "/api/player/content", headers={"Authorization": f"Bearer {token}"}
+        )
+    assert response.status_code == 200
+    assert response.json() == []
+
+
 def test_sqlite_busy_timeout_and_integrity_check(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
     initialize()
@@ -560,6 +577,14 @@ def test_session_is_stored_for_server_restarts(tmp_path: Path, monkeypatch):
         assert restarted_client.get("/api/system/session").status_code == 200
 
 
+def test_unauthenticated_session_status_is_not_an_http_error(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        response = client.get("/api/system/session")
+    assert response.status_code == 200
+    assert response.json() == {"authenticated": False}
+
+
 def test_text_content_can_be_previewed_by_player_edited_and_deleted(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
     with TestClient(app) as client:
@@ -1009,13 +1034,15 @@ def test_display_control_configuration_and_request_are_protected(tmp_path: Path,
         updated = client.patch("/api/system/display-control", json={
             "cec_address": "A", "activate_source": True, "fallback_hdmi_signal": True,
             "schedule_enabled": True, "schedule_entries": [
+                {"weekday": 1, "on": "08:00", "off": "09:00"},
                 {"weekday": 1, "on": "19:30", "off": "21:30"},
                 {"weekday": 3, "on": "09:00", "off": "12:00"},
                 {"weekday": 6, "on": "10:15", "off": "13:30"},
             ],
         })
         assert updated.status_code == 200
-        assert updated.json()["config"]["schedule_entries"][0]["weekday"] == 1
+        assert len(updated.json()["config"]["schedule_entries"]) == 4
+        assert [entry["weekday"] for entry in updated.json()["config"]["schedule_entries"][:2]] == [1, 1]
         assert client.post("/api/system/display-control/action", json={"action": "on"}).status_code == 202
         assert client.post("/api/system/display-control/action", json={"action": "arbitrary"}).status_code == 422
     assert (tmp_path / "display-control-request").read_text() == "on"
@@ -1025,12 +1052,15 @@ def test_display_schedule_handles_daytime_and_overnight_windows():
     helper = runpy.run_path(str(PROJECT_ROOT / "deploy/open-signage-display-control"))
     scheduled_state = helper["scheduled_state"]
     daytime = {"schedule_enabled": True, "schedule_entries": [
+        {"weekday": 1, "on": "08:00", "off": "09:00"},
         {"weekday": 1, "on": "19:30", "off": "21:30"},
         {"weekday": 3, "on": "09:00", "off": "12:00"},
         {"weekday": 6, "on": "10:15", "off": "13:30"},
     ]}
     assert scheduled_state(daytime, datetime(2026, 8, 9, 11, 0)) == "on"  # Sunday
     assert scheduled_state(daytime, datetime(2026, 8, 11, 20, 0)) == "on"  # Tuesday
+    assert scheduled_state(daytime, datetime(2026, 8, 11, 8, 30)) == "on"  # second Tuesday window
+    assert scheduled_state(daytime, datetime(2026, 8, 11, 12, 0)) == "off"
     assert scheduled_state(daytime, datetime(2026, 8, 13, 10, 0)) == "on"  # Thursday
     assert scheduled_state(daytime, datetime(2026, 8, 10, 20, 0)) == "off"
     overnight = {"schedule_enabled": True, "schedule_entries": [{"weekday": 0, "on": "22:00", "off": "02:00"}]}
@@ -1055,6 +1085,18 @@ def test_legacy_display_schedule_is_migrated_on_read(tmp_path: Path, monkeypatch
     ]
 
 
+def test_null_display_schedule_entries_are_normalized(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    tmp_path.mkdir(exist_ok=True)
+    (tmp_path / "display-control.json").write_text(
+        json.dumps({"schedule_enabled": False, "schedule_entries": None})
+    )
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        config = client.get("/api/system/display-control").json()["config"]
+    assert config["schedule_entries"] == []
+
+
 def test_privileged_display_helper_sanitizes_its_configuration(tmp_path: Path):
     helper = runpy.run_path(str(PROJECT_ROOT / "deploy/open-signage-display-control"))
     config_path = tmp_path / "display-control.json"
@@ -1062,6 +1104,7 @@ def test_privileged_display_helper_sanitizes_its_configuration(tmp_path: Path):
         "cec_address": "0\nstandby 0", "schedule_enabled": True,
         "schedule_entries": [
             {"weekday": 1, "on": "19:30", "off": "21:30"},
+            {"weekday": 1, "on": "08:00", "off": "09:00"},
             {"weekday": 99, "on": "08:00", "off": "12:00"},
             {"weekday": 2, "on": "invalid", "off": "21:30"},
         ], "activate_source": "yes",
@@ -1069,5 +1112,8 @@ def test_privileged_display_helper_sanitizes_its_configuration(tmp_path: Path):
     helper["sanitized_config"].__globals__["CONFIG"] = config_path
     config = helper["sanitized_config"]()
     assert config["cec_address"] == "0"
-    assert config["schedule_entries"] == [{"weekday": 1, "on": "19:30", "off": "21:30"}]
+    assert config["schedule_entries"] == [
+        {"weekday": 1, "on": "08:00", "off": "09:00"},
+        {"weekday": 1, "on": "19:30", "off": "21:30"},
+    ]
     assert config["activate_source"] is False

@@ -21,8 +21,8 @@ Chromium-Kioskfenster an.
 - Ausfallsicherer Player mit lokalem Playlist-Cache und Wiederaufnahme
 - Speicherbereinigung, zeitgesteuerte Playlists und sichere Systemaktionen
 - Geräteidentität und Rollenmodell als Grundlage für Master-/Slave-Betrieb
-- HDMI-CEC-Bildschirmsteuerung mit individuellen Zeiten je Wochentag, Eingangswahl und
-  HDMI-Signal-Fallback
+- HDMI-CEC-Bildschirmsteuerung mit frei kombinierbaren Zeitfenstern, mehreren
+  Ein-/Ausschaltphasen je Wochentag, Eingangswahl und HDMI-Signal-Fallback
 - Kompakte Inhaltsverwaltung mit auswählbaren Formularen sowie Freitext auf
   Bild- oder stummem Video-Hintergrund
 - Bildeditor mit 16:9-Zuschnitt, Drehung, Fokus, Helligkeit und Kontrast sowie
