@@ -1,0 +1,6 @@
+[Unit]
+Description=Open Signage HDMI-CEC display control
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/open-signage-display-control

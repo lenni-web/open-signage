@@ -10,6 +10,7 @@ readonly UPDATE_COMMAND="/usr/local/sbin/open-signage-system-update"
 readonly APPLICATION_UPDATE_COMMAND="/usr/local/sbin/open-signage-application-update"
 readonly APPLICATION_UPDATE_CONFIG="/etc/default/open-signage-application-update"
 readonly SYSTEM_ACTION_COMMAND="/usr/local/sbin/open-signage-system-action"
+readonly DISPLAY_CONTROL_COMMAND="/usr/local/sbin/open-signage-display-control"
 
 PORT=8080
 KIOSK_USER="signage"
@@ -72,6 +73,7 @@ printf 'Installiere minimales Wayland-System und Chromium …\n'
 apt-get update
 apt-get install --no-install-recommends -y \
   chromium \
+  cec-utils \
   curl \
   ffmpeg \
   fonts-dejavu-core \
@@ -148,6 +150,12 @@ install -o root -g root -m 0644 \
   "${PROJECT_DIR}/deploy/open-signage-system-action.service" "/etc/systemd/system/open-signage-system-action.service"
 install -o root -g root -m 0644 \
   "${PROJECT_DIR}/deploy/open-signage-system-action.path" "/etc/systemd/system/open-signage-system-action.path"
+install -o root -g root -m 0755 \
+  "${PROJECT_DIR}/deploy/open-signage-display-control" "${DISPLAY_CONTROL_COMMAND}"
+for unit in open-signage-display-control.service open-signage-display-control.path \
+  open-signage-display-schedule.service open-signage-display-schedule.timer; do
+  install -o root -g root -m 0644 "${PROJECT_DIR}/deploy/${unit}" "/etc/systemd/system/${unit}"
+done
 
 readonly AUTOSTART_DIR="${KIOSK_HOME}/.config/labwc"
 readonly AUTOSTART_FILE="${AUTOSTART_DIR}/autostart"
@@ -168,6 +176,8 @@ systemctl daemon-reload
 systemctl enable --now open-signage-update.path
 systemctl enable --now open-signage-application-update.path
 systemctl enable --now open-signage-system-action.path
+systemctl enable --now open-signage-display-control.path
+systemctl enable --now open-signage-display-schedule.timer
 systemctl enable --now open-signage.service
 
 "${PROJECT_DIR}/scripts/verify-installation.sh" --port "${PORT}"

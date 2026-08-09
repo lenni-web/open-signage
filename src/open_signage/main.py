@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .database import connect, data_dir, initialize, media_dir
+from .display_control import display_config, display_status, request_display_action, save_display_config
 from .auth import change_password, create_session, destroy_session, get_setting, require_system_login, screen_name, set_setting, verify_password
 from .application_update import request_update as request_application_update
 from .application_update import update_status as application_update_status
@@ -117,6 +118,20 @@ class DeviceSettings(BaseModel):
 
 class SystemAction(BaseModel):
     action: str = Field(pattern=r"^(restart_service|reboot|poweroff)$")
+
+
+class DisplayControlSettings(BaseModel):
+    cec_address: str = Field(default="0", pattern=r"^[0-9A-Fa-f]$")
+    activate_source: bool = True
+    fallback_hdmi_signal: bool = True
+    schedule_enabled: bool = False
+    schedule_weekdays: list[int] = Field(default_factory=list)
+    schedule_on: str = Field(default="08:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    schedule_off: str = Field(default="22:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+class DisplayAction(BaseModel):
+    action: str = Field(pattern=r"^(on|off|status)$")
 
 
 class ImageEdit(BaseModel):
@@ -395,6 +410,31 @@ def cleanup_storage(_: None = Depends(require_system_login)):
 @app.post("/api/system/action", status_code=202)
 def request_system_action(payload: SystemAction, _: None = Depends(require_system_login)):
     (data_dir() / "system-action-request").write_text(payload.action, encoding="utf-8")
+    return {"queued": True, "action": payload.action}
+
+
+@app.get("/api/system/display-control")
+def get_display_control(_: None = Depends(require_system_login)):
+    return {"config": display_config(), "status": display_status()}
+
+
+@app.patch("/api/system/display-control")
+def update_display_control(payload: DisplayControlSettings, _: None = Depends(require_system_login)):
+    if any(day < 0 or day > 6 for day in payload.schedule_weekdays):
+        raise HTTPException(status_code=422, detail="Ungültiger Wochentag")
+    if payload.schedule_enabled and payload.schedule_on == payload.schedule_off:
+        raise HTTPException(status_code=422, detail="Ein- und Ausschaltzeit müssen unterschiedlich sein")
+    config = payload.model_dump()
+    config["cec_address"] = config["cec_address"].upper()
+    config["schedule_weekdays"] = sorted(set(config["schedule_weekdays"]))
+    save_display_config(config)
+    request_display_action("status")
+    return {"config": config, "status": display_status()}
+
+
+@app.post("/api/system/display-control/action", status_code=202)
+def start_display_action(payload: DisplayAction, _: None = Depends(require_system_login)):
+    request_display_action(payload.action)
     return {"queued": True, "action": payload.action}
 
 

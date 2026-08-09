@@ -63,6 +63,11 @@ fi
   "${release_dir}/.venv/bin/python" -m pip install --upgrade pip
   "${release_dir}/.venv/bin/python" -m pip install "${release_dir}"
 
+  if ! command -v cec-client >/dev/null 2>&1; then
+    apt-get update
+    apt-get install --no-install-recommends -y cec-utils
+  fi
+
   # Keep the privileged updater and its units in sync with the installed release.
   install -o root -g root -m 0755 \
     "${release_dir}/deploy/open-signage-application-update" \
@@ -82,8 +87,17 @@ fi
   install -o root -g root -m 0644 \
     "${release_dir}/deploy/open-signage-system-action.path" \
     /etc/systemd/system/open-signage-system-action.path
+  install -o root -g root -m 0755 \
+    "${release_dir}/deploy/open-signage-display-control" \
+    /usr/local/sbin/open-signage-display-control
+  for unit in open-signage-display-control.service open-signage-display-control.path \
+    open-signage-display-schedule.service open-signage-display-schedule.timer; do
+    install -o root -g root -m 0644 "${release_dir}/deploy/${unit}" "/etc/systemd/system/${unit}"
+  done
   systemctl daemon-reload
   systemctl enable --now open-signage-system-action.path
+  systemctl enable --now open-signage-display-control.path
+  systemctl enable --now open-signage-display-schedule.timer
 
   systemctl stop open-signage.service
   mv "${APP_DIR}" "${backup_dir}"

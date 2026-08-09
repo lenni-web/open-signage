@@ -1,0 +1,6 @@
+[Unit]
+Description=Apply Open Signage display schedule
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/open-signage-display-control --schedule

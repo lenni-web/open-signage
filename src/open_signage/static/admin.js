@@ -15,6 +15,21 @@ let playlists = [];
 let editingLibraryImage = null;
 const selectedMediaIds = new Set();
 
+function updateAdminClock() {
+  const clock = document.querySelector("#admin-clock");
+  const now = new Date();
+  clock.dateTime = now.toISOString();
+  clock.textContent = now.toLocaleTimeString("de-DE", {
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
+  clock.title = now.toLocaleDateString("de-DE", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+}
+
+updateAdminClock();
+window.setInterval(updateAdminClock, 1000);
+
 function notify(text, isError = false, duration = 3000) {
   message.textContent = text;
   message.className = isError ? "show error" : "show";
@@ -51,7 +66,7 @@ async function loadSettings() {
 }
 
 async function openSystemPage() {
-  await Promise.all([loadSystemInfo(), loadMonitoring(), loadUpdateStatus(), loadApplicationUpdateStatus(), loadStorage(), loadDevice()]);
+  await Promise.all([loadSystemInfo(), loadMonitoring(), loadUpdateStatus(), loadApplicationUpdateStatus(), loadStorage(), loadDevice(), loadDisplayControl()]);
 }
 
 async function boot() {
@@ -545,6 +560,31 @@ async function loadDevice() {
   document.querySelector("#sync-status").textContent = `Synchronisationsstatus: ${device.sync_status}`;
 }
 
+function renderDisplayControl(data) {
+  const config = data.config;
+  const status = data.status;
+  const form = document.querySelector("#display-control-form");
+  form.elements.cec_address.value = config.cec_address;
+  form.elements.activate_source.checked = config.activate_source;
+  form.elements.fallback_hdmi_signal.checked = config.fallback_hdmi_signal;
+  form.elements.schedule_enabled.checked = config.schedule_enabled;
+  form.elements.schedule_on.value = config.schedule_on;
+  form.elements.schedule_off.value = config.schedule_off;
+  form.querySelectorAll('[name="display_weekday"]').forEach(box => {
+    box.checked = config.schedule_weekdays.includes(Number(box.value));
+  });
+  document.querySelector("#display-cec-status").textContent = status.cec_available == null ? "Noch unbekannt" : status.cec_available ? "Verfügbar" : "Nicht verfügbar";
+  document.querySelector("#display-fallback-status").textContent = status.hdmi_fallback_available == null ? "Noch unbekannt" : status.hdmi_fallback_available ? "Verfügbar" : "Nicht verfügbar";
+  document.querySelector("#display-power-status").textContent = { on: "Eingeschaltet", off: "Ausgeschaltet", unknown: "Unbekannt" }[status.power_status] || "Unbekannt";
+  document.querySelector("#display-updated-at").textContent = status.updated_at ? new Date(status.updated_at).toLocaleString("de-DE") : "Noch nie";
+  document.querySelector("#display-status-message").textContent = status.message || "";
+}
+
+async function loadDisplayControl() {
+  try { renderDisplayControl(await api("/api/system/display-control")); }
+  catch (error) { notify(error.message, true); }
+}
+
 function openPlaylistSchedule(item) {
   schedulingPlaylist = item;
   const form = document.querySelector("#playlist-schedule-form");
@@ -839,6 +879,7 @@ window.setInterval(() => {
     loadUpdateStatus();
     loadApplicationUpdateStatus();
     loadMonitoring();
+    loadDisplayControl();
   }
 }, 5000);
 
@@ -1178,6 +1219,40 @@ document.querySelector("#device-form").addEventListener("submit", async (event) 
     await loadDevice(); notify("Gerätekonfiguration gespeichert");
   } catch (error) { notify(error.message, true); }
 });
+
+document.querySelector("#display-control-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = new FormData(event.target);
+  try {
+    const result = await api("/api/system/display-control", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        cec_address: form.get("cec_address"),
+        activate_source: form.get("activate_source") === "on",
+        fallback_hdmi_signal: form.get("fallback_hdmi_signal") === "on",
+        schedule_enabled: form.get("schedule_enabled") === "on",
+        schedule_weekdays: form.getAll("display_weekday").map(Number),
+        schedule_on: form.get("schedule_on"), schedule_off: form.get("schedule_off"),
+      }),
+    });
+    renderDisplayControl(result);
+    notify("Bildschirmsteuerung und Zeitplan gespeichert");
+  } catch (error) { notify(error.message, true); }
+});
+
+document.querySelectorAll("[data-display-action]").forEach(button => button.addEventListener("click", async () => {
+  const action = button.dataset.displayAction;
+  if (action === "off" && !window.confirm("Den angeschlossenen Bildschirm jetzt ausschalten?")) return;
+  button.disabled = true;
+  try {
+    await api("/api/system/display-control/action", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }),
+    });
+    notify(action === "on" ? "Einschalten angefordert" : action === "off" ? "Ausschalten angefordert" : "Statusabfrage gestartet");
+    window.setTimeout(loadDisplayControl, 2000);
+  } catch (error) { notify(error.message, true); }
+  finally { window.setTimeout(() => { button.disabled = false; }, 2000); }
+}));
 
 document.querySelectorAll("[data-system-action]").forEach(button => button.addEventListener("click", async () => {
   const action = button.dataset.systemAction;

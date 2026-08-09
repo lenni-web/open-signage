@@ -8,6 +8,28 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.11.2] – 2026-08-09
+
+### Hinzugefügt
+
+- Dezente, sekündlich aktualisierte lokale Uhrzeit oben links in der
+  Verwaltungsoberfläche; das vollständige Datum steht als Tooltip bereit.
+- HDMI-CEC-Bildschirmsteuerung mit Ein-/Ausschaltbuttons, konfigurierbarer
+  logischer CEC-Adresse und optionaler Aktivierung des angeschlossenen
+  HDMI-Eingangs.
+- Automatischer Ein-/Ausschaltzeitplan nach Wochentagen und Uhrzeiten,
+  einschließlich Zeitfenstern über Mitternacht.
+- Anzeige von CEC-Verfügbarkeit, erkanntem Bildschirmstatus, verwendeter
+  Steuerungsmethode und letzter Statusmeldung auf der Systemseite.
+- Optionaler Fallback über `vcgencmd display_power`, wenn der Bildschirm kein
+  HDMI-CEC unterstützt oder die CEC-Steuerung fehlschlägt.
+- Separater validierender Root-Helfer mit systemd-Path und -Timer; die
+  Webanwendung erhält keine allgemeinen Root- oder sudo-Rechte.
+
+### Geändert
+
+- Projektversion von `0.11.1` auf `0.11.2` erhöht.
+
 ## [0.11.1] – 2026-08-09
 
 ### Hinzugefügt

@@ -1,6 +1,8 @@
 import sqlite3
 import base64
+import json
 import subprocess
+import runpy
 from datetime import datetime
 from pathlib import Path
 
@@ -315,6 +317,13 @@ def test_update_service_is_installed_without_sudo_access():
     assert "ExecStartPre=/bin/sleep 2" in application_service
     assert "PathExists=/var/lib/open-signage/application-update.request" in application_path
     assert "systemctl daemon-reload" in application_script
+    assert "cec-utils" in installer
+    assert "open-signage-display-control.path" in installer
+    assert "open-signage-display-schedule.timer" in installer
+    display_helper = (PROJECT_ROOT / "deploy/open-signage-display-control").read_text(encoding="utf-8")
+    assert "cec-client" in display_helper
+    assert "vcgencmd" in display_helper
+    assert "sudo" not in display_helper
 
 
 def test_admin_contains_system_navigation_and_update_controls():
@@ -342,6 +351,10 @@ def test_admin_contains_system_navigation_and_update_controls():
     assert 'id="library-bulk-add"' in admin
     assert 'id="monitoring-summary"' in admin
     assert 'id="monitoring-refresh"' in admin
+    assert 'id="display-control-form"' in admin
+    assert 'id="admin-clock"' in admin
+    assert 'data-display-action="on"' in admin
+    assert 'data-display-action="off"' in admin
     assert 'id="add-content-type"' in admin
     assert 'video/mp4,video/webm' in admin
     admin_js = (PROJECT_ROOT / "src/open_signage/static/admin.js").read_text(encoding="utf-8")
@@ -889,3 +902,50 @@ def test_device_role_and_system_action_are_persisted(tmp_path: Path, monkeypatch
         assert updated.json()["device_id"] == first["device_id"]
         assert client.post("/api/system/action", json={"action": "reboot"}).status_code == 202
     assert (tmp_path / "system-action-request").read_text() == "reboot"
+
+
+def test_display_control_configuration_and_request_are_protected(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        assert client.get("/api/system/display-control").status_code == 401
+        client.post("/api/system/login", json={"password": "open-signage"})
+        initial = client.get("/api/system/display-control").json()
+        assert initial["config"]["cec_address"] == "0"
+        updated = client.patch("/api/system/display-control", json={
+            "cec_address": "A", "activate_source": True, "fallback_hdmi_signal": True,
+            "schedule_enabled": True, "schedule_weekdays": [0, 1, 1],
+            "schedule_on": "07:30", "schedule_off": "23:00",
+        })
+        assert updated.status_code == 200
+        assert updated.json()["config"]["schedule_weekdays"] == [0, 1]
+        assert client.post("/api/system/display-control/action", json={"action": "on"}).status_code == 202
+        assert client.post("/api/system/display-control/action", json={"action": "arbitrary"}).status_code == 422
+    assert (tmp_path / "display-control-request").read_text() == "on"
+
+
+def test_display_schedule_handles_daytime_and_overnight_windows():
+    helper = runpy.run_path(str(PROJECT_ROOT / "deploy/open-signage-display-control"))
+    scheduled_state = helper["scheduled_state"]
+    daytime = {"schedule_enabled": True, "schedule_weekdays": [0], "schedule_on": "08:00", "schedule_off": "18:00"}
+    assert scheduled_state(daytime, datetime(2026, 8, 10, 12, 0)) == "on"  # Monday
+    assert scheduled_state(daytime, datetime(2026, 8, 10, 20, 0)) == "off"
+    overnight = {"schedule_enabled": True, "schedule_weekdays": [0], "schedule_on": "22:00", "schedule_off": "02:00"}
+    assert scheduled_state(overnight, datetime(2026, 8, 10, 23, 0)) == "on"
+    assert scheduled_state(overnight, datetime(2026, 8, 11, 1, 0)) == "on"
+    assert scheduled_state(overnight, datetime(2026, 8, 11, 3, 0)) == "off"
+
+
+def test_privileged_display_helper_sanitizes_its_configuration(tmp_path: Path):
+    helper = runpy.run_path(str(PROJECT_ROOT / "deploy/open-signage-display-control"))
+    config_path = tmp_path / "display-control.json"
+    config_path.write_text(json.dumps({
+        "cec_address": "0\nstandby 0", "schedule_enabled": True,
+        "schedule_weekdays": [1, 99, "2"], "schedule_on": "invalid",
+        "schedule_off": "21:30", "activate_source": "yes",
+    }))
+    helper["sanitized_config"].__globals__["CONFIG"] = config_path
+    config = helper["sanitized_config"]()
+    assert config["cec_address"] == "0"
+    assert config["schedule_weekdays"] == [1]
+    assert config["schedule_on"] == "08:00"
+    assert config["activate_source"] is False

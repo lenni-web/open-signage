@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch Open Signage display control requests
+
+[Path]
+PathExists=/var/lib/open-signage/display-control-request
+Unit=open-signage-display-control.service
+
+[Install]
+WantedBy=multi-user.target

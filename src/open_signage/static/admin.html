@@ -23,6 +23,7 @@
   <div id="admin-app" hidden>
   <header>
     <div>
+      <time id="admin-clock" class="admin-clock" aria-label="Aktuelle Uhrzeit">--:--:--</time>
       <span class="eyebrow">Lokaler Bildschirm</span>
       <h1>Open Signage</h1>
     </div>
@@ -386,6 +387,47 @@
           <button>Gerätekonfiguration speichern</button>
         </form>
       </section>
+
+      <details class="card system-overview collapsible-card">
+        <summary class="collapsible-summary"><span><span class="eyebrow">HDMI-CEC</span><strong>Bildschirmsteuerung</strong></span></summary>
+        <div class="collapsible-body">
+          <div class="monitoring-summary display-control-status">
+            <div><span>CEC</span><strong id="display-cec-status">–</strong></div>
+            <div><span>Bildschirm</span><strong id="display-power-status">–</strong></div>
+            <div><span>HDMI-Fallback</span><strong id="display-fallback-status">–</strong></div>
+            <div><span>Letzte Aktualisierung</span><strong id="display-updated-at">–</strong></div>
+          </div>
+          <p id="display-status-message" class="schedule-note"></p>
+          <div class="form-actions system-actions display-action-buttons">
+            <button type="button" data-display-action="on">Bildschirm einschalten</button>
+            <button type="button" class="secondary" data-display-action="status">Status abfragen</button>
+            <button type="button" class="danger" data-display-action="off">Bildschirm ausschalten</button>
+          </div>
+          <form id="display-control-form">
+            <label>CEC-Zieladresse
+              <input name="cec_address" maxlength="1" pattern="[0-9A-Fa-f]" value="0" required>
+              <small>Üblicherweise ist der Fernseher die logische Adresse 0.</small>
+            </label>
+            <label class="inline-check"><input name="activate_source" type="checkbox"><span>Beim Einschalten diesen HDMI-Eingang aktivieren</span></label>
+            <label class="inline-check"><input name="fallback_hdmi_signal" type="checkbox"><span>HDMI-Signalsteuerung als Fallback verwenden</span></label>
+            <label class="inline-check"><input name="schedule_enabled" type="checkbox"><span>Automatischen Bildschirm-Zeitplan aktivieren</span></label>
+            <fieldset>
+              <legend>Aktive Wochentage (keine Auswahl = täglich)</legend>
+              <div class="weekday-grid">
+                <label><input type="checkbox" name="display_weekday" value="0"> Mo</label><label><input type="checkbox" name="display_weekday" value="1"> Di</label>
+                <label><input type="checkbox" name="display_weekday" value="2"> Mi</label><label><input type="checkbox" name="display_weekday" value="3"> Do</label>
+                <label><input type="checkbox" name="display_weekday" value="4"> Fr</label><label><input type="checkbox" name="display_weekday" value="5"> Sa</label>
+                <label><input type="checkbox" name="display_weekday" value="6"> So</label>
+              </div>
+            </fieldset>
+            <div class="time-grid">
+              <label>Einschalten um<input name="schedule_on" type="time" value="08:00" required></label>
+              <label>Ausschalten um<input name="schedule_off" type="time" value="22:00" required></label>
+            </div>
+            <button>Bildschirmsteuerung speichern</button>
+          </form>
+        </div>
+      </details>
 
       <details class="card system-overview collapsible-card">
         <summary class="collapsible-summary"><span><span class="eyebrow">Steuerung</span><strong>Systemaktionen</strong></span></summary>

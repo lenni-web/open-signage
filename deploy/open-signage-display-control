@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+
+DATA_DIR = Path("/var/lib/open-signage")
+CONFIG = DATA_DIR / "display-control.json"
+REQUEST = DATA_DIR / "display-control-request"
+STATUS = DATA_DIR / "display-control-status.json"
+DEFAULTS = {
+    "cec_address": "0", "activate_source": True, "fallback_hdmi_signal": True,
+    "schedule_enabled": False, "schedule_weekdays": [],
+    "schedule_on": "08:00", "schedule_off": "22:00",
+}
+
+
+def read_json(path: Path, fallback: dict) -> dict:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return {**fallback, **value} if isinstance(value, dict) else fallback.copy()
+    except (OSError, ValueError):
+        return fallback.copy()
+
+
+def write_status(**values) -> None:
+    current = read_json(STATUS, {})
+    current.update(values, updated_at=datetime.now().astimezone().isoformat())
+    temporary = STATUS.with_suffix(".tmp")
+    temporary.write_text(json.dumps(current, ensure_ascii=False), encoding="utf-8")
+    os.chmod(temporary, 0o640)
+    try:
+        shutil.chown(temporary, user="open-signage", group="open-signage")
+    except LookupError:
+        pass
+    temporary.replace(STATUS)
+
+
+def sanitized_config() -> dict:
+    raw = read_json(CONFIG, DEFAULTS)
+    address = str(raw.get("cec_address", "0")).upper()
+    if not re.fullmatch(r"[0-9A-F]", address):
+        address = "0"
+    time_pattern = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")
+    weekdays = raw.get("schedule_weekdays", [])
+    if not isinstance(weekdays, list):
+        weekdays = []
+    return {
+        "cec_address": address,
+        "activate_source": raw.get("activate_source") is True,
+        "fallback_hdmi_signal": raw.get("fallback_hdmi_signal") is True,
+        "schedule_enabled": raw.get("schedule_enabled") is True,
+        "schedule_weekdays": sorted({day for day in weekdays if isinstance(day, int) and 0 <= day <= 6}),
+        "schedule_on": raw.get("schedule_on") if isinstance(raw.get("schedule_on"), str) and time_pattern.fullmatch(raw["schedule_on"]) else "08:00",
+        "schedule_off": raw.get("schedule_off") if isinstance(raw.get("schedule_off"), str) and time_pattern.fullmatch(raw["schedule_off"]) else "22:00",
+    }
+
+
+def run(command: list[str], input_text: str | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(command, input=input_text, text=True, capture_output=True, timeout=15, check=False)
+
+
+def cec(command: str) -> tuple[bool, str]:
+    executable = shutil.which("cec-client")
+    if not executable:
+        return False, "cec-client ist nicht installiert."
+    result = run([executable, "-s", "-d", "1"], command + "\n")
+    output = (result.stdout + "\n" + result.stderr).strip()
+    lowered = output.lower()
+    unavailable = any(marker in lowered for marker in (
+        "no device found", "unable to open", "cannot open", "failed to open", "connection lost",
+    ))
+    return result.returncode == 0 and not unavailable, output
+
+
+def hdmi_signal(on: bool | None) -> tuple[bool, str]:
+    executable = shutil.which("vcgencmd")
+    if not executable:
+        return False, "vcgencmd ist nicht verfügbar."
+    args = [executable, "display_power"] + ([] if on is None else ["1" if on else "0"])
+    result = run(args)
+    return result.returncode == 0, (result.stdout + result.stderr).strip()
+
+
+def scheduled_state(config: dict, now: datetime) -> str | None:
+    if not config.get("schedule_enabled"):
+        return None
+    weekdays = set(config.get("schedule_weekdays") or range(7))
+    current = now.strftime("%H:%M")
+    on_time, off_time = config["schedule_on"], config["schedule_off"]
+    if on_time < off_time:
+        active = now.weekday() in weekdays and on_time <= current < off_time
+    else:
+        active = ((now.weekday() in weekdays and current >= on_time) or
+                  ((now.weekday() - 1) % 7 in weekdays and current < off_time))
+    return "on" if active else "off"
+
+
+def execute(action: str, config: dict) -> None:
+    address = config.get("cec_address", "0")
+    fallback_available = shutil.which("vcgencmd") is not None
+    if action == "status":
+        ok, output = cec(f"pow {address}")
+        cec_available = ok
+        lowered = output.lower()
+        power = "on" if "power status: on" in lowered else "off" if "power status: standby" in lowered else "unknown"
+        method = "cec" if ok and power != "unknown" else None
+        if method is None and config.get("fallback_hdmi_signal"):
+            fallback_ok, fallback_output = hdmi_signal(None)
+            if fallback_ok:
+                power = "on" if "=1" in fallback_output else "off" if "=0" in fallback_output else "unknown"
+                method, output = "hdmi_signal", fallback_output
+        write_status(cec_available=cec_available, hdmi_fallback_available=fallback_available,
+                     power_status=power, method=method, message=output[-500:] or "Status abgefragt.")
+        return
+
+    turn_on = action == "on"
+    cec_command = f"on {address}" if turn_on else f"standby {address}"
+    ok, output = cec(cec_command)
+    cec_available = ok
+    method = "cec" if ok else None
+    if ok and turn_on and config.get("activate_source"):
+        source_ok, source_output = cec("as")
+        ok = ok and source_ok
+        output = f"{output}\n{source_output}".strip()
+    if not ok and config.get("fallback_hdmi_signal"):
+        ok, output = hdmi_signal(turn_on)
+        method = "hdmi_signal" if ok else None
+    write_status(cec_available=cec_available, hdmi_fallback_available=fallback_available,
+                 power_status=action if ok else "unknown", desired_state=action,
+                 method=method, message=("Aktion ausgeführt. " if ok else "Aktion fehlgeschlagen. ") + output[-500:])
+
+
+def main() -> int:
+    config = sanitized_config()
+    if "--schedule" in sys.argv:
+        action = scheduled_state(config, datetime.now().astimezone())
+        if action is None:
+            return 0
+        previous = read_json(STATUS, {}).get("desired_state")
+        if previous == action:
+            return 0
+    else:
+        try:
+            action = REQUEST.read_text(encoding="utf-8").strip()
+        except OSError:
+            return 0
+        REQUEST.unlink(missing_ok=True)
+    if action not in {"on", "off", "status"}:
+        write_status(message="Ungültige Display-Aktion verworfen.", power_status="unknown")
+        return 2
+    execute(action, config)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
