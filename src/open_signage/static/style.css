@@ -79,6 +79,9 @@ main {
   background: var(--panel);
 }
 .stream-card, .text-card, .playlist-card { grid-column: 1 / -1; }
+#content-main > .playlist-card { order: -2; }
+#content-main > .add-content-selector { grid-column: 1 / -1; order: -1; }
+#content-main > .add-content-card { grid-column: 1 / -1; }
 .section-heading {
   display: flex;
   align-items: center;
@@ -154,6 +157,7 @@ button:disabled { cursor: default; opacity: .35; }
 .media-card-body { display: grid; gap: 10px; padding: 13px; }
 .media-card-body strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .media-card-meta { color: var(--muted); font-size: .8rem; }
+.media-preview-error, .transcode-status { grid-column: 1 / -1; margin: 0; color: #f5d56f; font-size: .82rem; }
 .media-card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .media-card-actions input { width: 78px; }
 .playlist-item {
@@ -284,8 +288,10 @@ button:disabled { cursor: default; opacity: .35; }
   overflow: hidden;
 }
 .text-slide::before { content: ""; position: absolute; inset: 0; background: rgb(0 0 0 / var(--background-dim, 0%)); pointer-events: none; }
+.text-background-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+.text-slide::before { z-index: 1; }
 .text-overlay { max-width: min(900px, 85%); padding: clamp(20px, 4vw, 56px); }
-.text-overlay { position: relative; z-index: 1; color: var(--slide-text, white); text-align: var(--text-align, left); }
+.text-overlay { position: relative; z-index: 2; color: var(--slide-text, white); text-align: var(--text-align, left); }
 .text-slide.position-top { align-items: start; }
 .text-slide.position-center { align-items: center; }
 .text-slide.position-bottom { align-items: end; }

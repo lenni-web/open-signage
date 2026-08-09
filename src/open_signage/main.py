@@ -653,15 +653,24 @@ def upload_content(
     return response
 
 
-def save_text_background(file: UploadFile) -> str:
+def text_background_kind(file: UploadFile, allow_video: bool = False) -> str:
     media_type = file.content_type
-    if media_type not in {"image/jpeg", "image/png", "image/webp"}:
+    allowed = {"image/jpeg", "image/png", "image/webp"}
+    if allow_video:
+        allowed |= {"video/mp4", "video/webm"}
+    if media_type not in allowed:
         media_type = mimetypes.guess_type(file.filename or "")[0]
-    if media_type not in {"image/jpeg", "image/png", "image/webp"}:
+    if media_type not in allowed:
         raise HTTPException(
             status_code=415,
-            detail="Als Freitext-Hintergrund sind JPG, PNG und WebP erlaubt.",
+            detail="Als Freitext-Hintergrund sind JPG, PNG, WebP, MP4 und WebM erlaubt."
+            if allow_video else "Als Logo sind JPG, PNG und WebP erlaubt.",
         )
+    return "video" if media_type.startswith("video/") else "image"
+
+
+def save_text_background(file: UploadFile, allow_video: bool = False) -> str:
+    text_background_kind(file, allow_video)
     suffix = Path(file.filename or "").suffix.lower()
     stored_name = f"{uuid.uuid4().hex}{suffix}"
     destination = media_dir() / stored_name
@@ -828,9 +837,11 @@ def convert_library_video(media_id: int, _: None = Depends(require_system_login)
             (source, original_source, thumbnail, metadata.get("width"), metadata.get("height"), json.dumps(metadata), media_id),
         )
         connection.execute("UPDATE content SET source = ? WHERE media_id = ?", (source, media_id))
-    for old in (media["thumbnail_source"],):
+    for old in (media["thumbnail_source"], media["source"]):
         if old:
-            (media_dir() / Path(old).name).unlink(missing_ok=True)
+            old_path = media_dir() / Path(old).name
+            if old != original_source and old != source:
+                old_path.unlink(missing_ok=True)
     return serialize_library_media(get_library_media_or_404(media_id))
 
 
@@ -1003,15 +1014,20 @@ def create_text_content(
         config_data["logo_source"] = logo_source
         config = json.dumps(config_data, ensure_ascii=False)
     library_media = get_library_media_or_404(library_media_id) if library_media_id else None
-    if library_media and library_media["kind"] != "image":
-        raise HTTPException(status_code=422, detail="Als Freitext-Hintergrund ist nur ein Bild möglich")
+    if library_media and library_media["kind"] not in {"image", "video"}:
+        raise HTTPException(status_code=422, detail="Als Freitext-Hintergrund ist nur ein Bild oder Video möglich")
     if background and background.filename:
-        source = save_text_background(background)
+        background_kind = text_background_kind(background, True)
+        source = save_text_background(background, True)
         library_media_id = None
     elif library_media:
         source = library_media["source"]
+        background_kind = library_media["kind"]
     else:
-        raise HTTPException(status_code=422, detail="Bitte ein Hintergrundbild auswählen")
+        raise HTTPException(status_code=422, detail="Bitte ein Hintergrundbild oder -video auswählen")
+    config_data = json.loads(config)
+    config_data["background_kind"] = background_kind
+    config = json.dumps(config_data, ensure_ascii=False)
     try:
         playlist_id = active_playlist_id()
         with connect() as connection:
@@ -1081,16 +1097,23 @@ def edit_text_content(
         config = json.dumps(config_data, ensure_ascii=False)
     source = row["source"]
     selected_media = get_library_media_or_404(library_media_id) if library_media_id else None
-    if selected_media and selected_media["kind"] != "image":
-        raise HTTPException(status_code=422, detail="Als Freitext-Hintergrund ist nur ein Bild möglich")
-    new_source = save_text_background(background) if background and background.filename else None
+    if selected_media and selected_media["kind"] not in {"image", "video"}:
+        raise HTTPException(status_code=422, detail="Als Freitext-Hintergrund ist nur ein Bild oder Video möglich")
+    uploaded_kind = text_background_kind(background, True) if background and background.filename else None
+    new_source = save_text_background(background, True) if background and background.filename else None
     if new_source:
         source = new_source
+        background_kind = uploaded_kind
         library_media_id = None
     elif selected_media:
         source = selected_media["source"]
+        background_kind = selected_media["kind"]
     else:
         library_media_id = row["media_id"]
+        background_kind = old_config.get("background_kind", "image")
+    config_data = json.loads(config)
+    config_data["background_kind"] = background_kind
+    config = json.dumps(config_data, ensure_ascii=False)
     try:
         with connect() as connection:
             connection.execute(

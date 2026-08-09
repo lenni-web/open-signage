@@ -21,10 +21,12 @@ Chromium-Kioskfenster an.
 - Ausfallsicherer Player mit lokalem Playlist-Cache und Wiederaufnahme
 - Speicherbereinigung, zeitgesteuerte Playlists und sichere Systemaktionen
 - Geräteidentität und Rollenmodell als Grundlage für Master-/Slave-Betrieb
+- Kompakte Inhaltsverwaltung mit auswählbaren Formularen sowie Freitext auf
+  Bild- oder stummem Video-Hintergrund
 - Bildeditor mit 16:9-Zuschnitt, Drehung, Fokus, Helligkeit und Kontrast sowie
   automatisch erzeugten Full-HD- und Thumbnail-Dateien
 - Mediathek-Suche, Kategorien, Nutzungsfilter, Mehrfachauswahl, Video-
-  Thumbnails und Konvertierung nach MP4/H.264/AAC
+  Thumbnails, direkte Vorschau und optimale Konvertierung nach MP4/H.264/AAC
 - Owncast-Livestreams direkt per HLS wiedergeben
 - Inhalte aktivieren, sortieren und mit einer Anzeigedauer versehen
 - Inhalte nach Datum, Uhrzeit und Wochentagen zeitgesteuert anzeigen

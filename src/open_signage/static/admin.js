@@ -15,10 +15,10 @@ let playlists = [];
 let editingLibraryImage = null;
 const selectedMediaIds = new Set();
 
-function notify(text, isError = false) {
+function notify(text, isError = false, duration = 3000) {
   message.textContent = text;
   message.className = isError ? "show error" : "show";
-  window.setTimeout(() => { message.className = ""; }, 3000);
+  window.setTimeout(() => { message.className = ""; }, duration);
 }
 
 async function api(path, options = {}) {
@@ -97,7 +97,21 @@ function openSchedule(item) {
 
 function renderTextSlide(target, source, config) {
   target.replaceChildren();
-  target.style.backgroundImage = source ? `url("${source.replaceAll('"', '%22')}")` : "none";
+  const previewError = document.querySelector("#text-preview-error");
+  previewError.hidden = true;
+  previewError.textContent = "";
+  target.style.backgroundImage = source && config.background_kind !== "video" ? `url("${source.replaceAll('"', '%22')}")` : "none";
+  if (source && config.background_kind === "video") {
+    const video = document.createElement("video");
+    video.className = "text-background-video";
+    video.src = source; video.autoplay = true; video.muted = true; video.loop = true; video.playsInline = true;
+    video.addEventListener("loadeddata", () => { previewError.hidden = true; }, { once: true });
+    video.addEventListener("error", () => {
+      previewError.textContent = "Das Video kann in diesem Browser nicht abgespielt werden. Bitte das Video in der Mediathek mit „Optimal konvertieren“ in MP4/H.264 umwandeln und anschließend erneut auswählen.";
+      previewError.hidden = false;
+    }, { once: true });
+    target.append(video);
+  }
   const align = config.text_align || "left";
   const vertical = config.vertical_position || "center";
   const font = config.font_family || "sans";
@@ -151,12 +165,13 @@ function resetTextForm() {
   document.querySelector("#shadow-intensity-label").hidden = false;
   textForm.elements.background.required = false;
   document.querySelector("#text-form-title").textContent = "Freitext hinzufügen";
-  document.querySelector("#text-background-note").textContent = "JPG, PNG oder WebP";
+  document.querySelector("#text-background-note").textContent = "JPG, PNG, WebP, MP4 oder WebM";
   document.querySelector("#text-save-button").textContent = "Speichern und zur Playlist hinzufügen";
   document.querySelector("#text-cancel-edit").hidden = true;
 }
 
 function editTextItem(item) {
+  showAddContent("text");
   editingTextItem = item;
   textForm.elements.content_id.value = item.id;
   textForm.elements.name.value = item.name;
@@ -176,7 +191,7 @@ function editTextItem(item) {
   textForm.elements.library_media_id.value = item.media_id || "";
   textForm.elements.background.required = false;
   document.querySelector("#text-form-title").textContent = "Freitext bearbeiten";
-  document.querySelector("#text-background-note").textContent = "Optional: neues Bild auswählen, sonst bleibt das bisherige erhalten.";
+  document.querySelector("#text-background-note").textContent = "Optional: neues Bild oder Video auswählen, sonst bleibt der bisherige Hintergrund erhalten.";
   document.querySelector("#text-save-button").textContent = "Änderungen speichern";
   document.querySelector("#text-cancel-edit").hidden = false;
   textForm.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -185,11 +200,17 @@ function editTextItem(item) {
 function populateLibraryImageSelect() {
   const select = document.querySelector("#text-library-image");
   const selected = select.value;
-  select.replaceChildren(new Option("Kein Mediathek-Bild ausgewählt", ""));
-  libraryItems.filter(item => item.kind === "image").forEach((item) => {
-    select.append(new Option(item.name, item.id));
+  select.replaceChildren(new Option("Kein Mediathek-Medium ausgewählt", ""));
+  libraryItems.filter(item => ["image", "video"].includes(item.kind)).forEach((item) => {
+    select.append(new Option(`${item.kind === "video" ? "Video" : "Bild"}: ${item.name}`, item.id));
   });
   if ([...select.options].some(option => option.value === selected)) select.value = selected;
+}
+
+function showAddContent(type) {
+  document.querySelector("#add-content-type").value = type;
+  document.querySelectorAll(".add-content-card").forEach(card => { card.hidden = card.dataset.addType !== type; });
+  if (type) document.querySelector(`.add-content-card[data-add-type="${type}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function renderLibrary(items) {
@@ -209,11 +230,14 @@ function renderLibrary(items) {
       card.classList.toggle("selected", selector.checked);
     });
     const preview = document.createElement(item.kind === "image" ? "img" : "video");
-    preview.src = item.thumbnail_source || item.source;
     if (item.kind === "video") {
+      preview.src = item.source;
+      if (item.thumbnail_source) preview.poster = item.thumbnail_source;
       preview.muted = true;
       preview.controls = true;
       preview.preload = "metadata";
+    } else {
+      preview.src = item.thumbnail_source || item.source;
     }
     const body = document.createElement("div");
     body.className = "media-card-body";
@@ -232,12 +256,22 @@ function renderLibrary(items) {
         ` : ""}
         <button class="add-library">Zur Playlist</button>
         ${item.kind === "image" ? '<button class="secondary edit-library-image">Bearbeiten</button>' : ""}
-        ${item.kind === "video" ? '<button class="secondary transcode-library-video">In MP4 konvertieren</button>' : ""}
+        ${item.kind === "video" ? '<button class="secondary transcode-library-video">Optimal konvertieren</button><span class="transcode-status" hidden></span>' : ""}
         <button class="secondary save-library-meta">Speichern</button>
         <button class="danger delete-library">Löschen</button>
       </div>`;
     body.querySelector(".media-name").value = item.name;
     body.querySelector(".media-category").value = item.category || "";
+    const previewError = document.createElement("p");
+    previewError.className = "media-preview-error";
+    previewError.hidden = true;
+    if (item.kind === "video") {
+      preview.addEventListener("error", () => {
+        previewError.textContent = "Vorschau nicht abspielbar – bitte „Optimal konvertieren“ verwenden.";
+        previewError.hidden = false;
+      });
+      preview.addEventListener("loadeddata", () => { previewError.hidden = true; });
+    }
     body.querySelector(".add-library").addEventListener("click", async () => {
       try {
         const duration = Number(body.querySelector(".library-duration").value);
@@ -279,14 +313,27 @@ function renderLibrary(items) {
       } catch (error) { notify(error.message, true); }
     });
     body.querySelector(".transcode-library-video")?.addEventListener("click", async () => {
-      if (!window.confirm("Video jetzt nach MP4/H.264/AAC konvertieren?")) return;
+      if (!window.confirm("Video jetzt für zuverlässige Wiedergabe nach MP4 mit H.264/AAC optimieren?")) return;
+      const button = body.querySelector(".transcode-library-video");
+      const status = body.querySelector(".transcode-status");
+      button.disabled = true;
+      button.textContent = "Konvertierung läuft …";
+      status.hidden = false;
+      status.textContent = "Das kann je nach Videolänge mehrere Minuten dauern.";
+      notify("Optimale Videokonvertierung wurde gestartet", false, 6000);
       try {
-        await api(`/api/media-library/${item.id}/transcode`, { method: "POST" });
+        const converted = await api(`/api/media-library/${item.id}/transcode`, { method: "POST" });
+        status.textContent = `Fertig: MP4 · ${converted.metadata?.video_codec || "H.264"}${converted.metadata?.audio_codec ? ` / ${converted.metadata.audio_codec}` : ""}`;
         await loadLibrary();
-        notify("Video erfolgreich konvertiert");
-      } catch (error) { notify(error.message, true); }
+        notify("Video wurde erfolgreich optimal konvertiert und die Vorschau aktualisiert", false, 8000);
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = "Erneut optimal konvertieren";
+        status.textContent = `Fehler: ${error.message}`;
+        notify(error.message, true, 8000);
+      }
     });
-    card.append(selector, preview, body);
+    card.append(selector, preview, previewError, body);
     target.append(card);
   });
 }
@@ -871,10 +918,10 @@ document.querySelector("#stream-form").addEventListener("submit", async (event) 
 document.querySelector("#text-preview-button").addEventListener("click", () => {
   const form = new FormData(textForm);
   const selected = textForm.elements.background.files[0];
-  const libraryImage = libraryItems.find(item => String(item.id) === String(form.get("library_media_id")));
-  const source = selected ? URL.createObjectURL(selected) : libraryImage?.source || editingTextItem?.source;
+  const libraryMedium = libraryItems.find(item => String(item.id) === String(form.get("library_media_id")));
+  const source = selected ? URL.createObjectURL(selected) : libraryMedium?.source || editingTextItem?.source;
   if (!source) {
-    notify("Bitte zuerst ein Hintergrundbild auswählen", true);
+    notify("Bitte zuerst ein Hintergrundbild oder -video auswählen", true);
     return;
   }
   if (!form.get("headline")?.trim() && !form.get("subheadline")?.trim() && !form.get("body")?.trim()) {
@@ -899,8 +946,16 @@ document.querySelector("#text-preview-button").addEventListener("click", () => {
     background_dim: Number(form.get("background_dim")), focus_x: Number(form.get("focus_x")),
     focus_y: Number(form.get("focus_y")), template_style: form.get("template_style"),
     logo_source: logoSource,
+    background_kind: selected ? (selected.type.startsWith("video/") ? "video" : "image") :
+      libraryMedium?.kind || editingTextItem?.text_config?.background_kind || "image",
   });
   textPreviewDialog.showModal();
+  const previewVideo = document.querySelector("#text-preview-stage .text-background-video");
+  previewVideo?.play().catch(() => {
+    const error = document.querySelector("#text-preview-error");
+    error.textContent = "Die Videovorschau konnte nicht gestartet werden. Bitte das Video in der Mediathek mit „Optimal konvertieren“ optimieren.";
+    error.hidden = false;
+  });
 });
 
 document.querySelector("#text-preview-close").addEventListener("click", () => textPreviewDialog.close());
@@ -909,7 +964,7 @@ textPreviewDialog.addEventListener("close", () => {
   previewObjectUrl = null;
 });
 
-document.querySelector("#text-cancel-edit").addEventListener("click", resetTextForm);
+document.querySelector("#text-cancel-edit").addEventListener("click", () => { resetTextForm(); showAddContent(""); });
 
 textForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -921,13 +976,14 @@ textForm.addEventListener("submit", async (event) => {
     form.delete("content_id");
     if (!form.get("background")?.size) form.delete("background");
     if (!form.get("background") && !form.get("library_media_id") && !editingTextItem) {
-      throw new Error("Bitte ein Hintergrundbild hochladen oder aus der Mediathek auswählen");
+      throw new Error("Bitte ein Hintergrundbild oder -video hochladen oder aus der Mediathek auswählen");
     }
     await api(id ? `/api/content/${id}/text` : "/api/content/text", {
       method: "POST",
       body: form,
     });
     resetTextForm();
+    showAddContent("");
     await load();
     notify(id ? "Freitext aktualisiert" : "Freitext zur Playlist hinzugefügt");
   } catch (error) { notify(error.message, true); }
@@ -1023,6 +1079,7 @@ textForm.elements.template_style.addEventListener("change", (event) => {
 });
 
 document.querySelector("#refresh").addEventListener("click", load);
+document.querySelector("#add-content-type").addEventListener("change", event => showAddContent(event.target.value));
 
 document.querySelector("#playlist-select").addEventListener("change", async (event) => {
   try {

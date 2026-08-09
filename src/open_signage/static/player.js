@@ -54,7 +54,8 @@ function preloadImage(source, highPriority = false) {
 }
 
 function imageSource(item) {
-  return ["image", "text"].includes(item?.kind) ? item.source : null;
+  return item?.kind === "image" || (item?.kind === "text" && item.text_config?.background_kind !== "video")
+    ? item.source : null;
 }
 
 function preloadPlaylist(playlist, firstIndex = 0) {
@@ -123,8 +124,20 @@ function show(item) {
     element.title = item.name;
   } else if (item.kind === "text") {
     element = document.createElement("div");
-    element.style.backgroundImage = `url("${item.source.replaceAll('"', '%22')}")`;
     const config = item.text_config || {};
+    if (config.background_kind === "video") {
+      const backgroundVideo = document.createElement("video");
+      backgroundVideo.className = "text-background-video";
+      backgroundVideo.src = item.source;
+      backgroundVideo.autoplay = true;
+      backgroundVideo.muted = true;
+      backgroundVideo.loop = true;
+      backgroundVideo.playsInline = true;
+      backgroundVideo.addEventListener("error", () => sendHeartbeat("error", "Freitext-Hintergrundvideo konnte nicht abgespielt werden."), { once: true });
+      element.append(backgroundVideo);
+    } else {
+      element.style.backgroundImage = `url("${item.source.replaceAll('"', '%22')}")`;
+    }
     const align = config.text_align || "left";
     const vertical = config.vertical_position || "center";
     const font = config.font_family || "sans";

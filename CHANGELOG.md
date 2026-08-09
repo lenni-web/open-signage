@@ -8,6 +8,33 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.11.1] – 2026-08-09
+
+### Hinzugefügt
+
+- Freitext-Inhalte unterstützen neben Bildern auch MP4- und WebM-Videos als
+  automatisch stumm und in Schleife abgespielten Hintergrund, sowohl per Upload
+  als auch aus der Mediathek.
+
+### Geändert
+
+- Die Playlist steht auf der Inhaltsseite an erster Stelle. Ein Auswahlfeld
+  blendet anschließend nur das Formular für den gewünschten neuen Inhalt ein,
+  wodurch die Seite deutlich kompakter bleibt.
+- Die bisher missverständliche Aktion „In MP4 konvertieren“ heißt nun „Optimal
+  konvertieren“ und zeigt während sowie nach der Verarbeitung einen sichtbaren
+  Status.
+- Projektversion von `0.11.0` auf `0.11.1` erhöht.
+
+### Behoben
+
+- Video-Vorschauen in der Mediathek verwenden wieder die Videodatei als Quelle
+  und das Thumbnail nur als Poster. Zuvor wurde das JPG-Vorschaubild irrtümlich
+  als Videoquelle geladen.
+- Die Freitext-Vorschau zeigt bei einem nicht abspielbaren Videocodec einen
+  verständlichen Hinweis zur optimalen Konvertierung.
+- Wiederholte Videokonvertierungen entfernen die vorherige konvertierte Datei.
+
 ## [0.11.0] – 2026-08-09
 
 ### Hinzugefügt

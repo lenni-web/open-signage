@@ -342,6 +342,11 @@ def test_admin_contains_system_navigation_and_update_controls():
     assert 'id="library-bulk-add"' in admin
     assert 'id="monitoring-summary"' in admin
     assert 'id="monitoring-refresh"' in admin
+    assert 'id="add-content-type"' in admin
+    assert 'video/mp4,video/webm' in admin
+    admin_js = (PROJECT_ROOT / "src/open_signage/static/admin.js").read_text(encoding="utf-8")
+    assert "preview.poster = item.thumbnail_source" in admin_js
+    assert "Optimal konvertieren" in admin_js
     assert admin.count('class="card update-card collapsible-card"') == 2
     assert 'class="card system-overview collapsible-card"' in admin
     assert 'value="12"' in admin
@@ -537,7 +542,7 @@ def test_text_content_can_be_previewed_by_player_edited_and_deleted(tmp_path: Pa
         assert not logo.exists()
 
 
-def test_text_content_requires_image_and_some_text(tmp_path: Path, monkeypatch):
+def test_text_content_requires_background_and_some_text(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
     with TestClient(app) as client:
         client.post("/api/system/login", json={"password": "open-signage"})
@@ -566,6 +571,22 @@ def test_text_content_requires_image_and_some_text(tmp_path: Path, monkeypatch):
             files={"background": ("bild.png", b"image", "image/png")},
         )
         assert invalid_intensity.status_code == 422
+
+
+def test_text_content_supports_video_background(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        created = client.post(
+            "/api/content/text",
+            data={"name": "Video-Hinweis", "headline": "Willkommen"},
+            files={"background": ("loop.mp4", b"video", "video/mp4")},
+        )
+        assert created.status_code == 201
+        item = created.json()
+        assert item["text_config"]["background_kind"] == "video"
+        assert item["source"].endswith(".mp4")
+        assert (tmp_path / "media" / Path(item["source"]).name).exists()
 
 
 def test_media_library_reuses_files_for_playlist_and_text(tmp_path: Path, monkeypatch):
@@ -703,12 +724,25 @@ def test_library_video_gets_thumbnail_and_can_be_transcoded(tmp_path: Path, monk
         assert playlist.status_code == 201
         assert playlist.json()["muted"] is False
         assert playlist.json()["play_to_end"] is True
+        text = client.post(
+            "/api/content/text",
+            data={"name": "Video-Text", "headline": "Live", "library_media_id": str(media["id"])},
+        )
+        assert text.status_code == 201
+        assert text.json()["text_config"]["background_kind"] == "video"
+        assert text.json()["media_id"] == media["id"]
         assert media["thumbnail_source"].endswith("-video-thumb.jpg")
         assert media["metadata"]["width"] == 320
         converted = client.post(f"/api/media-library/{media['id']}/transcode")
         assert converted.status_code == 200
         assert converted.json()["source"].endswith("-converted.mp4")
         assert converted.json()["metadata"]["video_codec"] == "h264"
+        first_converted = tmp_path / "media" / Path(converted.json()["source"]).name
+        assert first_converted.exists()
+        converted_again = client.post(f"/api/media-library/{media['id']}/transcode")
+        assert converted_again.status_code == 200
+        assert converted_again.json()["source"] != converted.json()["source"]
+        assert not first_converted.exists()
 
 
 def test_content_schedule_controls_player_playlist(tmp_path: Path, monkeypatch):
