@@ -8,6 +8,43 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.11.3] – 2026-08-09
+
+### Hinzugefügt
+
+- Persistenter Login-Schutz mit maximal fünf Fehlversuchen pro Client innerhalb
+  von 15 Minuten und anschließender 15-minütiger Sperre.
+- Zufälliges, bei der Raspberry-Pi-Installation ausgegebenes Initialpasswort;
+  schreibende Verwaltungsaktionen bleiben bis zur Passwortänderung gesperrt.
+- Eigener zufälliger Geräteschlüssel für Player-Inhaltsabruf und Heartbeat, dessen
+  lokale Bereitstellung auf die Loopback-Schnittstelle begrenzt ist.
+- Täglicher SQLite-Integritätscheck mit gespeichertem Prüfzeitpunkt und Ergebnis.
+- Inhaltsbasierte Upload-Erkennung, laufende Speicherplatzprüfung und vollständige
+  Videoanalyse über `ffprobe`.
+- Persistenter Status für Videokonvertierungen, die nacheinander im Hintergrund
+  ausgeführt und in der Oberfläche bis zum Ergebnis verfolgt werden.
+
+### Geändert
+
+- Der automatische Bildschirm-Zeitplan unterstützt individuelle Ein- und
+  Ausschaltzeiten für jeden einzelnen Wochentag statt eines gemeinsamen
+  Zeitfensters für alle ausgewählten Tage.
+- Bestehende gemeinsame Bildschirmzeitpläne werden automatisch in das neue
+  Wochenformat übernommen.
+- SQLite verwendet WAL, `synchronous=NORMAL` und ein `busy_timeout` von zehn
+  Sekunden.
+- Das Standardlimit pro Upload beträgt 1 GiB; mindestens 512 MiB beziehungsweise
+  fünf Prozent des Datenträgers bleiben frei.
+- ffmpeg-Konvertierungen verwenden höchstens zwei Threads und werden nach
+  30 Minuten abgebrochen.
+- Projektversion von `0.11.2` auf `0.11.3` erhöht.
+
+### Behoben
+
+- Die regelmäßige Statusaktualisierung überschreibt keine noch nicht
+  gespeicherten Eingaben mehr. Dadurch bleibt insbesondere der Haken bei
+  „Automatischen Bildschirm-Zeitplan aktivieren“ während der Bearbeitung gesetzt.
+
 ## [0.11.2] – 2026-08-09
 
 ### Hinzugefügt

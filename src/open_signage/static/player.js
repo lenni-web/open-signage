@@ -9,6 +9,7 @@ const imagePreloads = new Map();
 let currentItem = null;
 let playerState = "idle";
 let playerError = null;
+let playerToken = "";
 const CACHE_KEY = "open-signage-playlist-v1";
 const CURRENT_KEY = "open-signage-current-content";
 
@@ -16,7 +17,7 @@ function sendHeartbeat(state = playerState, error = playerError) {
   playerState = state;
   playerError = error;
   fetch("/api/player/heartbeat", {
-    method: "POST", headers: { "Content-Type": "application/json" }, keepalive: true,
+    method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${playerToken}` }, keepalive: true,
     body: JSON.stringify({
       state, content_id: currentItem?.id || null, content_name: currentItem?.name || null, error,
     }),
@@ -250,7 +251,9 @@ function showStream(item) {
 
 async function refreshPlaylist() {
   try {
-    const response = await fetch("/api/player/content", { cache: "no-store" });
+    const response = await fetch("/api/player/content", {
+      cache: "no-store", headers: { "Authorization": `Bearer ${playerToken}` },
+    });
     if (!response.ok) return;
     const nextItems = await response.json();
     const nextSignature = signature(nextItems);
@@ -280,6 +283,14 @@ try {
     preloadPlaylist(items, Math.max(0, currentIndex + 1)).then(advance);
   }
 } catch (_) {}
-refreshPlaylist();
-window.setInterval(refreshPlaylist, 5000);
-window.setInterval(() => sendHeartbeat(), 10000);
+async function startPlayer() {
+  try {
+    const response = await fetch("/api/player/bootstrap", { cache: "no-store" });
+    if (response.ok) playerToken = (await response.json()).token;
+  } catch (_) {}
+  if (!playerToken) return;
+  refreshPlaylist();
+  window.setInterval(refreshPlaylist, 5000);
+  window.setInterval(() => sendHeartbeat(), 10000);
+}
+startPlayer();

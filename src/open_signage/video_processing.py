@@ -27,7 +27,7 @@ def video_thumbnail(path: Path, directory: Path) -> str:
     subprocess.run(
         ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(path),
          "-vf", "thumbnail,scale=480:270:force_original_aspect_ratio=decrease",
-         "-frames:v", "1", "-c:v", "mjpeg", "-q:v", "4", str(target)],
+         "-frames:v", "1", "-threads", "2", "-c:v", "mjpeg", "-q:v", "4", str(target)],
         capture_output=True, check=True, timeout=120,
     )
     return f"/media/{target.name}"
@@ -37,8 +37,8 @@ def transcode_video(path: Path, directory: Path) -> tuple[str, dict, str]:
     target = directory / f"{uuid.uuid4().hex}-converted.mp4"
     subprocess.run(
         ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(path),
-         "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+         "-threads", "2", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
          "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(target)],
-        capture_output=True, check=True,
+        capture_output=True, check=True, timeout=1800,
     )
     return f"/media/{target.name}", video_metadata(target), video_thumbnail(target, directory)

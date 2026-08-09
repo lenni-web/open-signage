@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
+from datetime import UTC, datetime, timedelta
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -25,9 +27,10 @@ def database_path() -> Path:
 
 @contextmanager
 def connect() -> Iterator[sqlite3.Connection]:
-    connection = sqlite3.connect(database_path())
+    connection = sqlite3.connect(database_path(), timeout=10)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute("PRAGMA busy_timeout = 10000")
     try:
         yield connection
         connection.commit()
@@ -37,6 +40,8 @@ def connect() -> Iterator[sqlite3.Connection]:
 
 def initialize() -> None:
     with connect() as connection:
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("PRAGMA synchronous = NORMAL")
         existing = connection.execute(
             "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'content'"
         ).fetchone()
@@ -119,6 +124,24 @@ def initialize() -> None:
                 token_hash TEXT PRIMARY KEY,
                 expires_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS login_attempts (
+                client_key TEXT PRIMARY KEY,
+                failed_count INTEGER NOT NULL DEFAULT 0,
+                window_started TEXT NOT NULL,
+                blocked_until TEXT
+            );
+            CREATE TABLE IF NOT EXISTS maintenance_state (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS conversion_jobs (
+                id TEXT PRIMARY KEY,
+                media_id INTEGER NOT NULL REFERENCES media_library(id) ON DELETE CASCADE,
+                status TEXT NOT NULL CHECK(status IN ('queued', 'running', 'completed', 'failed')),
+                message TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
 
             CREATE TABLE IF NOT EXISTS player_status (
                 id INTEGER PRIMARY KEY CHECK(id = 1),
@@ -187,3 +210,38 @@ def initialize() -> None:
         }.items():
             if name not in playlist_columns:
                 connection.execute(f"ALTER TABLE playlists ADD COLUMN {name} {definition}")
+        connection.execute(
+            "UPDATE conversion_jobs SET status = 'failed', "
+            "message = 'Konvertierung wurde durch einen Anwendungsneustart abgebrochen', "
+            "updated_at = ? WHERE status IN ('queued', 'running')",
+            (datetime.now(UTC).isoformat(),),
+        )
+
+
+def integrity_check_if_due(interval: timedelta = timedelta(days=1)) -> dict:
+    """Run SQLite's complete integrity check at most once per interval."""
+    now = datetime.now(UTC)
+    with connect() as connection:
+        row = connection.execute(
+            "SELECT value FROM maintenance_state WHERE key = 'last_integrity_check'"
+        ).fetchone()
+        if row:
+            try:
+                last = datetime.fromisoformat(row["value"])
+                if now - last < interval:
+                    return {"checked": False, "ok": True, "last_checked": row["value"]}
+            except ValueError:
+                pass
+        results = [item[0] for item in connection.execute("PRAGMA integrity_check").fetchall()]
+        ok = results == ["ok"]
+        connection.execute(
+            "INSERT INTO maintenance_state(key, value) VALUES ('last_integrity_check', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (now.isoformat(),),
+        )
+        connection.execute(
+            "INSERT INTO maintenance_state(key, value) VALUES ('last_integrity_result', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (json.dumps(results),),
+        )
+    return {"checked": True, "ok": ok, "last_checked": now.isoformat(), "results": results}

@@ -13,6 +13,7 @@ let schedulingItem = null;
 let schedulingPlaylist = null;
 let playlists = [];
 let editingLibraryImage = null;
+let displayControlDirty = false;
 const selectedMediaIds = new Set();
 
 function updateAdminClock() {
@@ -56,6 +57,10 @@ function showApplication(settings) {
   document.querySelector("#admin-app").hidden = false;
   document.querySelector('#screen-settings-form [name="screen_name"]').value = settings.screen_name;
   document.querySelector("#content-heading").textContent = `Inhalte – ${settings.screen_name}`;
+  if (settings.password_change_required) {
+    notify("Bitte ändere jetzt das Initialpasswort auf der Systemseite.", true, 10000);
+    document.querySelector('[data-page="system-page"]')?.click();
+  }
 }
 
 async function loadSettings() {
@@ -337,8 +342,16 @@ function renderLibrary(items) {
       status.textContent = "Das kann je nach Videolänge mehrere Minuten dauern.";
       notify("Optimale Videokonvertierung wurde gestartet", false, 6000);
       try {
-        const converted = await api(`/api/media-library/${item.id}/transcode`, { method: "POST" });
-        status.textContent = `Fertig: MP4 · ${converted.metadata?.video_codec || "H.264"}${converted.metadata?.audio_codec ? ` / ${converted.metadata.audio_codec}` : ""}`;
+        const queued = await api(`/api/media-library/${item.id}/transcode`, { method: "POST" });
+        status.textContent = queued.message;
+        let job = queued;
+        while (["queued", "running"].includes(job.status)) {
+          await new Promise(resolve => window.setTimeout(resolve, 1500));
+          job = await api(`/api/conversions/${queued.job_id}`);
+          status.textContent = job.status === "running" ? "Video wird optimal konvertiert …" : "Konvertierung wartet …";
+        }
+        if (job.status === "failed") throw new Error(job.message);
+        status.textContent = job.message;
         await loadLibrary();
         notify("Video wurde erfolgreich optimal konvertiert und die Vorschau aktualisiert", false, 8000);
       } catch (error) {
@@ -560,19 +573,23 @@ async function loadDevice() {
   document.querySelector("#sync-status").textContent = `Synchronisationsstatus: ${device.sync_status}`;
 }
 
-function renderDisplayControl(data) {
+function renderDisplayControl(data, updateForm = !displayControlDirty) {
   const config = data.config;
   const status = data.status;
   const form = document.querySelector("#display-control-form");
-  form.elements.cec_address.value = config.cec_address;
-  form.elements.activate_source.checked = config.activate_source;
-  form.elements.fallback_hdmi_signal.checked = config.fallback_hdmi_signal;
-  form.elements.schedule_enabled.checked = config.schedule_enabled;
-  form.elements.schedule_on.value = config.schedule_on;
-  form.elements.schedule_off.value = config.schedule_off;
-  form.querySelectorAll('[name="display_weekday"]').forEach(box => {
-    box.checked = config.schedule_weekdays.includes(Number(box.value));
-  });
+  if (updateForm) {
+    form.elements.cec_address.value = config.cec_address;
+    form.elements.activate_source.checked = config.activate_source;
+    form.elements.fallback_hdmi_signal.checked = config.fallback_hdmi_signal;
+    form.elements.schedule_enabled.checked = config.schedule_enabled;
+    form.querySelectorAll(".display-schedule-row").forEach(row => {
+      const entry = config.schedule_entries.find(item => item.weekday === Number(row.dataset.weekday));
+      row.querySelector(".day-enabled").checked = Boolean(entry);
+      row.querySelector(".day-on").value = entry?.on || "08:00";
+      row.querySelector(".day-off").value = entry?.off || "22:00";
+      row.classList.toggle("enabled", Boolean(entry));
+    });
+  }
   document.querySelector("#display-cec-status").textContent = status.cec_available == null ? "Noch unbekannt" : status.cec_available ? "Verfügbar" : "Nicht verfügbar";
   document.querySelector("#display-fallback-status").textContent = status.hdmi_fallback_available == null ? "Noch unbekannt" : status.hdmi_fallback_available ? "Verfügbar" : "Nicht verfügbar";
   document.querySelector("#display-power-status").textContent = { on: "Eingeschaltet", off: "Ausgeschaltet", unknown: "Unbekannt" }[status.power_status] || "Unbekannt";
@@ -1231,13 +1248,21 @@ document.querySelector("#display-control-form").addEventListener("submit", async
         activate_source: form.get("activate_source") === "on",
         fallback_hdmi_signal: form.get("fallback_hdmi_signal") === "on",
         schedule_enabled: form.get("schedule_enabled") === "on",
-        schedule_weekdays: form.getAll("display_weekday").map(Number),
-        schedule_on: form.get("schedule_on"), schedule_off: form.get("schedule_off"),
+        schedule_entries: [...event.target.querySelectorAll(".display-schedule-row")]
+          .filter(row => row.querySelector(".day-enabled").checked)
+          .map(row => ({ weekday: Number(row.dataset.weekday), on: row.querySelector(".day-on").value, off: row.querySelector(".day-off").value })),
       }),
     });
-    renderDisplayControl(result);
+    displayControlDirty = false;
+    renderDisplayControl(result, true);
     notify("Bildschirmsteuerung und Zeitplan gespeichert");
   } catch (error) { notify(error.message, true); }
+});
+
+document.querySelector("#display-control-form").addEventListener("input", event => {
+  displayControlDirty = true;
+  const row = event.target.closest(".display-schedule-row");
+  if (row) row.classList.toggle("enabled", row.querySelector(".day-enabled").checked);
 });
 
 document.querySelectorAll("[data-display-action]").forEach(button => button.addEventListener("click", async () => {

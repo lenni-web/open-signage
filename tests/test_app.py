@@ -3,24 +3,99 @@ import base64
 import json
 import subprocess
 import runpy
-from datetime import datetime
+import shutil
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from open_signage.database import initialize
+from open_signage.database import connect, integrity_check_if_due
 from open_signage.application_update import request_update as request_application_update
 from open_signage.application_update import update_status as application_update_status
 from open_signage.main import app, scheduled_now
 from open_signage.media_probe import evaluate_video_probe
 from open_signage.system_update import request_update, update_status
 from open_signage.version import __version__
+from open_signage.upload_security import detect_media_type, ensure_free_space
 
 PROJECT_ROOT = Path(__file__).parents[1]
 VALID_PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 )
+
+
+@pytest.fixture(autouse=True)
+def legacy_test_initial_password(monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_INITIAL_PASSWORD", "open-signage")
+    monkeypatch.setenv("OPEN_SIGNAGE_REQUIRE_INITIAL_PASSWORD_CHANGE", "0")
+
+
+def test_login_is_rate_limited_per_client(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        for _ in range(5):
+            assert client.post("/api/system/login", json={"password": "falsch"}).status_code == 401
+        blocked = client.post("/api/system/login", json={"password": "open-signage"})
+        assert blocked.status_code == 429
+        assert "Retry-After" in blocked.headers
+
+
+def test_initial_password_must_be_changed_before_writes(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("OPEN_SIGNAGE_REQUIRE_INITIAL_PASSWORD_CHANGE", "1")
+    with TestClient(app) as client:
+        login = client.post("/api/system/login", json={"password": "open-signage"})
+        assert login.json()["password_change_required"] is True
+        assert client.post(
+            "/api/content/website", json={"name": "Gesperrt", "url": "https://example.org"}
+        ).status_code == 403
+        assert client.post("/api/system/password", json={
+            "current_password": "open-signage", "new_password": "wirklich-sicher-123",
+        }).status_code == 200
+        assert client.post(
+            "/api/content/website", json={"name": "Erlaubt", "url": "https://example.org"}
+        ).status_code == 201
+
+
+def test_player_endpoints_require_device_token(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        assert client.get("/api/player/content").status_code == 401
+        assert client.post("/api/player/heartbeat", json={"state": "idle"}).status_code == 401
+        token = client.get("/api/player/bootstrap").json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        assert client.get("/api/player/content", headers=headers).status_code == 200
+        assert client.post(
+            "/api/player/heartbeat", json={"state": "idle"}, headers=headers
+        ).status_code == 204
+
+
+def test_sqlite_busy_timeout_and_integrity_check(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    initialize()
+    with connect() as connection:
+        assert connection.execute("PRAGMA busy_timeout").fetchone()[0] == 10_000
+        assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+    result = integrity_check_if_due(timedelta(0))
+    assert result["ok"] is True
+    assert result["results"] == ["ok"]
+
+
+def test_upload_detection_uses_content_and_preserves_disk_reserve(tmp_path: Path, monkeypatch):
+    image = tmp_path / "angeblich.pdf"
+    image.write_bytes(VALID_PNG)
+    assert detect_media_type(image) == "image/png"
+    monkeypatch.setattr(
+        "open_signage.upload_security.shutil.disk_usage",
+        lambda _path: shutil._ntuple_diskusage(total=10_000_000_000, used=9_700_000_000, free=300_000_000),
+    )
+    with pytest.raises(HTTPException) as error:
+        ensure_free_space(tmp_path)
+    assert error.value.status_code == 507
 
 
 def test_health_and_website_crud(tmp_path: Path, monkeypatch):
@@ -193,16 +268,14 @@ def test_video_upload_returns_compatibility_result(tmp_path: Path, monkeypatch):
         "warnings": ["Für zuverlässige Wiedergabe H.264/AVC verwenden."],
         "recommendation": "Empfohlen: MP4 mit H.264/AVC und AAC.",
     }
-    monkeypatch.setattr(
-        "open_signage.main.inspect_video", lambda _path: compatibility
-    )
+    monkeypatch.setattr("open_signage.main.validate_video", lambda _path: compatibility)
 
     with TestClient(app) as client:
         client.post("/api/system/login", json={"password": "open-signage"})
         response = client.post(
             "/api/content/upload",
             data={"duration_seconds": "10", "muted": "false", "play_to_end": "true"},
-            files={"file": ("video.mp4", b"test", "video/mp4")},
+            files={"file": ("video.mp4", b"\x00\x00\x00\x18ftypisom0000", "video/mp4")},
         )
 
     assert response.status_code == 201
@@ -513,8 +586,8 @@ def test_text_content_can_be_previewed_by_player_edited_and_deleted(tmp_path: Pa
                 "duration_seconds": "12",
             },
             files={
-                "background": ("foyer.jpg", b"image", "image/jpeg"),
-                "logo": ("logo.png", b"logo", "image/png"),
+                "background": ("foyer.png", VALID_PNG, "image/png"),
+                "logo": ("logo.png", VALID_PNG, "image/png"),
             },
         )
         assert created.status_code == 201
@@ -588,12 +661,16 @@ def test_text_content_requires_background_and_some_text(tmp_path: Path, monkeypa
 
 def test_text_content_supports_video_background(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        "open_signage.main.validate_video",
+        lambda _path: {"checked": True, "video_codecs": ["h264"]},
+    )
     with TestClient(app) as client:
         client.post("/api/system/login", json={"password": "open-signage"})
         created = client.post(
             "/api/content/text",
             data={"name": "Video-Hinweis", "headline": "Willkommen"},
-            files={"background": ("loop.mp4", b"video", "video/mp4")},
+            files={"background": ("loop.mp4", b"\x00\x00\x00\x18ftypisom0000", "video/mp4")},
         )
         assert created.status_code == 201
         item = created.json()
@@ -747,14 +824,27 @@ def test_library_video_gets_thumbnail_and_can_be_transcoded(tmp_path: Path, monk
         assert media["thumbnail_source"].endswith("-video-thumb.jpg")
         assert media["metadata"]["width"] == 320
         converted = client.post(f"/api/media-library/{media['id']}/transcode")
-        assert converted.status_code == 200
-        assert converted.json()["source"].endswith("-converted.mp4")
-        assert converted.json()["metadata"]["video_codec"] == "h264"
-        first_converted = tmp_path / "media" / Path(converted.json()["source"]).name
+        assert converted.status_code == 202
+        for _ in range(100):
+            job = client.get(f"/api/conversions/{converted.json()['job_id']}").json()
+            if job["status"] not in {"queued", "running"}:
+                break
+            time.sleep(0.02)
+        assert job["status"] == "completed", job
+        converted_media = job["media"]
+        assert converted_media["source"].endswith("-converted.mp4")
+        assert converted_media["metadata"]["video_codec"] == "h264"
+        first_converted = tmp_path / "media" / Path(converted_media["source"]).name
         assert first_converted.exists()
         converted_again = client.post(f"/api/media-library/{media['id']}/transcode")
-        assert converted_again.status_code == 200
-        assert converted_again.json()["source"] != converted.json()["source"]
+        assert converted_again.status_code == 202
+        for _ in range(100):
+            second_job = client.get(f"/api/conversions/{converted_again.json()['job_id']}").json()
+            if second_job["status"] not in {"queued", "running"}:
+                break
+            time.sleep(0.02)
+        assert second_job["status"] == "completed", second_job
+        assert second_job["media"]["source"] != converted_media["source"]
         assert not first_converted.exists()
 
 
@@ -826,8 +916,10 @@ def test_multiple_playlists_are_isolated_and_switch_player(tmp_path: Path, monke
 def test_player_heartbeat_and_monitoring(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
     with TestClient(app) as client:
+        token = client.get("/api/player/bootstrap").json()["token"]
         heartbeat = client.post(
             "/api/player/heartbeat",
+            headers={"Authorization": f"Bearer {token}"},
             json={
                 "state": "playing", "content_id": 42,
                 "content_name": "Begrüßung", "error": None,
@@ -836,6 +928,7 @@ def test_player_heartbeat_and_monitoring(tmp_path: Path, monkeypatch):
         assert heartbeat.status_code == 204
         client.post(
             "/api/player/heartbeat",
+            headers={"Authorization": f"Bearer {token}"},
             json={
                 "state": "error", "content_id": 42,
                 "content_name": "Begrüßung", "error": "Bild konnte nicht geladen werden.",
@@ -856,8 +949,10 @@ def test_player_heartbeat_and_monitoring(tmp_path: Path, monkeypatch):
 def test_player_heartbeat_rejects_unknown_state(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
     with TestClient(app) as client:
+        token = client.get("/api/player/bootstrap").json()["token"]
         assert client.post(
-            "/api/player/heartbeat", json={"state": "compromised"}
+            "/api/player/heartbeat", json={"state": "compromised"},
+            headers={"Authorization": f"Bearer {token}"},
         ).status_code == 422
 
 
@@ -913,11 +1008,14 @@ def test_display_control_configuration_and_request_are_protected(tmp_path: Path,
         assert initial["config"]["cec_address"] == "0"
         updated = client.patch("/api/system/display-control", json={
             "cec_address": "A", "activate_source": True, "fallback_hdmi_signal": True,
-            "schedule_enabled": True, "schedule_weekdays": [0, 1, 1],
-            "schedule_on": "07:30", "schedule_off": "23:00",
+            "schedule_enabled": True, "schedule_entries": [
+                {"weekday": 1, "on": "19:30", "off": "21:30"},
+                {"weekday": 3, "on": "09:00", "off": "12:00"},
+                {"weekday": 6, "on": "10:15", "off": "13:30"},
+            ],
         })
         assert updated.status_code == 200
-        assert updated.json()["config"]["schedule_weekdays"] == [0, 1]
+        assert updated.json()["config"]["schedule_entries"][0]["weekday"] == 1
         assert client.post("/api/system/display-control/action", json={"action": "on"}).status_code == 202
         assert client.post("/api/system/display-control/action", json={"action": "arbitrary"}).status_code == 422
     assert (tmp_path / "display-control-request").read_text() == "on"
@@ -926,13 +1024,35 @@ def test_display_control_configuration_and_request_are_protected(tmp_path: Path,
 def test_display_schedule_handles_daytime_and_overnight_windows():
     helper = runpy.run_path(str(PROJECT_ROOT / "deploy/open-signage-display-control"))
     scheduled_state = helper["scheduled_state"]
-    daytime = {"schedule_enabled": True, "schedule_weekdays": [0], "schedule_on": "08:00", "schedule_off": "18:00"}
-    assert scheduled_state(daytime, datetime(2026, 8, 10, 12, 0)) == "on"  # Monday
+    daytime = {"schedule_enabled": True, "schedule_entries": [
+        {"weekday": 1, "on": "19:30", "off": "21:30"},
+        {"weekday": 3, "on": "09:00", "off": "12:00"},
+        {"weekday": 6, "on": "10:15", "off": "13:30"},
+    ]}
+    assert scheduled_state(daytime, datetime(2026, 8, 9, 11, 0)) == "on"  # Sunday
+    assert scheduled_state(daytime, datetime(2026, 8, 11, 20, 0)) == "on"  # Tuesday
+    assert scheduled_state(daytime, datetime(2026, 8, 13, 10, 0)) == "on"  # Thursday
     assert scheduled_state(daytime, datetime(2026, 8, 10, 20, 0)) == "off"
-    overnight = {"schedule_enabled": True, "schedule_weekdays": [0], "schedule_on": "22:00", "schedule_off": "02:00"}
+    overnight = {"schedule_enabled": True, "schedule_entries": [{"weekday": 0, "on": "22:00", "off": "02:00"}]}
     assert scheduled_state(overnight, datetime(2026, 8, 10, 23, 0)) == "on"
     assert scheduled_state(overnight, datetime(2026, 8, 11, 1, 0)) == "on"
     assert scheduled_state(overnight, datetime(2026, 8, 11, 3, 0)) == "off"
+
+
+def test_legacy_display_schedule_is_migrated_on_read(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    tmp_path.mkdir(exist_ok=True)
+    (tmp_path / "display-control.json").write_text(json.dumps({
+        "schedule_enabled": True, "schedule_weekdays": [1, 3],
+        "schedule_on": "09:00", "schedule_off": "12:00",
+    }))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        config = client.get("/api/system/display-control").json()["config"]
+    assert config["schedule_entries"] == [
+        {"weekday": 1, "on": "09:00", "off": "12:00"},
+        {"weekday": 3, "on": "09:00", "off": "12:00"},
+    ]
 
 
 def test_privileged_display_helper_sanitizes_its_configuration(tmp_path: Path):
@@ -940,12 +1060,14 @@ def test_privileged_display_helper_sanitizes_its_configuration(tmp_path: Path):
     config_path = tmp_path / "display-control.json"
     config_path.write_text(json.dumps({
         "cec_address": "0\nstandby 0", "schedule_enabled": True,
-        "schedule_weekdays": [1, 99, "2"], "schedule_on": "invalid",
-        "schedule_off": "21:30", "activate_source": "yes",
+        "schedule_entries": [
+            {"weekday": 1, "on": "19:30", "off": "21:30"},
+            {"weekday": 99, "on": "08:00", "off": "12:00"},
+            {"weekday": 2, "on": "invalid", "off": "21:30"},
+        ], "activate_source": "yes",
     }))
     helper["sanitized_config"].__globals__["CONFIG"] = config_path
     config = helper["sanitized_config"]()
     assert config["cec_address"] == "0"
-    assert config["schedule_weekdays"] == [1]
-    assert config["schedule_on"] == "08:00"
+    assert config["schedule_entries"] == [{"weekday": 1, "on": "19:30", "off": "21:30"}]
     assert config["activate_source"] is False

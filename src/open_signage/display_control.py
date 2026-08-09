@@ -10,9 +10,7 @@ DEFAULT_CONFIG = {
     "activate_source": True,
     "fallback_hdmi_signal": True,
     "schedule_enabled": False,
-    "schedule_weekdays": [],
-    "schedule_on": "08:00",
-    "schedule_off": "22:00",
+    "schedule_entries": [],
 }
 
 
@@ -25,7 +23,17 @@ def _read_json(path: Path, fallback: dict) -> dict:
 
 
 def display_config() -> dict:
-    return _read_json(data_dir() / "display-control.json", DEFAULT_CONFIG)
+    config = _read_json(data_dir() / "display-control.json", DEFAULT_CONFIG)
+    if not config.get("schedule_entries") and "schedule_on" in config:
+        weekdays = config.get("schedule_weekdays") or list(range(7))
+        config["schedule_entries"] = [
+            {"weekday": day, "on": config.get("schedule_on", "08:00"),
+             "off": config.get("schedule_off", "22:00")}
+            for day in weekdays
+        ]
+    for legacy in ("schedule_weekdays", "schedule_on", "schedule_off"):
+        config.pop(legacy, None)
+    return config
 
 
 def save_display_config(config: dict) -> dict:

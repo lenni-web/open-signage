@@ -23,6 +23,11 @@ def evaluate_video_probe(suffix: str, probe: dict) -> dict:
         for stream in streams
         if stream.get("codec_type") == "audio"
     ]
+    video_streams = [stream for stream in streams if stream.get("codec_type") == "video"]
+    try:
+        duration = float(probe.get("format", {}).get("duration", 0))
+    except (TypeError, ValueError):
+        duration = 0
     warnings: list[str] = []
 
     if not video_codecs:
@@ -65,6 +70,9 @@ def evaluate_video_probe(suffix: str, probe: dict) -> dict:
         "container": ",".join(sorted(format_names)) or "unbekannt",
         "video_codecs": video_codecs,
         "audio_codecs": audio_codecs,
+        "duration_seconds": duration,
+        "width": video_streams[0].get("width") if video_streams else None,
+        "height": video_streams[0].get("height") if video_streams else None,
         "warnings": warnings,
         "recommendation": RECOMMENDATION,
     }
@@ -78,7 +86,7 @@ def inspect_video(path: Path) -> dict:
                 "-v",
                 "error",
                 "-show_entries",
-                "format=format_name:stream=codec_type,codec_name",
+                "format=format_name,duration:stream=codec_type,codec_name,width,height,duration",
                 "-of",
                 "json",
                 str(path),
@@ -105,3 +113,17 @@ def inspect_video(path: Path) -> dict:
         }
 
     return evaluate_video_probe(path.suffix.lower(), probe)
+
+
+def validate_video(path: Path) -> dict:
+    """Reject unreadable containers and files without a usable video stream."""
+    result = inspect_video(path)
+    if (
+        not result.get("checked")
+        or not result.get("video_codecs")
+        or not result.get("duration_seconds")
+        or not result.get("width")
+        or not result.get("height")
+    ):
+        raise ValueError("Keine gültige und vollständig lesbare Videospur gefunden")
+    return result

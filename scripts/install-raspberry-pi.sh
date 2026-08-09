@@ -11,6 +11,7 @@ readonly APPLICATION_UPDATE_COMMAND="/usr/local/sbin/open-signage-application-up
 readonly APPLICATION_UPDATE_CONFIG="/etc/default/open-signage-application-update"
 readonly SYSTEM_ACTION_COMMAND="/usr/local/sbin/open-signage-system-action"
 readonly DISPLAY_CONTROL_COMMAND="/usr/local/sbin/open-signage-display-control"
+readonly APP_ENV_FILE="/etc/open-signage.env"
 
 PORT=8080
 KIOSK_USER="signage"
@@ -114,6 +115,14 @@ python3 -m venv "${APP_DIR}/.venv"
 
 install -d -o "${APP_USER}" -g "${APP_USER}" -m 0750 "${DATA_DIR}"
 
+INITIAL_PASSWORD=""
+if [[ ! -f "${APP_ENV_FILE}" ]]; then
+  INITIAL_PASSWORD="$("${APP_DIR}/.venv/bin/python" -c 'import secrets; print(secrets.token_urlsafe(18))')"
+  printf 'OPEN_SIGNAGE_INITIAL_PASSWORD=%s\nOPEN_SIGNAGE_MAX_UPLOAD_BYTES=%s\n' \
+    "${INITIAL_PASSWORD}" "1073741824" >"${APP_ENV_FILE}"
+  chmod 0600 "${APP_ENV_FILE}"
+fi
+
 sed "s/@@PORT@@/${PORT}/g" \
   "${PROJECT_DIR}/deploy/open-signage.service" >"${SERVICE_FILE}"
 chmod 0644 "${SERVICE_FILE}"
@@ -178,6 +187,11 @@ systemctl enable --now open-signage-application-update.path
 systemctl enable --now open-signage-system-action.path
 systemctl enable --now open-signage-display-control.path
 systemctl enable --now open-signage-display-schedule.timer
+
+if [[ -n "${INITIAL_PASSWORD}" ]]; then
+  printf '\nInitiales Verwaltungspasswort: %s\n' "${INITIAL_PASSWORD}"
+  printf 'Bitte nach der ersten Anmeldung sofort auf der Systemseite ändern.\n'
+fi
 systemctl enable --now open-signage.service
 
 "${PROJECT_DIR}/scripts/verify-installation.sh" --port "${PORT}"

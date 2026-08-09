@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import mimetypes
+import asyncio
 import json
 import sqlite3
 import uuid
@@ -15,36 +15,40 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .database import connect, data_dir, initialize, media_dir
+from .database import connect, data_dir, initialize, integrity_check_if_due, media_dir
 from .display_control import display_config, display_status, request_display_action, save_display_config
-from .auth import change_password, create_session, destroy_session, get_setting, require_system_login, screen_name, set_setting, verify_password
+from .auth import (change_password, clear_login_failures, create_session, destroy_session,
+                   ensure_login_allowed, get_setting, password_change_required, player_token,
+                   record_login_failure, require_player, require_system_login, screen_name,
+                   set_setting, verify_password)
 from .application_update import request_update as request_application_update
 from .application_update import update_status as application_update_status
-from .media_probe import inspect_video
+from .conversion_jobs import conversion_status, queue_conversion
+from .media_probe import inspect_video, validate_video
+from .upload_security import ensure_free_space, save_upload
 from .image_processing import edit_image, optimize_image
-from .video_processing import transcode_video, video_metadata, video_thumbnail
+from .video_processing import video_metadata, video_thumbnail
 from .system_info import collect_system_info
 from .system_update import request_update, update_status
 from .version import __version__
 
 PACKAGE_DIR = Path(__file__).parent
 STATIC_DIR = PACKAGE_DIR / "static"
-ALLOWED_MEDIA_TYPES = {
-    "image/jpeg": "image",
-    "image/png": "image",
-    "image/webp": "image",
-    "image/gif": "image",
-    "video/mp4": "video",
-    "video/webm": "video",
-    "application/pdf": "pdf",
-}
-MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     initialize()
-    yield
+    integrity_check_if_due()
+    async def database_maintenance() -> None:
+        while True:
+            await asyncio.sleep(24 * 60 * 60)
+            await asyncio.to_thread(integrity_check_if_due)
+    maintenance_task = asyncio.create_task(database_maintenance())
+    try:
+        yield
+    finally:
+        maintenance_task.cancel()
 
 
 app = FastAPI(title="Open Signage", version=__version__, lifespan=lifespan)
@@ -120,14 +124,18 @@ class SystemAction(BaseModel):
     action: str = Field(pattern=r"^(restart_service|reboot|poweroff)$")
 
 
+class DisplayScheduleEntry(BaseModel):
+    weekday: int = Field(ge=0, le=6)
+    on: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    off: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
 class DisplayControlSettings(BaseModel):
     cec_address: str = Field(default="0", pattern=r"^[0-9A-Fa-f]$")
     activate_source: bool = True
     fallback_hdmi_signal: bool = True
     schedule_enabled: bool = False
-    schedule_weekdays: list[int] = Field(default_factory=list)
-    schedule_on: str = Field(default="08:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
-    schedule_off: str = Field(default="22:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    schedule_entries: list[DisplayScheduleEntry] = Field(default_factory=list, max_length=7)
 
 
 class DisplayAction(BaseModel):
@@ -268,7 +276,7 @@ def health():
 
 
 @app.post("/api/player/heartbeat", status_code=204)
-def player_heartbeat(payload: PlayerHeartbeat):
+def player_heartbeat(payload: PlayerHeartbeat, _: None = Depends(require_player)):
     with connect() as connection:
         previous = connection.execute("SELECT error FROM player_status WHERE id = 1").fetchone()
         if payload.error and (not previous or previous["error"] != payload.error):
@@ -420,13 +428,14 @@ def get_display_control(_: None = Depends(require_system_login)):
 
 @app.patch("/api/system/display-control")
 def update_display_control(payload: DisplayControlSettings, _: None = Depends(require_system_login)):
-    if any(day < 0 or day > 6 for day in payload.schedule_weekdays):
-        raise HTTPException(status_code=422, detail="Ungültiger Wochentag")
-    if payload.schedule_enabled and payload.schedule_on == payload.schedule_off:
+    weekdays = [entry.weekday for entry in payload.schedule_entries]
+    if len(weekdays) != len(set(weekdays)):
+        raise HTTPException(status_code=422, detail="Jeder Wochentag darf nur einmal vorkommen")
+    if any(entry.on == entry.off for entry in payload.schedule_entries):
         raise HTTPException(status_code=422, detail="Ein- und Ausschaltzeit müssen unterschiedlich sein")
     config = payload.model_dump()
     config["cec_address"] = config["cec_address"].upper()
-    config["schedule_weekdays"] = sorted(set(config["schedule_weekdays"]))
+    config["schedule_entries"] = sorted(config["schedule_entries"], key=lambda entry: entry["weekday"])
     save_display_config(config)
     request_display_action("status")
     return {"config": config, "status": display_status()}
@@ -440,15 +449,20 @@ def start_display_action(payload: DisplayAction, _: None = Depends(require_syste
 
 @app.get("/api/system/session")
 def system_session(_: None = Depends(require_system_login)):
-    return {"authenticated": True, "screen_name": screen_name()}
+    return {"authenticated": True, "screen_name": screen_name(),
+            "password_change_required": password_change_required()}
 
 
 @app.post("/api/system/login")
-def system_login(payload: LoginRequest, response: Response):
+def system_login(payload: LoginRequest, request: Request, response: Response):
+    ensure_login_allowed(request)
     if not verify_password(payload.password):
+        record_login_failure(request)
         raise HTTPException(status_code=401, detail="Falsches Passwort")
+    clear_login_failures(request)
     create_session(response)
-    return {"authenticated": True, "screen_name": screen_name()}
+    return {"authenticated": True, "screen_name": screen_name(),
+            "password_change_required": password_change_required()}
 
 
 @app.post("/api/system/logout", status_code=204)
@@ -486,8 +500,15 @@ def content_rows(enabled_only: bool = False) -> list[dict]:
     return [item for item in items if scheduled_now(item)] if enabled_only else items
 
 
+@app.get("/api/player/bootstrap")
+def player_bootstrap(request: Request):
+    if not request.client or request.client.host not in {"127.0.0.1", "::1", "testclient"}:
+        require_system_login(request)
+    return {"token": player_token()}
+
+
 @app.get("/api/player/content")
-def player_content():
+def player_content(_: None = Depends(require_player)):
     return content_rows(enabled_only=True)
 
 
@@ -580,43 +601,18 @@ def upload_content(
     play_to_end: Annotated[bool, Form()] = False,
     _: None = Depends(require_system_login),
 ):
-    media_type = file.content_type
-    if media_type not in ALLOWED_MEDIA_TYPES:
-        media_type = mimetypes.guess_type(file.filename or "")[0]
-    kind = ALLOWED_MEDIA_TYPES.get(media_type or "")
-    if kind is None:
-        raise HTTPException(
-            status_code=415,
-            detail="Erlaubt sind JPG, PNG, WebP, GIF, MP4, WebM und PDF",
-        )
-
-    suffix = Path(file.filename or "").suffix.lower()
-    stored_name = f"{uuid.uuid4().hex}{suffix}"
-    destination = media_dir() / stored_name
-    size = 0
     try:
-        with destination.open("wb") as output:
-            while chunk := file.file.read(1024 * 1024):
-                size += len(chunk)
-                if size > MAX_UPLOAD_BYTES:
-                    raise HTTPException(status_code=413, detail="Datei ist zu groß")
-                output.write(chunk)
-    except Exception:
-        destination.unlink(missing_ok=True)
+        destination, kind, size = save_upload(file, media_dir(), {"image", "video", "pdf"})
+    except HTTPException as error:
+        if error.status_code == 415:
+            error.detail = "Erlaubt sind echte JPG-, PNG-, WebP-, GIF-, MP4-, WebM- und PDF-Dateien."
         raise
-    finally:
-        file.file.close()
-
-    if kind == "pdf":
-        with destination.open("rb") as uploaded_pdf:
-            if uploaded_pdf.read(5) != b"%PDF-":
-                destination.unlink(missing_ok=True)
-                raise HTTPException(
-                    status_code=415,
-                    detail="Die Datei ist kein gültiges PDF-Dokument.",
-                )
-
-    compatibility = inspect_video(destination) if kind == "video" else None
+    stored_name = destination.name
+    try:
+        compatibility = validate_video(destination) if kind == "video" else None
+    except ValueError as error:
+        destination.unlink(missing_ok=True)
+        raise HTTPException(status_code=415, detail="Video konnte nicht vollständig geprüft werden.") from error
     source = f"/media/{stored_name}"
     original_source = None
     thumbnail_source = None
@@ -693,41 +689,16 @@ def upload_content(
     return response
 
 
-def text_background_kind(file: UploadFile, allow_video: bool = False) -> str:
-    media_type = file.content_type
-    allowed = {"image/jpeg", "image/png", "image/webp"}
-    if allow_video:
-        allowed |= {"video/mp4", "video/webm"}
-    if media_type not in allowed:
-        media_type = mimetypes.guess_type(file.filename or "")[0]
-    if media_type not in allowed:
-        raise HTTPException(
-            status_code=415,
-            detail="Als Freitext-Hintergrund sind JPG, PNG, WebP, MP4 und WebM erlaubt."
-            if allow_video else "Als Logo sind JPG, PNG und WebP erlaubt.",
-        )
-    return "video" if media_type.startswith("video/") else "image"
-
-
 def save_text_background(file: UploadFile, allow_video: bool = False) -> str:
-    text_background_kind(file, allow_video)
-    suffix = Path(file.filename or "").suffix.lower()
-    stored_name = f"{uuid.uuid4().hex}{suffix}"
-    destination = media_dir() / stored_name
-    size = 0
+    allowed = {"image", "video"} if allow_video else {"image"}
     try:
-        with destination.open("wb") as output:
-            while chunk := file.file.read(1024 * 1024):
-                size += len(chunk)
-                if size > MAX_UPLOAD_BYTES:
-                    raise HTTPException(status_code=413, detail="Datei ist zu groß")
-                output.write(chunk)
-    except Exception:
+        destination, kind, _ = save_upload(file, media_dir(), allowed)
+        if kind == "video":
+            validate_video(destination)
+    except ValueError as error:
         destination.unlink(missing_ok=True)
-        raise
-    finally:
-        file.file.close()
-    return f"/media/{stored_name}"
+        raise HTTPException(status_code=415, detail="Video konnte nicht vollständig geprüft werden.") from error
+    return f"/media/{destination.name}"
 
 
 @app.get("/api/media-library")
@@ -746,32 +717,18 @@ def upload_library_media(
     file: Annotated[UploadFile, File()],
     _: None = Depends(require_system_login),
 ):
-    media_type = file.content_type
-    if media_type not in ALLOWED_MEDIA_TYPES:
-        media_type = mimetypes.guess_type(file.filename or "")[0]
-    kind = ALLOWED_MEDIA_TYPES.get(media_type or "")
-    if kind not in {"image", "video"}:
-        raise HTTPException(
-            status_code=415,
-            detail="Für die Mediathek sind JPG, PNG, WebP, GIF, MP4 und WebM erlaubt.",
-        )
-    suffix = Path(file.filename or "").suffix.lower()
-    stored_name = f"{uuid.uuid4().hex}{suffix}"
-    destination = media_dir() / stored_name
-    size = 0
     try:
-        with destination.open("wb") as output:
-            while chunk := file.file.read(1024 * 1024):
-                size += len(chunk)
-                if size > MAX_UPLOAD_BYTES:
-                    raise HTTPException(status_code=413, detail="Datei ist zu groß")
-                output.write(chunk)
-    except Exception:
-        destination.unlink(missing_ok=True)
+        destination, kind, size = save_upload(file, media_dir(), {"image", "video"})
+    except HTTPException as error:
+        if error.status_code == 415:
+            error.detail = "Für die Mediathek sind echte JPG-, PNG-, WebP-, GIF-, MP4- und WebM-Dateien erlaubt."
         raise
-    finally:
-        file.file.close()
-    compatibility = inspect_video(destination) if kind == "video" else None
+    stored_name = destination.name
+    try:
+        compatibility = validate_video(destination) if kind == "video" else None
+    except ValueError as error:
+        destination.unlink(missing_ok=True)
+        raise HTTPException(status_code=415, detail="Video konnte nicht vollständig geprüft werden.") from error
     processed = None
     metadata = {}
     thumbnail_source = None
@@ -858,31 +815,31 @@ def add_media_bulk_to_playlist(
     return {"created_ids": created}
 
 
-@app.post("/api/media-library/{media_id}/transcode")
+@app.post("/api/media-library/{media_id}/transcode", status_code=202)
 def convert_library_video(media_id: int, _: None = Depends(require_system_login)):
     media = get_library_media_or_404(media_id)
     if media["kind"] != "video":
         raise HTTPException(status_code=422, detail="Nur Videos können konvertiert werden")
     original_source = media["original_source"] or media["source"]
+    source_path = media_dir() / Path(original_source).name
     try:
-        source, metadata, thumbnail = transcode_video(
-            media_dir() / Path(original_source).name, media_dir()
-        )
-    except Exception as error:
-        raise HTTPException(status_code=500, detail="Videokonvertierung fehlgeschlagen") from error
-    with connect() as connection:
-        connection.execute(
-            """UPDATE media_library SET source = ?, original_source = ?, thumbnail_source = ?,
-               width = ?, height = ?, metadata_json = ? WHERE id = ?""",
-            (source, original_source, thumbnail, metadata.get("width"), metadata.get("height"), json.dumps(metadata), media_id),
-        )
-        connection.execute("UPDATE content SET source = ? WHERE media_id = ?", (source, media_id))
-    for old in (media["thumbnail_source"], media["source"]):
-        if old:
-            old_path = media_dir() / Path(old).name
-            if old != original_source and old != source:
-                old_path.unlink(missing_ok=True)
-    return serialize_library_media(get_library_media_or_404(media_id))
+        ensure_free_space(media_dir(), source_path.stat().st_size)
+    except (OSError, HTTPException) as error:
+        if isinstance(error, HTTPException):
+            raise
+        raise HTTPException(status_code=404, detail="Videoquelldatei fehlt") from error
+    job_id = queue_conversion(media_id, source_path, original_source)
+    return {"job_id": job_id, "status": "queued", "message": "Konvertierung wurde gestartet."}
+
+
+@app.get("/api/conversions/{job_id}")
+def get_conversion(job_id: str, _: None = Depends(require_system_login)):
+    job = conversion_status(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Konvertierungsauftrag nicht gefunden")
+    if job["status"] == "completed":
+        job["media"] = serialize_library_media(get_library_media_or_404(job["media_id"]))
+    return job
 
 
 @app.post("/api/media-library/{media_id}/edit-image")
@@ -1057,8 +1014,8 @@ def create_text_content(
     if library_media and library_media["kind"] not in {"image", "video"}:
         raise HTTPException(status_code=422, detail="Als Freitext-Hintergrund ist nur ein Bild oder Video möglich")
     if background and background.filename:
-        background_kind = text_background_kind(background, True)
         source = save_text_background(background, True)
+        background_kind = "video" if Path(source).suffix in {".mp4", ".webm"} else "image"
         library_media_id = None
     elif library_media:
         source = library_media["source"]
@@ -1139,8 +1096,10 @@ def edit_text_content(
     selected_media = get_library_media_or_404(library_media_id) if library_media_id else None
     if selected_media and selected_media["kind"] not in {"image", "video"}:
         raise HTTPException(status_code=422, detail="Als Freitext-Hintergrund ist nur ein Bild oder Video möglich")
-    uploaded_kind = text_background_kind(background, True) if background and background.filename else None
     new_source = save_text_background(background, True) if background and background.filename else None
+    uploaded_kind = (
+        "video" if new_source and Path(new_source).suffix in {".mp4", ".webm"} else "image"
+    ) if new_source else None
     if new_source:
         source = new_source
         background_kind = uploaded_kind

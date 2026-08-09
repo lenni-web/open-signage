@@ -9,6 +9,7 @@ User=open-signage
 Group=open-signage
 WorkingDirectory=/opt/open-signage
 Environment=OPEN_SIGNAGE_DATA_DIR=/var/lib/open-signage
+EnvironmentFile=-/etc/open-signage.env
 ExecStart=/opt/open-signage/.venv/bin/uvicorn --app-dir /opt/open-signage/src open_signage.main:app --host 0.0.0.0 --port @@PORT@@
 Restart=on-failure
 RestartSec=3

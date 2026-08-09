@@ -335,6 +335,11 @@ button:disabled { cursor: default; opacity: .35; }
 .weekday-grid input { width: auto; }
 .time-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .schedule-note { color: var(--muted); font-size: .78rem; }
+.display-schedule-grid { display: grid; gap: 7px; margin-top: 8px; }
+.display-schedule-heading, .display-schedule-row { display: grid; grid-template-columns: minmax(130px, 1fr) 120px 120px; gap: 10px; align-items: center; }
+.display-schedule-heading { color: var(--muted); font-size: .78rem; font-weight: 700; }
+.display-schedule-row { padding-top: 7px; border-top: 1px solid var(--line); }
+.display-schedule-row:not(.enabled) .day-on, .display-schedule-row:not(.enabled) .day-off { opacity: .45; }
 .placeholder {
   display: grid;
   place-content: center;
@@ -427,6 +432,7 @@ button:disabled { cursor: default; opacity: .35; }
     overflow-y: auto;
   }
   .weekday-grid { grid-template-columns: repeat(4, 1fr); }
+  .display-schedule-heading, .display-schedule-row { grid-template-columns: minmax(105px, 1fr) 1fr 1fr; }
   #message { right: 18px; bottom: 18px; left: 18px; text-align: center; }
   button, .button, input, select, textarea { min-height: 44px; }
   input[type="checkbox"] { min-height: 20px; }
@@ -451,5 +457,8 @@ button:disabled { cursor: default; opacity: .35; }
   .network-heading, .network-item > div { align-items: flex-start; flex-direction: column; gap: 4px; }
   .network-item b { text-align: left; }
   .weekday-grid { grid-template-columns: repeat(2, 1fr); }
+  .display-schedule-heading { display: none; }
+  .display-schedule-row { grid-template-columns: 1fr 1fr; }
+  .display-schedule-row label { grid-column: 1 / -1; }
   #text-preview-dialog { width: calc(100vw - 16px); padding: 8px; }
 }

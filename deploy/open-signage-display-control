@@ -16,8 +16,7 @@ REQUEST = DATA_DIR / "display-control-request"
 STATUS = DATA_DIR / "display-control-status.json"
 DEFAULTS = {
     "cec_address": "0", "activate_source": True, "fallback_hdmi_signal": True,
-    "schedule_enabled": False, "schedule_weekdays": [],
-    "schedule_on": "08:00", "schedule_off": "22:00",
+    "schedule_enabled": False, "schedule_entries": [],
 }
 
 
@@ -48,17 +47,31 @@ def sanitized_config() -> dict:
     if not re.fullmatch(r"[0-9A-F]", address):
         address = "0"
     time_pattern = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")
-    weekdays = raw.get("schedule_weekdays", [])
-    if not isinstance(weekdays, list):
-        weekdays = []
+    entries = raw.get("schedule_entries")
+    if not isinstance(entries, list):
+        entries = []
+    if not entries and "schedule_on" in raw:
+        entries = [{"weekday": day, "on": raw.get("schedule_on"), "off": raw.get("schedule_off")}
+                   for day in (raw.get("schedule_weekdays") or range(7))]
+    clean_entries = []
+    seen = set()
+    for entry in entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("weekday"), int):
+            continue
+        day = entry["weekday"]
+        on_time, off_time = entry.get("on"), entry.get("off")
+        if day in seen or not 0 <= day <= 6 or not isinstance(on_time, str) or not isinstance(off_time, str):
+            continue
+        if not time_pattern.fullmatch(on_time) or not time_pattern.fullmatch(off_time) or on_time == off_time:
+            continue
+        clean_entries.append({"weekday": day, "on": on_time, "off": off_time})
+        seen.add(day)
     return {
         "cec_address": address,
         "activate_source": raw.get("activate_source") is True,
         "fallback_hdmi_signal": raw.get("fallback_hdmi_signal") is True,
         "schedule_enabled": raw.get("schedule_enabled") is True,
-        "schedule_weekdays": sorted({day for day in weekdays if isinstance(day, int) and 0 <= day <= 6}),
-        "schedule_on": raw.get("schedule_on") if isinstance(raw.get("schedule_on"), str) and time_pattern.fullmatch(raw["schedule_on"]) else "08:00",
-        "schedule_off": raw.get("schedule_off") if isinstance(raw.get("schedule_off"), str) and time_pattern.fullmatch(raw["schedule_off"]) else "22:00",
+        "schedule_entries": sorted(clean_entries, key=lambda entry: entry["weekday"]),
     }
 
 
@@ -91,14 +104,16 @@ def hdmi_signal(on: bool | None) -> tuple[bool, str]:
 def scheduled_state(config: dict, now: datetime) -> str | None:
     if not config.get("schedule_enabled"):
         return None
-    weekdays = set(config.get("schedule_weekdays") or range(7))
     current = now.strftime("%H:%M")
-    on_time, off_time = config["schedule_on"], config["schedule_off"]
-    if on_time < off_time:
-        active = now.weekday() in weekdays and on_time <= current < off_time
-    else:
-        active = ((now.weekday() in weekdays and current >= on_time) or
-                  ((now.weekday() - 1) % 7 in weekdays and current < off_time))
+    entries = config.get("schedule_entries") or []
+    active = False
+    for entry in entries:
+        day, on_time, off_time = entry["weekday"], entry["on"], entry["off"]
+        if on_time < off_time:
+            active = active or (now.weekday() == day and on_time <= current < off_time)
+        else:
+            active = active or ((now.weekday() == day and current >= on_time) or
+                                (now.weekday() == (day + 1) % 7 and current < off_time))
     return "on" if active else "off"
 
 

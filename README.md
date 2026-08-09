@@ -21,7 +21,7 @@ Chromium-Kioskfenster an.
 - Ausfallsicherer Player mit lokalem Playlist-Cache und Wiederaufnahme
 - Speicherbereinigung, zeitgesteuerte Playlists und sichere Systemaktionen
 - Geräteidentität und Rollenmodell als Grundlage für Master-/Slave-Betrieb
-- HDMI-CEC-Bildschirmsteuerung mit Wochenzeitplan, Eingangswahl und
+- HDMI-CEC-Bildschirmsteuerung mit individuellen Zeiten je Wochentag, Eingangswahl und
   HDMI-Signal-Fallback
 - Kompakte Inhaltsverwaltung mit auswählbaren Formularen sowie Freitext auf
   Bild- oder stummem Video-Hintergrund
@@ -45,14 +45,26 @@ Weitere SRT-Quellen können später über MediaMTX ergänzt werden.
 ### Systemverwaltung
 
 Die passwortgeschützte Seite **System** zeigt Geräte-, Speicher- und
-Netzwerkinformationen des Raspberry Pi. Das initiale Passwort lautet
-`open-signage` und sollte dort direkt geändert werden. Außerdem kann ein
+Netzwerkinformationen des Raspberry Pi. Bei der Installation wird ein zufälliges
+Initialpasswort ausgegeben. Bis zu dessen Änderung sind schreibende Aktionen
+gesperrt. Außerdem kann ein
 Bildschirmname vergeben und ein Betriebssystemupdate gestartet werden.
 
 Die Anmeldung schützt die gesamte Verwaltungsoberfläche einschließlich der
-Inhalte-Seite. Der Vollbild-Player bleibt davon unabhängig und startet ohne
-Anmeldung. Eine Anmeldung bleibt auch während eines Anwendungsneustarts gültig
+Inhalte-Seite. Nach fünf Fehlversuchen innerhalb von 15 Minuten wird die
+Client-Adresse für 15 Minuten gesperrt. Der lokale Vollbild-Player authentifiziert
+sich mit einem automatisch erzeugten Geräteschlüssel, der nur über die
+Loopback-Schnittstelle ausgegeben wird. Eine Anmeldung bleibt auch während eines Anwendungsneustarts gültig
 und läuft nach zwölf Stunden ab.
+
+Uploads werden anhand ihres tatsächlichen Dateiinhalts geprüft und standardmäßig
+auf 1 GiB begrenzt. Mindestens 512 MiB beziehungsweise fünf Prozent des
+Datenträgers bleiben reserviert. Videos müssen durch `ffprobe` vollständig lesbar
+sein. Optimale Videokonvertierungen laufen nacheinander im Hintergrund, verwenden
+höchstens zwei ffmpeg-Threads und werden nach 30 Minuten beendet.
+
+SQLite verwendet WAL, ein zehnsekündiges `busy_timeout` und führt beim Start sowie
+anschließend täglich einen Integritätscheck aus.
 Im Hintergrund führt ein separater root-Dienst fest definiert Folgendes aus:
 
 ```bash

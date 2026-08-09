@@ -412,18 +412,18 @@
             <label class="inline-check"><input name="fallback_hdmi_signal" type="checkbox"><span>HDMI-Signalsteuerung als Fallback verwenden</span></label>
             <label class="inline-check"><input name="schedule_enabled" type="checkbox"><span>Automatischen Bildschirm-Zeitplan aktivieren</span></label>
             <fieldset>
-              <legend>Aktive Wochentage (keine Auswahl = täglich)</legend>
-              <div class="weekday-grid">
-                <label><input type="checkbox" name="display_weekday" value="0"> Mo</label><label><input type="checkbox" name="display_weekday" value="1"> Di</label>
-                <label><input type="checkbox" name="display_weekday" value="2"> Mi</label><label><input type="checkbox" name="display_weekday" value="3"> Do</label>
-                <label><input type="checkbox" name="display_weekday" value="4"> Fr</label><label><input type="checkbox" name="display_weekday" value="5"> Sa</label>
-                <label><input type="checkbox" name="display_weekday" value="6"> So</label>
+              <legend>Individuelle Schaltzeiten</legend>
+              <div class="display-schedule-grid">
+                <div class="display-schedule-heading"><span>Tag</span><span>Ein</span><span>Aus</span></div>
+                <div class="display-schedule-row" data-weekday="0"><label class="inline-check"><input type="checkbox" class="day-enabled"><span>Montag</span></label><input class="day-on" type="time" value="08:00"><input class="day-off" type="time" value="22:00"></div>
+                <div class="display-schedule-row" data-weekday="1"><label class="inline-check"><input type="checkbox" class="day-enabled"><span>Dienstag</span></label><input class="day-on" type="time" value="08:00"><input class="day-off" type="time" value="22:00"></div>
+                <div class="display-schedule-row" data-weekday="2"><label class="inline-check"><input type="checkbox" class="day-enabled"><span>Mittwoch</span></label><input class="day-on" type="time" value="08:00"><input class="day-off" type="time" value="22:00"></div>
+                <div class="display-schedule-row" data-weekday="3"><label class="inline-check"><input type="checkbox" class="day-enabled"><span>Donnerstag</span></label><input class="day-on" type="time" value="08:00"><input class="day-off" type="time" value="22:00"></div>
+                <div class="display-schedule-row" data-weekday="4"><label class="inline-check"><input type="checkbox" class="day-enabled"><span>Freitag</span></label><input class="day-on" type="time" value="08:00"><input class="day-off" type="time" value="22:00"></div>
+                <div class="display-schedule-row" data-weekday="5"><label class="inline-check"><input type="checkbox" class="day-enabled"><span>Samstag</span></label><input class="day-on" type="time" value="08:00"><input class="day-off" type="time" value="22:00"></div>
+                <div class="display-schedule-row" data-weekday="6"><label class="inline-check"><input type="checkbox" class="day-enabled"><span>Sonntag</span></label><input class="day-on" type="time" value="08:00"><input class="day-off" type="time" value="22:00"></div>
               </div>
             </fieldset>
-            <div class="time-grid">
-              <label>Einschalten um<input name="schedule_on" type="time" value="08:00" required></label>
-              <label>Ausschalten um<input name="schedule_off" type="time" value="22:00" required></label>
-            </div>
             <button>Bildschirmsteuerung speichern</button>
           </form>
         </div>
