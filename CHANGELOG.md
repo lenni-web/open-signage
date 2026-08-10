@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.13.4] – 2026-08-10
+
 ### Geändert
 
 - Übergänge laufen nun über eine eigene, minimal sichtbare Compositor-Ebene und
@@ -22,6 +24,11 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
   sichtbar und der Wechsel wirkt als ruhige Überblendung statt als Lichtblitz.
 - Die Deckblende dauert nun drei Sekunden und verwendet eine symmetrische,
   besonders sanft ein- und auslaufende Animationskurve.
+- CEC-Schaltbefehle gelten erst dann als erfolgreich, wenn eine anschließende
+  Statusabfrage den erwarteten Energiezustand bestätigt. Reagiert ein Monitor
+  trotz erfolgreichem Prozessaufruf nicht auf CEC, übernimmt automatisch der
+  aktivierte Wayland-DPMS-Fallback und die Oberfläche zeigt keinen falschen
+  CEC-Erfolg mehr an.
 
 ## [0.13.3] – 2026-08-10
 

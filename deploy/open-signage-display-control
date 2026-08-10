@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -108,6 +109,18 @@ def cec_adapter(address: str) -> tuple[str | None, str]:
         if ok:
             return device or "", output
     return None, "\n".join(messages)
+
+
+def cec_power_state(address: str, device: str | None) -> tuple[str, str]:
+    ok, output = cec(f"pow {address}", device, require_response=True)
+    if not ok:
+        return "unknown", output
+    lowered = output.lower()
+    if "power status: on" in lowered:
+        return "on", output
+    if "power status: standby" in lowered:
+        return "off", output
+    return "unknown", output
 
 
 def connected_outputs() -> list[str]:
@@ -218,11 +231,22 @@ def execute(action: str, config: dict) -> None:
         source_ok, source_output = cec("as", adapter)
         ok = ok and source_ok
         output = f"{output}\n{source_output}".strip()
+    if ok:
+        time.sleep(1)
+        confirmed_state, confirmation_output = cec_power_state(address, adapter or None)
+        expected_state = "on" if turn_on else "off"
+        ok = confirmed_state == expected_state
+        output = f"{output}\nCEC-Rückprüfung: {confirmation_output}".strip()
+        if not ok:
+            output = (
+                f"{output}\nCEC meldet nach der Aktion {confirmed_state!r} statt "
+                f"{expected_state!r}; die Aktion gilt als nicht ausgeführt."
+            )
     if not ok and config.get("fallback_hdmi_signal"):
         fallback_ok, fallback_message, fallback_output = wayland_signal(turn_on)
         ok = fallback_ok
         method = "wayland_dpms" if fallback_ok else None
-        output = f"CEC nicht verfügbar: {cec_output[-300:]}\nWayland-DPMS: {fallback_message}".strip()
+        output = f"CEC nicht verfügbar: {output[-500:]}\nWayland-DPMS: {fallback_message}".strip()
     if ok and method == "cec":
         summary = "CEC-Aktion erfolgreich ausgeführt. "
     elif ok and method == "wayland_dpms":

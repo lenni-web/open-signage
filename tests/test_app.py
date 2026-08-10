@@ -1284,6 +1284,31 @@ def test_display_action_uses_hdmi_fallback_after_cec_failure(monkeypatch):
     assert "Fallback ausgeführt" in captured["message"]
 
 
+def test_display_action_uses_fallback_when_cec_does_not_change_power_state():
+    helper = runpy.run_path(str(PROJECT_ROOT / "deploy/open-signage-display-control"))
+    captured = {}
+    globals_ = helper["execute"].__globals__
+    globals_["cec_adapter"] = lambda _address: ("/dev/cec0", "power status: on")
+    globals_["cec"] = lambda _command, _device=None, **_kwargs: (
+        True, "opening a connection to the CEC adapter..."
+    )
+    globals_["cec_power_state"] = lambda _address, _device: ("on", "power status: on")
+    globals_["time"].sleep = lambda _seconds: None
+    globals_["wayland_signal"] = lambda on: (
+        True, "HDMI-A-2 wurde deaktiviert." if on is False else "HDMI-A-2 on", "HDMI-A-2"
+    )
+    globals_["write_status"] = lambda **values: captured.update(values)
+
+    helper["execute"]("off", {
+        "cec_address": "0", "activate_source": False, "fallback_hdmi_signal": True,
+    })
+
+    assert captured["method"] == "wayland_dpms"
+    assert captured["power_status"] == "off"
+    assert "statt 'off'" in captured["message"]
+    assert "Fallback ausgeführt" in captured["message"]
+
+
 def test_backup_can_be_created_downloaded_and_restored(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
     with TestClient(app) as client:
