@@ -318,7 +318,7 @@ button:disabled { cursor: default; opacity: .35; }
   inset: 0;
   z-index: 2;
   opacity: 1;
-  transition: opacity 4s cubic-bezier(.37, 0, .63, 1);
+  transition: opacity 5s cubic-bezier(.3, 0, .7, 1);
 }
 .player-transition-source.player-leaving { opacity: 0; }
 .content-image { background: transparent; }

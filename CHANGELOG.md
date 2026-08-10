@@ -10,8 +10,9 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ### Geändert
 
-- Deckblenden dauern nun vier Sekunden und verwenden eine noch weichere
-  Ein-/Auslaufkurve. Player-Ebenen bleiben dauerhaft als isolierte
+- Deckblenden dauern nun fünf Sekunden und verwenden eine besonders flache,
+  gleichmäßige Ein-/Auslaufkurve ohne ausgeprägte Beschleunigung in der Mitte.
+  Player-Ebenen bleiben dauerhaft als isolierte
   Compositor-Flächen vorbereitet, damit insbesondere bei einfachen Bildern
   keine kurzfristige GPU-Umschaltung als dunkler Einzelbildblitz erscheint.
 
