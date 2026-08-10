@@ -13,6 +13,9 @@ let playerToken = "";
 let transitionGeneration = 0;
 const CACHE_KEY = "open-signage-playlist-v1";
 const CURRENT_KEY = "open-signage-current-content";
+const TRANSITION_MS = 900;
+const WEBSITE_SETTLE_MS = 1000;
+const PDF_SETTLE_MS = 500;
 
 function sendHeartbeat(state = playerState, error = playerError) {
   playerState = state;
@@ -56,6 +59,12 @@ function waitForEvent(element, eventName, timeoutMs = 6000) {
   });
 }
 
+function settleAfter(promise, delayMs) {
+  return Promise.resolve(promise).then(() => new Promise(resolve => {
+    window.setTimeout(resolve, delayMs);
+  }));
+}
+
 function transitionTo(elements, ready, options = {}) {
   const generation = ++transitionGeneration;
   const nextElements = Array.isArray(elements) ? elements : [elements];
@@ -78,7 +87,7 @@ function transitionTo(elements, ready, options = {}) {
     window.setTimeout(() => {
       previousElements.forEach(element => element.remove());
       if (previousHls && previousHls !== activeHls) previousHls.destroy();
-    }, 500);
+    }, TRANSITION_MS + 100);
     options.onVisible?.();
   });
 }
@@ -167,12 +176,12 @@ function show(item) {
     element.src = item.source;
     element.title = item.name;
     element.allow = "autoplay; fullscreen";
-    ready = waitForEvent(element, "load");
+    ready = settleAfter(waitForEvent(element, "load", 10000), WEBSITE_SETTLE_MS);
   } else if (item.kind === "pdf") {
     element = document.createElement("iframe");
     element.src = `${item.source}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
     element.title = item.name;
-    ready = waitForEvent(element, "load");
+    ready = settleAfter(waitForEvent(element, "load", 10000), PDF_SETTLE_MS);
   } else if (item.kind === "text") {
     element = document.createElement("div");
     const config = item.text_config || {};

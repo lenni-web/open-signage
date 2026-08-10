@@ -296,6 +296,9 @@ def test_raspberry_pi_templates_have_expected_placeholders():
     assert "function transitionTo(" in player_script
     assert "previousElements.forEach" in player_script
     assert 'classList.add("player-leaving")' not in player_script
+    assert "const TRANSITION_MS = 900" in player_script
+    assert "const WEBSITE_SETTLE_MS = 1000" in player_script
+    assert "function settleAfter(" in player_script
 
 
 def test_compatible_mp4_probe_has_no_warning():

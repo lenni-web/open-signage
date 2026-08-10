@@ -304,7 +304,8 @@ button:disabled { cursor: default; opacity: .35; }
 .player-entering {
   opacity: 0;
   z-index: 2;
-  transition: opacity .45s ease;
+  will-change: opacity;
+  transition: opacity .9s cubic-bezier(.4, 0, .2, 1);
 }
 .player-entering.player-visible { opacity: 1; }
 .placeholder.player-entering,

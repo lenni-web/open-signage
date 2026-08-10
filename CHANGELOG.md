@@ -16,6 +16,9 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 - Bei Player-Übergängen bleibt der bisherige Inhalt vollständig deckend, bis
   der vorgeladene neue Inhalt darüber eingeblendet ist. Dadurch scheint der
   schwarze Bühnenhintergrund während Bildwechseln nicht mehr durch.
+- Die Vollbild-Deckblende läuft nun ruhiger über 900 Millisekunden. Webseiten
+  und PDFs erhalten nach ihrem Ladeereignis zusätzlich Zeit für den ersten
+  vollständig gerenderten Browserframe, bevor ihre Einblendung beginnt.
 
 ## [0.13.2] – 2026-08-10
 
