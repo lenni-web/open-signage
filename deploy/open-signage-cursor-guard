@@ -2,6 +2,14 @@
 set -uo pipefail
 
 hide_cursor() {
+  # Virtuelle Eingaben wecken einen per Wayland-DPMS ausgeschalteten Ausgang.
+  # Solange alle Ausgänge aus sind, darf der Cursor-Wächter daher keine
+  # Tastenkombination an den Compositor senden.
+  local output_states
+  if output_states="$(wlopm 2>/dev/null)" &&
+     ! grep -Eiq '(^|[[:space:]])on([[:space:]]|$)' <<<"${output_states}"; then
+    return 0
+  fi
   wtype -M alt -M logo -k h >/dev/null 2>&1 || true
 }
 

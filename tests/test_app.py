@@ -4,6 +4,7 @@ import json
 import subprocess
 import runpy
 import shutil
+import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -293,6 +294,8 @@ def test_raspberry_pi_templates_have_expected_placeholders():
         PROJECT_ROOT / "deploy/open-signage-cursor-guard"
     ).read_text(encoding="utf-8")
     assert "while sleep 2" in cursor_guard
+    assert 'output_states="$(wlopm 2>/dev/null)"' in cursor_guard
+    assert "return 0" in cursor_guard
     assert "wtype -M alt -M logo -k h" in cursor_guard
 
     player_style = (
@@ -1205,6 +1208,34 @@ def test_display_schedule_handles_daytime_and_overnight_windows():
     assert scheduled_state(overnight, datetime(2026, 8, 10, 23, 0)) == "on"
     assert scheduled_state(overnight, datetime(2026, 8, 11, 1, 0)) == "on"
     assert scheduled_state(overnight, datetime(2026, 8, 11, 3, 0)) == "off"
+
+
+def test_display_schedule_reasserts_off_but_not_on(tmp_path: Path):
+    helper = runpy.run_path(str(PROJECT_ROOT / "deploy/open-signage-display-control"))
+    globals_ = helper["main"].__globals__
+    request_path = tmp_path / "display-control-request"
+    status_path = tmp_path / "display-control-status.json"
+    globals_["REQUEST"] = request_path
+    globals_["STATUS"] = status_path
+    globals_["sanitized_config"] = lambda: {
+        "schedule_enabled": True,
+        "schedule_entries": [{"weekday": 0, "on": "00:00", "off": "23:59"}],
+    }
+    actions = []
+    globals_["execute"] = lambda action, _config: actions.append(action)
+    globals_["scheduled_state"] = lambda _config, _now: "on"
+    status_path.write_text(json.dumps({"desired_state": "on"}))
+    old_argv = sys.argv
+    try:
+        sys.argv = [old_argv[0], "--schedule"]
+        assert helper["main"]() == 0
+        assert actions == []
+        globals_["scheduled_state"] = lambda _config, _now: "off"
+        status_path.write_text(json.dumps({"desired_state": "off"}))
+        assert helper["main"]() == 0
+        assert actions == ["off"]
+    finally:
+        sys.argv = old_argv
 
 
 def test_legacy_display_schedule_is_migrated_on_read(tmp_path: Path, monkeypatch):

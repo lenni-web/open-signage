@@ -266,7 +266,10 @@ def main() -> int:
         if action is None:
             return 0
         previous = read_json(STATUS, {}).get("desired_state")
-        if previous == action:
+        # Ein eingeschalteter Ausgang muss nicht minütlich erneut aktiviert
+        # werden. Den ausgeschalteten Zustand setzen wir dagegen erneut durch,
+        # weil HDMI-Hotplug oder Eingabeereignisse Wayland-DPMS wecken können.
+        if previous == action == "on":
             return 0
     else:
         try:

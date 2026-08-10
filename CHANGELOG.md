@@ -8,6 +8,16 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.13.5] – 2026-08-10
+
+### Behoben
+
+- Der Mauszeiger-Wächter erzeugt keine virtuellen Tastatureingaben mehr,
+  solange alle Wayland-Ausgänge ausgeschaltet sind. Dadurch wird ein per
+  Wayland-DPMS abgeschalteter Monitor nicht unbeabsichtigt wieder aufgeweckt.
+  Der aktive Bildschirm-Zeitplan setzt seinen Ausschaltzustand zusätzlich
+  regelmäßig erneut durch, falls HDMI-Hotplug den Ausgang reaktiviert.
+
 ## [0.13.4] – 2026-08-10
 
 ### Geändert
