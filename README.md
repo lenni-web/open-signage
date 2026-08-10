@@ -234,7 +234,10 @@ Kiosk- und Chromiumfehler werden unter
 `/home/signage/.local/state/open-signage/kiosk.log` protokolliert, bei einem
 abweichenden `--kiosk-user` entsprechend in dessen Home-Verzeichnis. Chromium
 verwendet ein eigenes beschreibbares Profil und wird nach einem unerwarteten
-Ende automatisch neu gestartet.
+Ende automatisch neu gestartet. Die Browsersprache und bevorzugte
+Webseitensprache sind auf Deutsch eingestellt; die automatische
+Übersetzungsleiste ist für den Kioskbetrieb deaktiviert. Der Vollbild-Player
+blendet den Mauszeiger dauerhaft aus.
 
 Die Bildschirmsteuerung prüft alle vorhandenen CEC-Adapter. Ein Display gilt
 erst dann als CEC-fähig, wenn es selbst antwortet. Andernfalls schaltet Open

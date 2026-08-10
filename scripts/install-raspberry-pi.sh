@@ -98,6 +98,7 @@ apt-get install --no-install-recommends -y \
   fonts-dejavu-core \
   fonts-liberation \
   iw \
+  locales \
   python3 \
   python3-pip \
   python3-venv \
@@ -106,6 +107,10 @@ apt-get install --no-install-recommends -y \
 
 command -v labwc >/dev/null 2>&1 || fail "labwc wurde nicht installiert."
 command -v raspi-config >/dev/null 2>&1 || fail "raspi-config wurde nicht gefunden."
+if ! locale -a | grep -qi '^de_DE\.utf8$'; then
+  sed -i 's/^# *\(de_DE.UTF-8 UTF-8\)/\1/' /etc/locale.gen
+  locale-gen de_DE.UTF-8
+fi
 
 if ! id "${KIOSK_USER}" >/dev/null 2>&1; then
   useradd --create-home --shell /bin/bash "${KIOSK_USER}"
@@ -154,6 +159,10 @@ sed \
   -e "s|@@HEALTH_URL@@|http://127.0.0.1:${PORT}/api/health|g" \
   "${PROJECT_DIR}/deploy/open-signage-kiosk" >"${KIOSK_COMMAND}"
 chmod 0755 "${KIOSK_COMMAND}"
+install -d -o root -g root -m 0755 /etc/chromium/policies/managed
+install -o root -g root -m 0644 \
+  "${PROJECT_DIR}/deploy/open-signage-chromium-policy.json" \
+  /etc/chromium/policies/managed/open-signage.json
 
 install -o root -g root -m 0755 \
   "${PROJECT_DIR}/deploy/open-signage-system-update" "${UPDATE_COMMAND}"

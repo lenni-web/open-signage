@@ -10,6 +10,7 @@ let currentItem = null;
 let playerState = "idle";
 let playerError = null;
 let playerToken = "";
+let transitionGeneration = 0;
 const CACHE_KEY = "open-signage-playlist-v1";
 const CURRENT_KEY = "open-signage-current-content";
 
@@ -30,6 +31,7 @@ function signature(value) {
 }
 
 function clearStage() {
+  transitionGeneration += 1;
   window.clearTimeout(timer);
   window.clearTimeout(reconnectTimer);
   if (activeHls) {
@@ -37,6 +39,49 @@ function clearStage() {
     activeHls = null;
   }
   stage.replaceChildren();
+}
+
+function waitForEvent(element, eventName, timeoutMs = 6000) {
+  return new Promise((resolve) => {
+    if ((eventName === "load" && element.complete) ||
+        (eventName === "canplay" && element.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA)) {
+      resolve();
+      return;
+    }
+    const timeout = window.setTimeout(resolve, timeoutMs);
+    element.addEventListener(eventName, () => {
+      window.clearTimeout(timeout);
+      resolve();
+    }, { once: true });
+  });
+}
+
+function transitionTo(elements, ready, options = {}) {
+  const generation = ++transitionGeneration;
+  const nextElements = Array.isArray(elements) ? elements : [elements];
+  const previousElements = [...stage.children];
+  const previousHls = activeHls;
+  nextElements.forEach(element => {
+    element.classList.add("player-entering");
+    stage.append(element);
+  });
+  Promise.resolve(ready).catch(() => {}).then(() => {
+    if (generation !== transitionGeneration) {
+      nextElements.forEach(element => element.remove());
+      options.hls?.destroy();
+      return;
+    }
+    activeHls = options.hls || null;
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      nextElements.forEach(element => element.classList.add("player-visible"));
+      previousElements.forEach(element => element.classList.add("player-leaving"));
+    }));
+    window.setTimeout(() => {
+      previousElements.forEach(element => element.remove());
+      if (previousHls && previousHls !== activeHls) previousHls.destroy();
+    }, 500);
+    options.onVisible?.();
+  });
 }
 
 function preloadImage(source, highPriority = false) {
@@ -88,11 +133,13 @@ function advance() {
 }
 
 function show(item) {
-  clearStage();
+  window.clearTimeout(timer);
+  window.clearTimeout(reconnectTimer);
   currentItem = item;
   try { localStorage.setItem(CURRENT_KEY, String(item.id)); } catch (_) {}
   sendHeartbeat("playing", null);
   let element;
+  let ready = Promise.resolve();
   if (item.kind === "image") {
     element = document.createElement("img");
     element.src = item.source;
@@ -103,6 +150,7 @@ function show(item) {
       sendHeartbeat("error", "Bild konnte nicht geladen werden.");
       advance();
     }, { once: true });
+    ready = preloadImage(item.source, true).then(() => element.decode?.().catch(() => {}));
   } else if (item.kind === "video") {
     element = document.createElement("video");
     element.src = item.source;
@@ -114,15 +162,18 @@ function show(item) {
       sendHeartbeat("error", "Video konnte nicht abgespielt werden.");
       advance();
     }, { once: true });
+    ready = waitForEvent(element, "canplay");
   } else if (item.kind === "website") {
     element = document.createElement("iframe");
     element.src = item.source;
     element.title = item.name;
     element.allow = "autoplay; fullscreen";
+    ready = waitForEvent(element, "load");
   } else if (item.kind === "pdf") {
     element = document.createElement("iframe");
     element.src = `${item.source}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
     element.title = item.name;
+    ready = waitForEvent(element, "load");
   } else if (item.kind === "text") {
     element = document.createElement("div");
     const config = item.text_config || {};
@@ -136,8 +187,10 @@ function show(item) {
       backgroundVideo.playsInline = true;
       backgroundVideo.addEventListener("error", () => sendHeartbeat("error", "Freitext-Hintergrundvideo konnte nicht abgespielt werden."), { once: true });
       element.append(backgroundVideo);
+      ready = waitForEvent(backgroundVideo, "canplay");
     } else {
       element.style.backgroundImage = `url("${item.source.replaceAll('"', '%22')}")`;
+      ready = preloadImage(item.source, true);
     }
     const align = config.text_align || "left";
     const vertical = config.vertical_position || "center";
@@ -174,13 +227,16 @@ function show(item) {
     return;
   }
   element.className = item.kind === "text" ? `content text-slide ${element.dataset.slideClasses}` : "content";
-  stage.append(element);
-  if (!(item.kind === "video" && item.play_to_end)) {
-    timer = window.setTimeout(advance, item.duration_seconds * 1000);
-  }
+  transitionTo(element, ready, { onVisible: () => {
+    if (!(item.kind === "video" && item.play_to_end)) {
+      timer = window.setTimeout(advance, item.duration_seconds * 1000);
+    }
+  } });
 }
 
 function showStream(item) {
+  window.clearTimeout(timer);
+  window.clearTimeout(reconnectTimer);
   const video = document.createElement("video");
   video.className = "content";
   video.autoplay = true;
@@ -191,7 +247,10 @@ function showStream(item) {
   const status = document.createElement("div");
   status.className = "stream-status";
   status.innerHTML = "<strong>Live-Übertragung</strong><span>Verbindung wird hergestellt …</span>";
-  stage.append(video, status);
+  let streamReady;
+  const ready = new Promise(resolve => { streamReady = resolve; });
+  const readyFallback = window.setTimeout(streamReady, 6000);
+  let streamHls = null;
 
   const setStatus = (text, visible = true) => {
     status.querySelector("span").textContent = text;
@@ -208,16 +267,21 @@ function showStream(item) {
     setStatus("Stream ist offline – neuer Versuch …");
     window.clearTimeout(reconnectTimer);
     reconnectTimer = window.setTimeout(() => {
-      if (activeHls) {
-        activeHls.stopLoad();
-        activeHls.startLoad(-1);
+      if (streamHls) {
+        streamHls.stopLoad();
+        streamHls.startLoad(-1);
       } else {
         video.load();
       }
     }, 5000);
   };
 
-  video.addEventListener("playing", () => { setStatus("", false); sendHeartbeat("playing", null); });
+  video.addEventListener("playing", () => {
+    window.clearTimeout(readyFallback);
+    streamReady();
+    setStatus("", false);
+    sendHeartbeat("playing", null);
+  });
   video.addEventListener("waiting", () => { setStatus("Livestream wird gepuffert …"); sendHeartbeat("buffering", null); });
   video.addEventListener("error", () => { sendHeartbeat("error", "Livestream-Verbindung unterbrochen."); reconnect(); });
 
@@ -225,28 +289,33 @@ function showStream(item) {
     video.src = item.source;
     video.addEventListener("loadedmetadata", tryPlay, { once: true });
   } else if (window.Hls?.isSupported()) {
-    activeHls = new Hls({
+    streamHls = new Hls({
       enableWorker: true,
       lowLatencyMode: true,
       backBufferLength: 30,
     });
-    activeHls.loadSource(item.source);
-    activeHls.attachMedia(video);
-    activeHls.on(Hls.Events.MANIFEST_PARSED, tryPlay);
-    activeHls.on(Hls.Events.ERROR, (_, data) => {
+    streamHls.loadSource(item.source);
+    streamHls.attachMedia(video);
+    streamHls.on(Hls.Events.MANIFEST_PARSED, tryPlay);
+    streamHls.on(Hls.Events.ERROR, (_, data) => {
       if (!data.fatal) return;
       if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
         setStatus("Wiedergabefehler – Wiederherstellung läuft …");
-        activeHls.recoverMediaError();
+        streamHls.recoverMediaError();
       } else {
         reconnect();
       }
     });
+    transitionTo([video, status], ready, { hls: streamHls, onVisible: () => {
+      timer = window.setTimeout(advance, item.duration_seconds * 1000);
+    } });
+    return;
   } else {
     setStatus("Dieser Browser unterstützt keine HLS-Wiedergabe.");
   }
-
-  timer = window.setTimeout(advance, item.duration_seconds * 1000);
+  transitionTo([video, status], ready, { onVisible: () => {
+    timer = window.setTimeout(advance, item.duration_seconds * 1000);
+  } });
 }
 
 async function refreshPlaylist() {

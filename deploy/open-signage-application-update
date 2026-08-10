@@ -64,9 +64,14 @@ KIOSK_USER="${KIOSK_USER:-signage}"
   "${release_dir}/.venv/bin/python" -m pip install --upgrade pip
   "${release_dir}/.venv/bin/python" -m pip install "${release_dir}"
 
-  if ! command -v cec-client >/dev/null 2>&1 || ! command -v wlopm >/dev/null 2>&1; then
+  if ! command -v cec-client >/dev/null 2>&1 || ! command -v wlopm >/dev/null 2>&1 || \
+     ! dpkg-query -W -f='${Status}' locales 2>/dev/null | grep -q 'install ok installed'; then
     apt-get update
-    apt-get install --no-install-recommends -y cec-utils wlopm
+    apt-get install --no-install-recommends -y cec-utils locales wlopm
+  fi
+  if ! locale -a | grep -qi '^de_DE\.utf8$'; then
+    sed -i 's/^# *\(de_DE.UTF-8 UTF-8\)/\1/' /etc/locale.gen
+    locale-gen de_DE.UTF-8
   fi
 
   # Keep the privileged updater and its units in sync with the installed release.
@@ -99,6 +104,10 @@ KIOSK_USER="${KIOSK_USER:-signage}"
     -e "s|@@HEALTH_URL@@|http://127.0.0.1:${PORT}/api/health|g" \
     "${release_dir}/deploy/open-signage-kiosk" >/usr/local/bin/open-signage-kiosk
   chmod 0755 /usr/local/bin/open-signage-kiosk
+  install -d -o root -g root -m 0755 /etc/chromium/policies/managed
+  install -o root -g root -m 0644 \
+    "${release_dir}/deploy/open-signage-chromium-policy.json" \
+    /etc/chromium/policies/managed/open-signage.json
   autostart_dir="${kiosk_home}/.config/labwc"
   autostart_file="${autostart_dir}/autostart"
   install -d -o "${KIOSK_USER}" -g "${KIOSK_USER}" -m 0755 "${autostart_dir}"

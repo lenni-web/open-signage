@@ -8,6 +8,27 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.13.2] – 2026-08-10
+
+### Geändert
+
+- Der Chromium-Kiosk verwendet explizit Deutsch (`de-DE`) als Oberflächen-,
+  Inhalts- und bevorzugte Webseitensprache; Installer und Updater richten die
+  benötigte UTF-8-Locale automatisch ein.
+- WLAN- und Ethernet-Informationen stehen auf breiten Systemseiten direkt
+  nebeneinander und wechseln auf kleinen Bildschirmen in eine einspaltige
+  Darstellung.
+- Der Player lädt den nächsten Inhalt auf einer zweiten Ebene vor und blendet
+  ihn weich über den bisherigen Inhalt. Bilder, Videos, Webseiten, PDFs,
+  Freitext und Streams wechseln dadurch ohne schwarzen Zwischenframe.
+
+### Behoben
+
+- Die integrierte Google-Übersetzungsleiste wird über Startparameter und eine
+  verwaltete Chromium-Richtlinie dauerhaft deaktiviert.
+- Der Mauszeiger bleibt im Vollbild-Player dauerhaft ausgeblendet, auch nach
+  Mausbewegungen oder dem erneuten Einschalten des HDMI-Ausgangs.
+
 ## [0.13.1] – 2026-08-10
 
 ### Geändert

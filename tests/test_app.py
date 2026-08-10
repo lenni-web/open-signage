@@ -242,6 +242,9 @@ def test_raspberry_pi_templates_have_expected_placeholders():
     assert "--disable-crash-reporter" in kiosk
     assert "DBUS_SESSION_BUS_ADDRESS" in kiosk
     assert "--disable-background-networking" in kiosk
+    assert "--lang=de-DE" in kiosk
+    assert "--accept-lang=de-DE,de" in kiosk
+    assert "--disable-translate" in kiosk
     assert "Chromium wurde mit Status" in kiosk
 
     installer = (PROJECT_ROOT / "scripts/install-raspberry-pi.sh").read_text(
@@ -257,6 +260,27 @@ def test_raspberry_pi_templates_have_expected_placeholders():
     assert 'chmod 0755 "${AUTOSTART_FILE}"' in installer
     assert "kiosk.log" in installer
     assert 's|@@KIOSK_USER@@|${KIOSK_USER}|g' in installer
+    assert "locale-gen de_DE.UTF-8" in installer
+    assert "open-signage-chromium-policy.json" in installer
+
+    chromium_policy = json.loads(
+        (PROJECT_ROOT / "deploy/open-signage-chromium-policy.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert chromium_policy["TranslateEnabled"] is False
+
+    player_style = (
+        PROJECT_ROOT / "src/open_signage/static/style.css"
+    ).read_text(encoding="utf-8")
+    assert ".player *" in player_style
+    assert "cursor: none !important" in player_style
+    assert ".player-entering.player-visible" in player_style
+    player_script = (
+        PROJECT_ROOT / "src/open_signage/static/player.js"
+    ).read_text(encoding="utf-8")
+    assert "function transitionTo(" in player_script
+    assert "previousElements.forEach" in player_script
 
 
 def test_compatible_mp4_probe_has_no_warning():
@@ -421,7 +445,7 @@ def test_update_service_is_installed_without_sudo_access():
     assert "ExecStartPre=/bin/sleep 2" in application_service
     assert "PathExists=/var/lib/open-signage/application-update.request" in application_path
     assert "systemctl daemon-reload" in application_script
-    assert "cec-utils wlopm" in application_script
+    assert "cec-utils locales wlopm" in application_script
     assert '@@KIOSK_USER@@|${KIOSK_USER}' in application_script
     assert "cec-utils" in installer
     assert "open-signage-display-control.path" in installer
@@ -446,6 +470,7 @@ def test_admin_contains_system_navigation_and_update_controls():
     assert '<h2 class="page-title">System</h2>' in admin
     assert 'id="wlan-info"' in admin
     assert 'id="ethernet-info"' in admin
+    assert 'class="network-overview"' in admin
     assert 'id="system-update"' in admin
     assert 'id="login-form"' in admin
     assert 'id="screen-settings-form"' in admin

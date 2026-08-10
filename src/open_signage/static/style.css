@@ -18,6 +18,11 @@ body {
   font: 16px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+.player,
+.player * {
+  cursor: none !important;
+}
+
 .admin { padding: 32px; }
 header, main, .admin-nav {
   width: min(1100px, 100%);
@@ -244,6 +249,13 @@ button:disabled { cursor: default; opacity: .35; }
 .monitoring-summary span { color: var(--muted); }
 .monitoring-warnings { margin-top: 14px; padding: 12px; border: 1px solid #d29922; border-radius: 10px; background: #2d250d; color: #f5d56f; }
 .network-list { display: grid; gap: 10px; margin-top: 18px; }
+.network-overview {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.network-overview .network-card { min-width: 0; }
 .network-item { display: grid; gap: 7px; padding: 13px; border: 1px solid var(--line); border-radius: 10px; }
 .network-heading, .network-item > div { display: flex; justify-content: space-between; gap: 14px; }
 .network-item span { color: var(--muted); }
@@ -276,16 +288,31 @@ button:disabled { cursor: default; opacity: .35; }
 #message.error { background: var(--danger); color: white; }
 
 .player { overflow: hidden; background: black; }
+.stage { position: relative; overflow: hidden; background: black; }
 .stage, .content, .placeholder {
   width: 100vw;
   height: 100vh;
 }
 .content {
+  position: absolute;
+  inset: 0;
   display: block;
   border: 0;
   object-fit: contain;
   background: black;
 }
+.player-entering {
+  opacity: 0;
+  z-index: 2;
+  transition: opacity .45s ease;
+}
+.player-entering.player-visible { opacity: 1; }
+.player-leaving {
+  opacity: 0;
+  transition: opacity .45s ease;
+}
+.placeholder.player-entering,
+.stream-status.player-entering { position: absolute; inset: 0; }
 .text-slide {
   position: relative;
   display: grid;
@@ -295,6 +322,7 @@ button:disabled { cursor: default; opacity: .35; }
   color: white;
   overflow: hidden;
 }
+.player .text-slide { position: absolute; inset: 0; }
 .text-slide::before { content: ""; position: absolute; inset: 0; background: rgb(0 0 0 / var(--background-dim, 0%)); pointer-events: none; }
 .text-background-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
 .text-slide::before { z-index: 1; }
@@ -435,6 +463,7 @@ form progress { width: 100%; height: 12px; }
   .form-actions button { width: 100%; min-height: 44px; }
   .info-list { grid-template-columns: 1fr; }
   .monitoring-summary { grid-template-columns: 1fr; }
+  .network-overview { grid-template-columns: 1fr; }
   .form-dialog {
     width: calc(100vw - 24px);
     max-height: calc(100dvh - 24px);
