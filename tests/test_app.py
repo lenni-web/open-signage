@@ -307,7 +307,7 @@ def test_raspberry_pi_templates_have_expected_placeholders():
     ).read_text(encoding="utf-8")
     assert "function transitionTo(" in player_script
     assert "previousElements.forEach" in player_script
-    assert "const TRANSITION_MS = 2000" in player_script
+    assert "const TRANSITION_MS = 3000" in player_script
     assert "const WEBSITE_SETTLE_MS = 4000" in player_script
     assert "function settleAfter(" in player_script
     assert "function waitForVideoFrame(" in player_script

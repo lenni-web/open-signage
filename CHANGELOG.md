@@ -20,6 +20,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
   der alte Inhalt ausgeblendet. Bilder verwenden zudem keinen schwarzen
   Elementhintergrund mehr. Damit bleibt stets eine vollständig gerenderte Ebene
   sichtbar und der Wechsel wirkt als ruhige Überblendung statt als Lichtblitz.
+- Die Deckblende dauert nun drei Sekunden und verwendet eine symmetrische,
+  besonders sanft ein- und auslaufende Animationskurve.
 
 ## [0.13.3] – 2026-08-10
 
