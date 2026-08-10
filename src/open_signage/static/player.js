@@ -94,22 +94,28 @@ function transitionTo(elements, ready, options = {}) {
   const nextElements = Array.isArray(elements) ? elements : [elements];
   const previousElements = [...stage.children];
   const previousHls = activeHls;
+  previousElements.forEach(element => element.classList.add("player-transition-source"));
   nextElements.forEach(element => {
-    element.classList.add("player-entering");
+    element.classList.add("player-preparing");
     stage.append(element);
   });
   Promise.resolve(ready).catch(() => {}).then(() => {
     if (generation !== transitionGeneration) {
       nextElements.forEach(element => element.remove());
+      previousElements.forEach(element => element.classList.remove("player-transition-source"));
       options.hls?.destroy();
       return;
     }
     activeHls = options.hls || null;
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-      nextElements.forEach(element => element.classList.add("player-visible"));
+      previousElements.forEach(element => element.classList.add("player-leaving"));
     }));
     window.setTimeout(() => {
       previousElements.forEach(element => element.remove());
+      nextElements.forEach(element => {
+        element.classList.remove("player-preparing");
+        element.classList.add("player-current");
+      });
       if (previousHls && previousHls !== activeHls) previousHls.destroy();
     }, TRANSITION_MS + 200);
     options.onVisible?.();
@@ -258,7 +264,9 @@ function show(item) {
     showStream(item);
     return;
   }
-  element.className = item.kind === "text" ? `content text-slide ${element.dataset.slideClasses}` : "content";
+  element.className = item.kind === "text"
+    ? `content text-slide ${element.dataset.slideClasses}`
+    : `content content-${item.kind}`;
   const layer = document.createElement("div");
   layer.className = "player-layer";
   layer.append(element);

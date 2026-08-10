@@ -15,6 +15,11 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
   GPU-Beruhigungszeit eingeblendet; Webseiten erhalten vier Sekunden und PDFs
   1,2 Sekunden zum Warmrendern. Dadurch werden verzögert erscheinende
   Videohintergründe und harte `iframe`-Freischaltungen vermieden.
+- Die Deckblende arbeitet nun umgekehrt: Der neue Inhalt wird vollständig
+  deckend hinter dem aktuellen Inhalt warmgerendert, danach wird ausschließlich
+  der alte Inhalt ausgeblendet. Bilder verwenden zudem keinen schwarzen
+  Elementhintergrund mehr. Damit bleibt stets eine vollständig gerenderte Ebene
+  sichtbar und der Wechsel wirkt als ruhige Überblendung statt als Lichtblitz.
 
 ## [0.13.3] – 2026-08-10
 

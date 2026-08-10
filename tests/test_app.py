@@ -300,19 +300,21 @@ def test_raspberry_pi_templates_have_expected_placeholders():
     ).read_text(encoding="utf-8")
     assert ".player *" in player_style
     assert "cursor: none !important" in player_style
-    assert ".player-entering.player-visible" in player_style
+    assert ".player-transition-source.player-leaving" in player_style
+    assert ".content-image" in player_style
     player_script = (
         PROJECT_ROOT / "src/open_signage/static/player.js"
     ).read_text(encoding="utf-8")
     assert "function transitionTo(" in player_script
     assert "previousElements.forEach" in player_script
-    assert 'classList.add("player-leaving")' not in player_script
     assert "const TRANSITION_MS = 2000" in player_script
     assert "const WEBSITE_SETTLE_MS = 4000" in player_script
     assert "function settleAfter(" in player_script
     assert "function waitForVideoFrame(" in player_script
     assert "requestVideoFrameCallback" in player_script
     assert 'layer.className = "player-layer"' in player_script
+    assert 'classList.add("player-transition-source")' in player_script
+    assert 'classList.add("player-leaving")' in player_script
 
 
 def test_compatible_mp4_probe_has_no_warning():
