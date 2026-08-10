@@ -13,9 +13,9 @@ let playerToken = "";
 let transitionGeneration = 0;
 const CACHE_KEY = "open-signage-playlist-v1";
 const CURRENT_KEY = "open-signage-current-content";
-const TRANSITION_MS = 1400;
-const WEBSITE_SETTLE_MS = 2500;
-const PDF_SETTLE_MS = 800;
+const TRANSITION_MS = 2000;
+const WEBSITE_SETTLE_MS = 4000;
+const PDF_SETTLE_MS = 1200;
 
 function sendHeartbeat(state = playerState, error = playerError) {
   playerState = state;
@@ -69,11 +69,15 @@ function waitForVideoFrame(video) {
   return waitForEvent(video, "canplay", 10000).then(async () => {
     try { await video.play(); } catch (_) {}
     return new Promise(resolve => {
-      const timeout = window.setTimeout(resolve, 1500);
+      const timeout = window.setTimeout(resolve, 2200);
       if (typeof video.requestVideoFrameCallback === "function") {
         video.requestVideoFrameCallback(() => {
-          window.clearTimeout(timeout);
-          resolve();
+          video.requestVideoFrameCallback(() => {
+            window.setTimeout(() => {
+              window.clearTimeout(timeout);
+              resolve();
+            }, 350);
+          });
         });
       } else {
         window.setTimeout(() => {
@@ -107,7 +111,7 @@ function transitionTo(elements, ready, options = {}) {
     window.setTimeout(() => {
       previousElements.forEach(element => element.remove());
       if (previousHls && previousHls !== activeHls) previousHls.destroy();
-    }, TRANSITION_MS + 150);
+    }, TRANSITION_MS + 200);
     options.onVisible?.();
   });
 }
@@ -255,7 +259,10 @@ function show(item) {
     return;
   }
   element.className = item.kind === "text" ? `content text-slide ${element.dataset.slideClasses}` : "content";
-  transitionTo(element, ready, { onVisible: () => {
+  const layer = document.createElement("div");
+  layer.className = "player-layer";
+  layer.append(element);
+  transitionTo(layer, ready, { onVisible: () => {
     if (!(item.kind === "video" && item.play_to_end)) {
       timer = window.setTimeout(advance, item.duration_seconds * 1000);
     }
@@ -334,14 +341,20 @@ function showStream(item) {
         reconnect();
       }
     });
-    transitionTo([video, status], ready, { hls: streamHls, onVisible: () => {
+    const layer = document.createElement("div");
+    layer.className = "player-layer";
+    layer.append(video, status);
+    transitionTo(layer, ready, { hls: streamHls, onVisible: () => {
       timer = window.setTimeout(advance, item.duration_seconds * 1000);
     } });
     return;
   } else {
     setStatus("Dieser Browser unterstützt keine HLS-Wiedergabe.");
   }
-  transitionTo([video, status], ready, { onVisible: () => {
+  const layer = document.createElement("div");
+  layer.className = "player-layer";
+  layer.append(video, status);
+  transitionTo(layer, ready, { onVisible: () => {
     timer = window.setTimeout(advance, item.duration_seconds * 1000);
   } });
 }

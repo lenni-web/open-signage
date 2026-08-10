@@ -289,6 +289,7 @@ button:disabled { cursor: default; opacity: .35; }
 
 .player { overflow: hidden; background: black; }
 .stage { position: relative; overflow: hidden; background: black; }
+.player-layer { position: absolute; inset: 0; width: 100vw; height: 100vh; overflow: hidden; }
 .stage, .content, .placeholder {
   width: 100vw;
   height: 100vh;
@@ -302,13 +303,13 @@ button:disabled { cursor: default; opacity: .35; }
   background: black;
 }
 .player-entering {
-  opacity: 0;
-  transform: translate3d(3vw, 0, 0) scale(1.008);
+  opacity: .001;
+  transform: translate3d(1.5vw, 0, 0) scale(1.004);
   z-index: 2;
   will-change: opacity, transform;
   transition:
-    opacity 1.4s cubic-bezier(.22, 1, .36, 1),
-    transform 1.4s cubic-bezier(.22, 1, .36, 1);
+    opacity 2s cubic-bezier(.22, 1, .36, 1),
+    transform 2s cubic-bezier(.22, 1, .36, 1);
 }
 .player-entering.player-visible { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 .placeholder.player-entering,

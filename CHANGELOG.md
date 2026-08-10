@@ -8,6 +8,14 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Geändert
+
+- Übergänge laufen nun über eine eigene, minimal sichtbare Compositor-Ebene und
+  dauern zwei Sekunden. Videos werden erst nach zwei gerenderten Frames plus
+  GPU-Beruhigungszeit eingeblendet; Webseiten erhalten vier Sekunden und PDFs
+  1,2 Sekunden zum Warmrendern. Dadurch werden verzögert erscheinende
+  Videohintergründe und harte `iframe`-Freischaltungen vermieden.
+
 ## [0.13.3] – 2026-08-10
 
 ### Behoben
@@ -28,7 +36,6 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
   dezenten Einschubbewegung. Freitext mit Video-Hintergrund wartet auf den
   ersten tatsächlich gerenderten Videoframe; Webseiten erhalten 2,5 Sekunden
   zusätzliche Aufbauzeit und PDFs 800 Millisekunden Renderzeit.
-
 ## [0.13.2] – 2026-08-10
 
 ### Geändert
