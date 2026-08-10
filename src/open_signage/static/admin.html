@@ -38,6 +38,7 @@
   <nav class="admin-nav" aria-label="Verwaltung">
     <button class="nav-button active" data-page="content-page">Inhalte</button>
     <button class="nav-button" data-page="library-page">Mediathek</button>
+    <button class="nav-button" data-page="settings-page">Einstellungen</button>
     <button class="nav-button" data-page="system-page">System</button>
   </nav>
 
@@ -289,7 +290,13 @@
     </main>
   </section>
 
+  <section id="settings-page" class="page" hidden>
+    <h2 class="page-title">Einstellungen</h2>
+    <main id="settings-content" class="system-grid"></main>
+  </section>
+
   <section id="system-page" class="page" hidden>
+    <h2 class="page-title">System</h2>
     <main id="system-content" class="system-grid">
       <section class="card system-overview">
         <span class="eyebrow">Anzeige</span>
@@ -419,7 +426,9 @@
           <div class="monitoring-summary display-control-status">
             <div><span>CEC</span><strong id="display-cec-status">–</strong></div>
             <div><span>Bildschirm</span><strong id="display-power-status">–</strong></div>
-            <div><span>HDMI-Fallback</span><strong id="display-fallback-status">–</strong></div>
+            <div><span>Wayland-Fallback</span><strong id="display-fallback-status">–</strong></div>
+            <div><span>Steuerungsweg</span><strong id="display-control-method">–</strong></div>
+            <div><span>Adapter/Ausgang</span><strong id="display-output-name">–</strong></div>
             <div><span>Letzte Aktualisierung</span><strong id="display-updated-at">–</strong></div>
           </div>
           <p id="display-status-message" class="schedule-note"></p>
@@ -434,7 +443,7 @@
               <small>Üblicherweise ist der Fernseher die logische Adresse 0.</small>
             </label>
             <label class="inline-check"><input name="activate_source" type="checkbox"><span>Beim Einschalten diesen HDMI-Eingang aktivieren</span></label>
-            <label class="inline-check"><input name="fallback_hdmi_signal" type="checkbox"><span>HDMI-Signalsteuerung als Fallback verwenden</span></label>
+            <label class="inline-check"><input name="fallback_hdmi_signal" type="checkbox"><span>Wayland-DPMS automatisch verwenden, wenn CEC nicht verfügbar ist</span></label>
             <label class="inline-check"><input name="schedule_enabled" type="checkbox"><span>Automatischen Bildschirm-Zeitplan aktivieren</span></label>
             <fieldset>
               <legend>Schaltplan</legend>

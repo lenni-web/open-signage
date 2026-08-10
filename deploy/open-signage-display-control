@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import pwd
 import re
 import shutil
 import subprocess
@@ -18,6 +19,7 @@ DEFAULTS = {
     "cec_address": "0", "activate_source": True, "fallback_hdmi_signal": True,
     "schedule_enabled": False, "schedule_entries": [],
 }
+KIOSK_USER = "@@KIOSK_USER@@"
 
 
 def read_json(path: Path, fallback: dict) -> dict:
@@ -77,26 +79,97 @@ def run(command: list[str], input_text: str | None = None) -> subprocess.Complet
     return subprocess.run(command, input=input_text, text=True, capture_output=True, timeout=15, check=False)
 
 
-def cec(command: str) -> tuple[bool, str]:
+def cec(command: str, device: str | None = None, require_response: bool = False) -> tuple[bool, str]:
     executable = shutil.which("cec-client")
     if not executable:
         return False, "cec-client ist nicht installiert."
-    result = run([executable, "-s", "-d", "1"], command + "\n")
+    args = [executable, "-s", "-d", "1"]
+    if device:
+        args.append(device)
+    result = run(args, command + "\n")
     output = (result.stdout + "\n" + result.stderr).strip()
     lowered = output.lower()
     unavailable = any(marker in lowered for marker in (
         "no device found", "unable to open", "cannot open", "failed to open", "connection lost",
+        "cec_transmit failed", "ioctl cec_transmit failed", "tx_status=00",
+        "transmit failed", "failed to transmit",
     ))
+    if require_response and "power status:" not in lowered:
+        unavailable = True
     return result.returncode == 0 and not unavailable, output
 
 
-def hdmi_signal(on: bool | None) -> tuple[bool, str]:
-    executable = shutil.which("vcgencmd")
-    if not executable:
-        return False, "vcgencmd ist nicht verfügbar."
-    args = [executable, "display_power"] + ([] if on is None else ["1" if on else "0"])
-    result = run(args)
-    return result.returncode == 0, (result.stdout + result.stderr).strip()
+def cec_adapter(address: str) -> tuple[str | None, str]:
+    devices = [str(path) for path in sorted(Path("/dev").glob("cec*"))] or [None]
+    messages = []
+    for device in devices:
+        ok, output = cec(f"pow {address}", device, require_response=True)
+        messages.append(f"{device or 'Standardadapter'}: {output[-300:]}")
+        if ok:
+            return device or "", output
+    return None, "\n".join(messages)
+
+
+def connected_outputs() -> list[str]:
+    outputs = []
+    for status in sorted(Path("/sys/class/drm").glob("card*-*/status")):
+        try:
+            if status.read_text(encoding="utf-8").strip() != "connected":
+                continue
+        except OSError:
+            continue
+        name = status.parent.name
+        match = re.match(r"card\d+-(.+)", name)
+        if match:
+            outputs.append(match.group(1))
+    return outputs
+
+
+def wayland_signal(on: bool | None) -> tuple[bool, str, str | None]:
+    executable = shutil.which("wlopm")
+    runuser = shutil.which("runuser")
+    if not executable or not runuser:
+        return False, "wlopm ist nicht installiert.", None
+    try:
+        account = pwd.getpwnam(KIOSK_USER)
+    except KeyError:
+        return False, f"Kiosk-Benutzer {KIOSK_USER} wurde nicht gefunden.", None
+    runtime = Path(f"/run/user/{account.pw_uid}")
+    sockets = sorted(path.name for path in runtime.glob("wayland-*") if not path.name.endswith(".lock"))
+    if not sockets:
+        return False, "Keine aktive Wayland-Sitzung gefunden.", None
+    preferred = connected_outputs()
+    errors = []
+    for socket in sockets:
+        environment = [
+            runuser, "-u", KIOSK_USER, "--", "env",
+            f"HOME={account.pw_dir}", f"XDG_RUNTIME_DIR={runtime}",
+            f"WAYLAND_DISPLAY={socket}",
+            f"DBUS_SESSION_BUS_ADDRESS=unix:path={runtime}/bus",
+        ]
+        listed = run(environment + [executable])
+        listing = (listed.stdout + listed.stderr).strip()
+        if listed.returncode != 0:
+            errors.append(listing)
+            continue
+        states = {}
+        for line in listing.splitlines():
+            match = re.match(r"^\s*(\S+):?\s+(on|off)\s*$", line, re.IGNORECASE)
+            if match:
+                states[match.group(1)] = match.group(2).lower()
+        output_name = next((name for name in preferred if name in states), None)
+        output_name = output_name or next(iter(states), None) or (preferred[0] if preferred else None)
+        if not output_name:
+            errors.append(f"{socket}: Kein Wayland-Ausgang gefunden. {listing}")
+            continue
+        if on is None:
+            return True, listing or f"{output_name}: Status verfügbar", output_name
+        result = run(environment + [executable, "--on" if on else "--off", output_name])
+        output = (result.stdout + result.stderr).strip()
+        if result.returncode == 0:
+            return True, output or f"{output_name} wurde {'aktiviert' if on else 'deaktiviert'}.", output_name
+        errors.append(f"{socket}/{output_name}: {output}")
+    return False, "\n".join(errors) or "Wayland-Ausgang konnte nicht gesteuert werden.", None
 
 
 def scheduled_state(config: dict, now: datetime) -> str | None:
@@ -117,37 +190,49 @@ def scheduled_state(config: dict, now: datetime) -> str | None:
 
 def execute(action: str, config: dict) -> None:
     address = config.get("cec_address", "0")
-    fallback_available = shutil.which("vcgencmd") is not None
+    adapter, probe_output = cec_adapter(address)
+    fallback_available, fallback_status, fallback_output = wayland_signal(None)
     if action == "status":
-        ok, output = cec(f"pow {address}")
-        cec_available = ok
-        lowered = output.lower()
+        cec_available = adapter is not None
+        output = probe_output
+        lowered = probe_output.lower()
         power = "on" if "power status: on" in lowered else "off" if "power status: standby" in lowered else "unknown"
-        method = "cec" if ok and power != "unknown" else None
+        method = "cec" if cec_available and power != "unknown" else None
         if method is None and config.get("fallback_hdmi_signal"):
-            fallback_ok, fallback_output = hdmi_signal(None)
-            if fallback_ok:
-                power = "on" if "=1" in fallback_output else "off" if "=0" in fallback_output else "unknown"
-                method, output = "hdmi_signal", fallback_output
+            if fallback_available:
+                lowered_fallback = fallback_status.lower()
+                power = "off" if re.search(rf"^{re.escape(fallback_output or '')}:?\s+off\s*$", lowered_fallback, re.MULTILINE | re.IGNORECASE) else "on"
+                method, output = "wayland_dpms", fallback_status
         write_status(cec_available=cec_available, hdmi_fallback_available=fallback_available,
-                     power_status=power, method=method, message=output[-500:] or "Status abgefragt.")
+                     power_status=power, method=method, cec_adapter=adapter,
+                     output_name=fallback_output, message=output[-500:] or "Status abgefragt.")
         return
 
     turn_on = action == "on"
     cec_command = f"on {address}" if turn_on else f"standby {address}"
-    ok, output = cec(cec_command)
-    cec_available = ok
-    method = "cec" if ok else None
-    if ok and turn_on and config.get("activate_source"):
-        source_ok, source_output = cec("as")
+    cec_ok, cec_output = cec(cec_command, adapter or None) if adapter is not None else (False, probe_output)
+    ok, output = cec_ok, cec_output
+    cec_available = adapter is not None
+    method = "cec" if cec_ok else None
+    if cec_ok and turn_on and config.get("activate_source"):
+        source_ok, source_output = cec("as", adapter)
         ok = ok and source_ok
         output = f"{output}\n{source_output}".strip()
     if not ok and config.get("fallback_hdmi_signal"):
-        ok, output = hdmi_signal(turn_on)
-        method = "hdmi_signal" if ok else None
+        fallback_ok, fallback_message, fallback_output = wayland_signal(turn_on)
+        ok = fallback_ok
+        method = "wayland_dpms" if fallback_ok else None
+        output = f"CEC nicht verfügbar: {cec_output[-300:]}\nWayland-DPMS: {fallback_message}".strip()
+    if ok and method == "cec":
+        summary = "CEC-Aktion erfolgreich ausgeführt. "
+    elif ok and method == "wayland_dpms":
+        summary = "CEC nicht erreichbar; Wayland-DPMS-Fallback ausgeführt. "
+    else:
+        summary = "Bildschirmaktion fehlgeschlagen. "
     write_status(cec_available=cec_available, hdmi_fallback_available=fallback_available,
                  power_status=action if ok else "unknown", desired_state=action,
-                 method=method, message=("Aktion ausgeführt. " if ok else "Aktion fehlgeschlagen. ") + output[-500:])
+                 method=method, cec_adapter=adapter, output_name=fallback_output,
+                 message=summary + output[-500:])
 
 
 def main() -> int:

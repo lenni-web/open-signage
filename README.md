@@ -22,7 +22,8 @@ Chromium-Kioskfenster an.
 - Speicherbereinigung, zeitgesteuerte Playlists und sichere Systemaktionen
 - Geräteidentität und Betriebsmodi für Standalone, Controller und Display
 - HDMI-CEC-Bildschirmsteuerung mit frei kombinierbaren Zeitfenstern, mehreren
-  Ein-/Ausschaltphasen je Wochentag, Eingangswahl und HDMI-Signal-Fallback
+  Ein-/Ausschaltphasen je Wochentag und Eingangswahl. Antwortet ein Display
+  nicht auf CEC, wird automatisch Wayland-DPMS über `wlopm` verwendet.
 - Kompakte Inhaltsverwaltung mit auswählbaren Formularen sowie Freitext auf
   Bild- oder stummem Video-Hintergrund
 - Bildeditor mit 16:9-Zuschnitt, Drehung, Fokus, Helligkeit und Kontrast sowie
@@ -201,8 +202,8 @@ sudo ./scripts/install-raspberry-pi.sh --port 8080
 
 Das Skript:
 
-- installiert nur den Raspberry-Pi-Wayland-Kern mit labwc, Chromium und die
-  Python-Laufzeit;
+- installiert nur den Raspberry-Pi-Wayland-Kern mit labwc, Chromium, `wlopm`
+  und die Python-Laufzeit;
 - legt den nicht-administrativen Kioskbenutzer `signage` an;
 - aktiviert den grafischen Start und meldet `signage` automatisch an;
 - kopiert Open Signage nach `/opt/open-signage`;
@@ -228,6 +229,18 @@ journalctl -u open-signage.service -f
 Der Dienst startet nach einem Stromausfall automatisch. Chromium wartet vor
 dem Öffnen des Players, bis der lokale Server erreichbar ist. Nach der ersten
 Installation ist ein Neustart erforderlich:
+
+Kiosk- und Chromiumfehler werden unter
+`/home/signage/.local/state/open-signage/kiosk.log` protokolliert, bei einem
+abweichenden `--kiosk-user` entsprechend in dessen Home-Verzeichnis. Chromium
+verwendet ein eigenes beschreibbares Profil und wird nach einem unerwarteten
+Ende automatisch neu gestartet.
+
+Die Bildschirmsteuerung prüft alle vorhandenen CEC-Adapter. Ein Display gilt
+erst dann als CEC-fähig, wenn es selbst antwortet. Andernfalls schaltet Open
+Signage den aktuell verbundenen Wayland-Ausgang per DPMS aus und wieder ein.
+Damit funktionieren sowohl CEC-fähige Fernseher als auch Monitore, die bei
+fehlendem HDMI-Signal automatisch in den Standby wechseln.
 
 ```bash
 sudo reboot

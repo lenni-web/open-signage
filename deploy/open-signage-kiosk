@@ -1,21 +1,49 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 PLAYER_URL="@@PLAYER_URL@@"
 HEALTH_URL="@@HEALTH_URL@@"
+KIOSK_HOME="$(getent passwd "$(id -un)" | cut -d: -f6)"
+[[ -n "${KIOSK_HOME}" && -d "${KIOSK_HOME}" ]] || {
+  printf 'Kiosk-Home-Verzeichnis konnte nicht ermittelt werden.\n' >&2
+  exit 1
+}
+export HOME="${KIOSK_HOME}"
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-${HOME}/.config}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-${HOME}/.cache}"
+export XDG_STATE_HOME="${XDG_STATE_HOME:-${HOME}/.local/state}"
+if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bus" ]]; then
+  export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bus"
+fi
+PROFILE_DIR="${XDG_STATE_HOME}/open-signage/chromium-profile"
+mkdir -p "${XDG_CONFIG_HOME}" "${XDG_CACHE_HOME}" "${PROFILE_DIR}"
+cd "${HOME}"
 
-until curl --fail --silent --show-error --max-time 2 "${HEALTH_URL}" >/dev/null; do
-  sleep 2
+while true; do
+  until curl --fail --silent --show-error --max-time 2 "${HEALTH_URL}" >/dev/null; do
+    sleep 2
+  done
+
+  printf '%s Starte Chromium-Kiosk.\n' "$(date --iso-8601=seconds)"
+  chromium \
+    --ozone-platform=wayland \
+    --user-data-dir="${PROFILE_DIR}" \
+    --kiosk \
+    --noerrdialogs \
+    --disable-infobars \
+    --disable-session-crashed-bubble \
+    --disable-crash-reporter \
+    --disable-breakpad \
+    --disable-background-networking \
+    --disable-component-update \
+    --disable-sync \
+    --disable-features=Translate \
+    --no-first-run \
+    --password-store=basic \
+    --autoplay-policy=no-user-gesture-required \
+    "${PLAYER_URL}"
+  exit_code=$?
+  printf '%s Chromium wurde mit Status %s beendet; Neustart in 3 Sekunden.\n' \
+    "$(date --iso-8601=seconds)" "${exit_code}" >&2
+  sleep 3
 done
-
-exec chromium \
-  --ozone-platform=wayland \
-  --kiosk \
-  --noerrdialogs \
-  --disable-infobars \
-  --disable-session-crashed-bubble \
-  --disable-features=Translate \
-  --no-first-run \
-  --password-store=basic \
-  --autoplay-policy=no-user-gesture-required \
-  "${PLAYER_URL}"

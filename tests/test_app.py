@@ -238,6 +238,11 @@ def test_raspberry_pi_templates_have_expected_placeholders():
     assert "@@HEALTH_URL@@" in kiosk
     assert "--autoplay-policy=no-user-gesture-required" in kiosk
     assert "--ozone-platform=wayland" in kiosk
+    assert "--user-data-dir" in kiosk
+    assert "--disable-crash-reporter" in kiosk
+    assert "DBUS_SESSION_BUS_ADDRESS" in kiosk
+    assert "--disable-background-networking" in kiosk
+    assert "Chromium wurde mit Status" in kiosk
 
     installer = (PROJECT_ROOT / "scripts/install-raspberry-pi.sh").read_text(
         encoding="utf-8"
@@ -249,6 +254,9 @@ def test_raspberry_pi_templates_have_expected_placeholders():
     assert "--mode MODUS" in installer
     assert "--controller-url URL" in installer
     assert "OPEN_SIGNAGE_MODE" in installer
+    assert 'chmod 0755 "${AUTOSTART_FILE}"' in installer
+    assert "kiosk.log" in installer
+    assert 's|@@KIOSK_USER@@|${KIOSK_USER}|g' in installer
 
 
 def test_compatible_mp4_probe_has_no_warning():
@@ -413,12 +421,17 @@ def test_update_service_is_installed_without_sudo_access():
     assert "ExecStartPre=/bin/sleep 2" in application_service
     assert "PathExists=/var/lib/open-signage/application-update.request" in application_path
     assert "systemctl daemon-reload" in application_script
+    assert "cec-utils wlopm" in application_script
+    assert '@@KIOSK_USER@@|${KIOSK_USER}' in application_script
     assert "cec-utils" in installer
     assert "open-signage-display-control.path" in installer
     assert "open-signage-display-schedule.timer" in installer
+    assert "  wlopm" in installer
     display_helper = (PROJECT_ROOT / "deploy/open-signage-display-control").read_text(encoding="utf-8")
     assert "cec-client" in display_helper
-    assert "vcgencmd" in display_helper
+    assert "wlopm" in display_helper
+    assert "vcgencmd" not in display_helper
+    assert "@@KIOSK_USER@@" in display_helper
     assert "sudo" not in display_helper
 
 
@@ -428,6 +441,9 @@ def test_admin_contains_system_navigation_and_update_controls():
     )
 
     assert 'data-page="system-page"' in admin
+    assert 'data-page="settings-page"' in admin
+    assert 'id="settings-content"' in admin
+    assert '<h2 class="page-title">System</h2>' in admin
     assert 'id="wlan-info"' in admin
     assert 'id="ethernet-info"' in admin
     assert 'id="system-update"' in admin
@@ -448,6 +464,12 @@ def test_admin_contains_system_navigation_and_update_controls():
     assert 'id="monitoring-summary"' in admin
     assert 'id="monitoring-refresh"' in admin
     assert 'id="display-control-form"' in admin
+
+    admin_script = (
+        PROJECT_ROOT / "src/open_signage/static/admin.js"
+    ).read_text(encoding="utf-8")
+    assert "function organizeAdministrationPages()" in admin_script
+    assert "async function openSettingsPage()" in admin_script
     assert 'id="admin-clock"' in admin
     assert 'data-display-action="on"' in admin
     assert 'data-display-action="off"' in admin
@@ -1174,6 +1196,33 @@ def test_privileged_display_helper_sanitizes_its_configuration(tmp_path: Path):
         {"weekday": 1, "on": "19:30", "off": "21:30"},
     ]
     assert config["activate_source"] is False
+
+
+def test_cec_transmit_error_is_failure_even_with_zero_exit_status(monkeypatch):
+    helper = runpy.run_path(str(PROJECT_ROOT / "deploy/open-signage-display-control"))
+    monkeypatch.setattr(helper["cec"].__globals__["shutil"], "which", lambda _name: "/usr/bin/cec-client")
+    helper["cec"].__globals__["run"] = lambda _command, _input: subprocess.CompletedProcess(
+        args=[], returncode=0, stdout="opening a connection to the CEC adapter...\n",
+        stderr="ERROR: ioctl CEC_TRANSMIT failed - tx_status=00 errno=64",
+    )
+    ok, output = helper["cec"]("standby 0")
+    assert ok is False
+    assert "CEC_TRANSMIT failed" in output
+
+
+def test_display_action_uses_hdmi_fallback_after_cec_failure(monkeypatch):
+    helper = runpy.run_path(str(PROJECT_ROOT / "deploy/open-signage-display-control"))
+    captured = {}
+    helper["execute"].__globals__["cec_adapter"] = lambda _address: (None, "Kein CEC-Display")
+    helper["execute"].__globals__["wayland_signal"] = lambda on: (
+        True, "HDMI-A-2 wurde deaktiviert." if on is False else "HDMI-A-2 on", "HDMI-A-2"
+    )
+    helper["execute"].__globals__["write_status"] = lambda **values: captured.update(values)
+    helper["execute"]("off", {"cec_address": "0", "fallback_hdmi_signal": True})
+    assert captured["method"] == "wayland_dpms"
+    assert captured["output_name"] == "HDMI-A-2"
+    assert captured["power_status"] == "off"
+    assert "Fallback ausgeführt" in captured["message"]
 
 
 def test_backup_can_be_created_downloaded_and_restored(tmp_path: Path, monkeypatch):

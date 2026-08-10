@@ -84,8 +84,8 @@ function showApplication(settings) {
   document.querySelector("#content-heading").textContent = `Inhalte – ${settings.screen_name}`;
   applyDeviceMode(settings.device_mode || "standalone");
   if (settings.password_change_required) {
-    notify("Bitte ändere jetzt das Initialpasswort auf der Systemseite.", true, 10000);
-    document.querySelector('[data-page="system-page"]')?.click();
+    notify("Bitte ändere jetzt das Initialpasswort unter Einstellungen.", true, 10000);
+    document.querySelector('[data-page="settings-page"]')?.click();
   }
 }
 
@@ -120,8 +120,29 @@ async function loadSettings() {
 }
 
 async function openSystemPage() {
-  await Promise.all([loadSystemInfo(), loadMonitoring(), loadUpdateStatus(), loadApplicationUpdateStatus(), loadStorage(), loadBackups(), loadSecurityStatus(), loadDevice(), loadDisplayControl()]);
+  await Promise.all([loadSystemInfo(), loadMonitoring(), loadUpdateStatus(), loadApplicationUpdateStatus(), loadStorage(), loadSecurityStatus()]);
 }
+
+function organizeAdministrationPages() {
+  const settingsContent = document.querySelector("#settings-content");
+  if (!settingsContent || settingsContent.childElementCount) return;
+  [
+    "#password-form",
+    "#backup-create",
+    "#device-form",
+    "#display-control-form",
+    "[data-system-action='restart_service']",
+  ].forEach((selector) => {
+    const card = document.querySelector(selector)?.closest("section.card, details.card");
+    if (card) settingsContent.append(card);
+  });
+}
+
+async function openSettingsPage() {
+  await Promise.all([loadBackups(), loadDevice(), loadDisplayControl()]);
+}
+
+organizeAdministrationPages();
 
 async function boot() {
   try {
@@ -713,7 +734,14 @@ function renderDisplayControl(data, updateForm = !displayControlDirty) {
   conflict.textContent = conflictCount ? `${conflictCount} überlappende Zeitfenster erkannt. Sie werden gemeinsam als Einschaltzeit behandelt.` : "";
   document.querySelector("#display-cec-status").textContent = status.cec_available == null ? "Noch unbekannt" : status.cec_available ? "Verfügbar" : "Nicht verfügbar";
   document.querySelector("#display-fallback-status").textContent = status.hdmi_fallback_available == null ? "Noch unbekannt" : status.hdmi_fallback_available ? "Verfügbar" : "Nicht verfügbar";
-  document.querySelector("#display-power-status").textContent = { on: "Eingeschaltet", off: "Ausgeschaltet", unknown: "Unbekannt" }[status.power_status] || "Unbekannt";
+  const powerLabels = status.method === "wayland_dpms"
+    ? { on: "HDMI-Signal an", off: "HDMI-Signal aus", unknown: "Unbekannt" }
+    : { on: "Eingeschaltet", off: "Ausgeschaltet", unknown: "Unbekannt" };
+  document.querySelector("#display-power-status").textContent = powerLabels[status.power_status] || "Unbekannt";
+  document.querySelector("#display-control-method").textContent = { cec: "HDMI-CEC", wayland_dpms: "Wayland-DPMS" }[status.method] || "Noch nicht erkannt";
+  document.querySelector("#display-output-name").textContent = status.method === "cec"
+    ? status.cec_adapter || "Standardadapter"
+    : status.output_name || "–";
   document.querySelector("#display-updated-at").textContent = status.updated_at ? new Date(status.updated_at).toLocaleString("de-DE") : "Noch nie";
   document.querySelector("#display-status-message").textContent = status.message || "";
 }
@@ -935,6 +963,8 @@ document.querySelectorAll(".nav-button").forEach((button) => {
     document.querySelector(`#${button.dataset.page}`).hidden = false;
     if (button.dataset.page === "system-page") {
       await openSystemPage();
+    } else if (button.dataset.page === "settings-page") {
+      await openSettingsPage();
     } else if (button.dataset.page === "library-page") {
       await loadLibrary();
     } else if (button.dataset.page === "content-page") {
@@ -1042,6 +1072,8 @@ window.setInterval(() => {
     loadUpdateStatus();
     loadApplicationUpdateStatus();
     loadMonitoring();
+  }
+  if (!document.querySelector("#settings-page").hidden) {
     loadDisplayControl();
   }
 }, 5000);

@@ -87,6 +87,8 @@ def display_status() -> dict:
         "hdmi_fallback_available": None,
         "power_status": "unknown",
         "method": None,
+        "cec_adapter": None,
+        "output_name": None,
         "message": "Status wurde noch nicht abgefragt.",
         "updated_at": None,
     })

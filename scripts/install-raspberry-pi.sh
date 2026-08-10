@@ -101,7 +101,8 @@ apt-get install --no-install-recommends -y \
   python3 \
   python3-pip \
   python3-venv \
-  rpd-wayland-core
+  rpd-wayland-core \
+  wlopm
 
 command -v labwc >/dev/null 2>&1 || fail "labwc wurde nicht installiert."
 command -v raspi-config >/dev/null 2>&1 || fail "raspi-config wurde nicht gefunden."
@@ -171,8 +172,8 @@ install -o root -g root -m 0644 \
   "${PROJECT_DIR}/deploy/open-signage-application-update.path" \
   "/etc/systemd/system/open-signage-application-update.path"
 install -d -o root -g root -m 0755 /etc/default
-printf 'SOURCE_REPOSITORY=%q\nSOURCE_USER=%q\nPORT=%q\n' \
-  "${PROJECT_DIR}" "${SOURCE_USER}" "${PORT}" >"${APPLICATION_UPDATE_CONFIG}"
+printf 'SOURCE_REPOSITORY=%q\nSOURCE_USER=%q\nPORT=%q\nKIOSK_USER=%q\n' \
+  "${PROJECT_DIR}" "${SOURCE_USER}" "${PORT}" "${KIOSK_USER}" >"${APPLICATION_UPDATE_CONFIG}"
 chmod 0600 "${APPLICATION_UPDATE_CONFIG}"
 install -o root -g root -m 0755 \
   "${PROJECT_DIR}/deploy/open-signage-system-action" "${SYSTEM_ACTION_COMMAND}"
@@ -180,8 +181,9 @@ install -o root -g root -m 0644 \
   "${PROJECT_DIR}/deploy/open-signage-system-action.service" "/etc/systemd/system/open-signage-system-action.service"
 install -o root -g root -m 0644 \
   "${PROJECT_DIR}/deploy/open-signage-system-action.path" "/etc/systemd/system/open-signage-system-action.path"
-install -o root -g root -m 0755 \
-  "${PROJECT_DIR}/deploy/open-signage-display-control" "${DISPLAY_CONTROL_COMMAND}"
+sed "s|@@KIOSK_USER@@|${KIOSK_USER}|g" \
+  "${PROJECT_DIR}/deploy/open-signage-display-control" >"${DISPLAY_CONTROL_COMMAND}"
+chmod 0755 "${DISPLAY_CONTROL_COMMAND}"
 for unit in open-signage-display-control.service open-signage-display-control.path \
   open-signage-display-schedule.service open-signage-display-schedule.timer; do
   install -o root -g root -m 0644 "${PROJECT_DIR}/deploy/${unit}" "/etc/systemd/system/${unit}"
@@ -190,11 +192,14 @@ done
 readonly AUTOSTART_DIR="${KIOSK_HOME}/.config/labwc"
 readonly AUTOSTART_FILE="${AUTOSTART_DIR}/autostart"
 install -d -o "${KIOSK_USER}" -g "${KIOSK_USER}" -m 0755 "${AUTOSTART_DIR}"
+install -d -o "${KIOSK_USER}" -g "${KIOSK_USER}" -m 0755 "${KIOSK_HOME}/.local/state/open-signage"
 touch "${AUTOSTART_FILE}"
-if ! grep -qxF "${KIOSK_COMMAND} &" "${AUTOSTART_FILE}"; then
-  printf '\n%s &\n' "${KIOSK_COMMAND}" >>"${AUTOSTART_FILE}"
-fi
+grep -q '^#!/bin/sh' "${AUTOSTART_FILE}" || sed -i '1i #!/bin/sh' "${AUTOSTART_FILE}"
+sed -i '\|^/usr/local/bin/open-signage-kiosk|d' "${AUTOSTART_FILE}"
+printf '%s >>%s 2>&1 &\n' "${KIOSK_COMMAND}" \
+  "${KIOSK_HOME}/.local/state/open-signage/kiosk.log" >>"${AUTOSTART_FILE}"
 chown "${KIOSK_USER}:${KIOSK_USER}" "${AUTOSTART_FILE}"
+chmod 0755 "${AUTOSTART_FILE}"
 
 printf 'Aktiviere Wayland, labwc und grafischen Autologin …\n'
 SUDO_USER="${KIOSK_USER}" raspi-config nonint do_wayland W2

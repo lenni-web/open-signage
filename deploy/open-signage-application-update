@@ -40,6 +40,7 @@ source "${CONFIG_FILE}"
 if [[ -z "${SOURCE_REPOSITORY:-}" || -z "${SOURCE_USER:-}" || -z "${PORT:-}" ]]; then
   finish_failure "Updatekonfiguration ist unvollständig."
 fi
+KIOSK_USER="${KIOSK_USER:-signage}"
 
 (
   printf '\n===== Anwendungsupdate %s =====\n' "$(date --iso-8601=seconds)"
@@ -63,9 +64,9 @@ fi
   "${release_dir}/.venv/bin/python" -m pip install --upgrade pip
   "${release_dir}/.venv/bin/python" -m pip install "${release_dir}"
 
-  if ! command -v cec-client >/dev/null 2>&1; then
+  if ! command -v cec-client >/dev/null 2>&1 || ! command -v wlopm >/dev/null 2>&1; then
     apt-get update
-    apt-get install --no-install-recommends -y cec-utils
+    apt-get install --no-install-recommends -y cec-utils wlopm
   fi
 
   # Keep the privileged updater and its units in sync with the installed release.
@@ -87,9 +88,28 @@ fi
   install -o root -g root -m 0644 \
     "${release_dir}/deploy/open-signage-system-action.path" \
     /etc/systemd/system/open-signage-system-action.path
-  install -o root -g root -m 0755 \
+  sed "s|@@KIOSK_USER@@|${KIOSK_USER}|g" \
     "${release_dir}/deploy/open-signage-display-control" \
-    /usr/local/sbin/open-signage-display-control
+    >/usr/local/sbin/open-signage-display-control
+  chmod 0755 /usr/local/sbin/open-signage-display-control
+  kiosk_home="$(getent passwd "${KIOSK_USER}" | cut -d: -f6)"
+  [[ -n "${kiosk_home}" ]] || { printf 'Kiosk-Benutzer %s existiert nicht.\n' "${KIOSK_USER}"; exit 24; }
+  sed \
+    -e "s|@@PLAYER_URL@@|http://127.0.0.1:${PORT}/player|g" \
+    -e "s|@@HEALTH_URL@@|http://127.0.0.1:${PORT}/api/health|g" \
+    "${release_dir}/deploy/open-signage-kiosk" >/usr/local/bin/open-signage-kiosk
+  chmod 0755 /usr/local/bin/open-signage-kiosk
+  autostart_dir="${kiosk_home}/.config/labwc"
+  autostart_file="${autostart_dir}/autostart"
+  install -d -o "${KIOSK_USER}" -g "${KIOSK_USER}" -m 0755 "${autostart_dir}"
+  install -d -o "${KIOSK_USER}" -g "${KIOSK_USER}" -m 0755 "${kiosk_home}/.local/state/open-signage"
+  touch "${autostart_file}"
+  grep -q '^#!/bin/sh' "${autostart_file}" || sed -i '1i #!/bin/sh' "${autostart_file}"
+  sed -i '\|^/usr/local/bin/open-signage-kiosk|d' "${autostart_file}"
+  printf '/usr/local/bin/open-signage-kiosk >>%s 2>&1 &\n' \
+    "${kiosk_home}/.local/state/open-signage/kiosk.log" >>"${autostart_file}"
+  chown "${KIOSK_USER}:${KIOSK_USER}" "${autostart_file}"
+  chmod 0755 "${autostart_file}"
   for unit in open-signage-display-control.service open-signage-display-control.path \
     open-signage-display-schedule.service open-signage-display-schedule.timer; do
     install -o root -g root -m 0644 "${release_dir}/deploy/${unit}" "/etc/systemd/system/${unit}"

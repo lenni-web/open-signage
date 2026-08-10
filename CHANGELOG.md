@@ -8,6 +8,38 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.13.1] – 2026-08-10
+
+### Geändert
+
+- Die Verwaltungsoberfläche trennt Konfigurationen künftig unter
+  `Einstellungen` von Diagnose und Wartung unter `System`. Anzeige,
+  Betriebszustand, Raspberry-Pi-Systeminformationen, Netzwerk,
+  Datenspeicher, Prüfungen sowie Anwendungs- und Betriebssystemupdate bleiben
+  übersichtlich auf der Systemseite gebündelt.
+- Die Bildschirmsteuerung prüft automatisch alle vorhandenen CEC-Adapter und
+  verwendet bei Displays ohne CEC-Antwort den verbundenen Wayland-Ausgang über
+  `wlopm`. Oberfläche und Status nennen den tatsächlich verwendeten
+  Steuerungsweg und Ausgang.
+
+### Behoben
+
+- Der Labwc-Autostart wird ausführbar installiert; dadurch startet Chromium nach
+  dem grafischen Autologin zuverlässig statt nur einen grauen Desktop zu zeigen.
+- Der Kiosk setzt ein beschreibbares Home-, XDG- und Chromium-Profilverzeichnis,
+  wodurch Crashpad-/Zygote-Abbrüche wegen fehlender Verzeichnisse vermieden werden.
+- Chromium wird nach einem Absturz automatisch neu gestartet und schreibt ein
+  dauerhaftes Diagnoseprotokoll nach
+  `~/.local/state/open-signage/kiosk.log`.
+- Installer und Anwendungs-Updater halten Kiosk-Skript und Labwc-Autostart bei
+  künftigen Installationen und Updates gemeinsam aktuell.
+- `cec-client`-Übertragungsfehler wie `CEC_TRANSMIT failed`, `tx_status=00` und
+  `errno=64` gelten nicht mehr fälschlich als erfolgreiche Bildschirmaktion.
+  Bei aktiviertem Fallback wird stattdessen Wayland-DPMS versucht und die
+  verwendete Methode verständlich protokolliert.
+- Der unter KMS wirkungslose `vcgencmd display_power`-Fallback wurde durch das
+  unter Labwc bestätigte, symmetrische Ein- und Ausschalten mit `wlopm` ersetzt.
+
 ## [0.13.0] – 2026-08-10
 
 ### Geändert
