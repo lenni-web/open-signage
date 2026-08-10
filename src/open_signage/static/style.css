@@ -460,7 +460,6 @@ form progress { width: 100%; height: 12px; }
   .form-actions button { width: 100%; min-height: 44px; }
   .info-list { grid-template-columns: 1fr; }
   .monitoring-summary { grid-template-columns: 1fr; }
-  .network-overview { grid-template-columns: 1fr; }
   .form-dialog {
     width: calc(100vw - 24px);
     max-height: calc(100dvh - 24px);
@@ -472,6 +471,10 @@ form progress { width: 100%; height: 12px; }
   #message { right: 18px; bottom: 18px; left: 18px; text-align: center; }
   button, .button, input, select, textarea { min-height: 44px; }
   input[type="checkbox"] { min-height: 20px; }
+}
+
+@media (max-width: 620px) {
+  .network-overview { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 480px) {

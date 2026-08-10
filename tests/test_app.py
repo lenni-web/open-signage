@@ -228,6 +228,17 @@ def test_current_version_is_documented_in_changelog():
     assert f"## [{__version__}]" in changelog
 
 
+def test_html_pages_version_static_assets_and_disable_document_cache():
+    with TestClient(app) as client:
+        admin = client.get("/")
+        player = client.get("/player")
+    assert admin.headers["cache-control"] == "no-store"
+    assert player.headers["cache-control"] == "no-store"
+    assert f"/static/style.css?v={__version__}" in admin.text
+    assert f"/static/admin.js?v={__version__}" in admin.text
+    assert f"/static/player.js?v={__version__}" in player.text
+
+
 def test_raspberry_pi_templates_have_expected_placeholders():
     service = (PROJECT_ROOT / "deploy/open-signage.service").read_text(encoding="utf-8")
     kiosk = (PROJECT_ROOT / "deploy/open-signage-kiosk").read_text(encoding="utf-8")

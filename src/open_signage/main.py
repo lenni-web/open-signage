@@ -14,7 +14,7 @@ from typing import Annotated
 from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -315,12 +315,14 @@ def serialize_playlist(row) -> dict:
 
 @app.get("/", include_in_schema=False)
 def admin_page():
-    return FileResponse(STATIC_DIR / "admin.html")
+    html = (STATIC_DIR / "admin.html").read_text(encoding="utf-8")
+    return HTMLResponse(html.replace("@@VERSION@@", __version__), headers={"Cache-Control": "no-store"})
 
 
 @app.get("/player", include_in_schema=False)
 def player_page():
-    return FileResponse(STATIC_DIR / "player.html")
+    html = (STATIC_DIR / "player.html").read_text(encoding="utf-8")
+    return HTMLResponse(html.replace("@@VERSION@@", __version__), headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/health")

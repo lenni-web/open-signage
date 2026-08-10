@@ -19,6 +19,10 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 - Die Vollbild-Deckblende läuft nun ruhiger über 900 Millisekunden. Webseiten
   und PDFs erhalten nach ihrem Ladeereignis zusätzlich Zeit für den ersten
   vollständig gerenderten Browserframe, bevor ihre Einblendung beginnt.
+- WLAN und Ethernet bleiben auf üblichen Browserbreiten zuverlässig
+  nebeneinander; erst unter 620 Pixeln wechselt der Netzwerkbereich auf eine
+  Spalte. Versionsgebundene CSS-/JavaScript-URLs verhindern nach Updates einen
+  Mischstand aus neuem HTML und alten Browser-Cache-Dateien.
 
 ## [0.13.2] – 2026-08-10
 
