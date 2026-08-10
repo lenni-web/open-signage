@@ -8,6 +8,15 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Behoben
+
+- Ein nativer Labwc-Cursorwächter blendet den Mauszeiger nun auch über
+  eingebetteten, fremden Webseiten und PDFs aus. Nach Eingaben oder einem
+  HDMI-Wake wird er automatisch erneut verborgen.
+- Bei Player-Übergängen bleibt der bisherige Inhalt vollständig deckend, bis
+  der vorgeladene neue Inhalt darüber eingeblendet ist. Dadurch scheint der
+  schwarze Bühnenhintergrund während Bildwechseln nicht mehr durch.
+
 ## [0.13.2] – 2026-08-10
 
 ### Geändert

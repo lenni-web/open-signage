@@ -262,6 +262,9 @@ def test_raspberry_pi_templates_have_expected_placeholders():
     assert 's|@@KIOSK_USER@@|${KIOSK_USER}|g' in installer
     assert "locale-gen de_DE.UTF-8" in installer
     assert "open-signage-chromium-policy.json" in installer
+    assert "open-signage-cursor-guard" in installer
+    assert "open-signage-labwc-rc.xml" in installer
+    assert "  wtype" in installer
 
     chromium_policy = json.loads(
         (PROJECT_ROOT / "deploy/open-signage-chromium-policy.json").read_text(
@@ -269,6 +272,17 @@ def test_raspberry_pi_templates_have_expected_placeholders():
         )
     )
     assert chromium_policy["TranslateEnabled"] is False
+
+    labwc_config = (
+        PROJECT_ROOT / "deploy/open-signage-labwc-rc.xml"
+    ).read_text(encoding="utf-8")
+    assert '<action name="HideCursor" />' in labwc_config
+    assert '<action name="WarpCursor" x="-1" y="-1" />' in labwc_config
+    cursor_guard = (
+        PROJECT_ROOT / "deploy/open-signage-cursor-guard"
+    ).read_text(encoding="utf-8")
+    assert "while sleep 2" in cursor_guard
+    assert "wtype -M alt -M logo -k h" in cursor_guard
 
     player_style = (
         PROJECT_ROOT / "src/open_signage/static/style.css"
@@ -281,6 +295,7 @@ def test_raspberry_pi_templates_have_expected_placeholders():
     ).read_text(encoding="utf-8")
     assert "function transitionTo(" in player_script
     assert "previousElements.forEach" in player_script
+    assert 'classList.add("player-leaving")' not in player_script
 
 
 def test_compatible_mp4_probe_has_no_warning():
@@ -445,7 +460,7 @@ def test_update_service_is_installed_without_sudo_access():
     assert "ExecStartPre=/bin/sleep 2" in application_service
     assert "PathExists=/var/lib/open-signage/application-update.request" in application_path
     assert "systemctl daemon-reload" in application_script
-    assert "cec-utils locales wlopm" in application_script
+    assert "cec-utils locales wlopm wtype" in application_script
     assert '@@KIOSK_USER@@|${KIOSK_USER}' in application_script
     assert "cec-utils" in installer
     assert "open-signage-display-control.path" in installer

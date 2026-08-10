@@ -307,10 +307,6 @@ button:disabled { cursor: default; opacity: .35; }
   transition: opacity .45s ease;
 }
 .player-entering.player-visible { opacity: 1; }
-.player-leaving {
-  opacity: 0;
-  transition: opacity .45s ease;
-}
 .placeholder.player-entering,
 .stream-status.player-entering { position: absolute; inset: 0; }
 .text-slide {

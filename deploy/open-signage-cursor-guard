@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+hide_cursor() {
+  wtype -M alt -M logo -k h >/dev/null 2>&1 || true
+}
+
+hide_cursor
+while sleep 2; do
+  hide_cursor
+done

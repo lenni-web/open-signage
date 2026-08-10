@@ -103,7 +103,8 @@ apt-get install --no-install-recommends -y \
   python3-pip \
   python3-venv \
   rpd-wayland-core \
-  wlopm
+  wlopm \
+  wtype
 
 command -v labwc >/dev/null 2>&1 || fail "labwc wurde nicht installiert."
 command -v raspi-config >/dev/null 2>&1 || fail "raspi-config wurde nicht gefunden."
@@ -159,6 +160,9 @@ sed \
   -e "s|@@HEALTH_URL@@|http://127.0.0.1:${PORT}/api/health|g" \
   "${PROJECT_DIR}/deploy/open-signage-kiosk" >"${KIOSK_COMMAND}"
 chmod 0755 "${KIOSK_COMMAND}"
+install -o root -g root -m 0755 \
+  "${PROJECT_DIR}/deploy/open-signage-cursor-guard" \
+  /usr/local/bin/open-signage-cursor-guard
 install -d -o root -g root -m 0755 /etc/chromium/policies/managed
 install -o root -g root -m 0644 \
   "${PROJECT_DIR}/deploy/open-signage-chromium-policy.json" \
@@ -201,10 +205,14 @@ done
 readonly AUTOSTART_DIR="${KIOSK_HOME}/.config/labwc"
 readonly AUTOSTART_FILE="${AUTOSTART_DIR}/autostart"
 install -d -o "${KIOSK_USER}" -g "${KIOSK_USER}" -m 0755 "${AUTOSTART_DIR}"
+install -o "${KIOSK_USER}" -g "${KIOSK_USER}" -m 0644 \
+  "${PROJECT_DIR}/deploy/open-signage-labwc-rc.xml" "${AUTOSTART_DIR}/rc.xml"
 install -d -o "${KIOSK_USER}" -g "${KIOSK_USER}" -m 0755 "${KIOSK_HOME}/.local/state/open-signage"
 touch "${AUTOSTART_FILE}"
 grep -q '^#!/bin/sh' "${AUTOSTART_FILE}" || sed -i '1i #!/bin/sh' "${AUTOSTART_FILE}"
 sed -i '\|^/usr/local/bin/open-signage-kiosk|d' "${AUTOSTART_FILE}"
+sed -i '\|^/usr/local/bin/open-signage-cursor-guard|d' "${AUTOSTART_FILE}"
+printf '/usr/local/bin/open-signage-cursor-guard &\n' >>"${AUTOSTART_FILE}"
 printf '%s >>%s 2>&1 &\n' "${KIOSK_COMMAND}" \
   "${KIOSK_HOME}/.local/state/open-signage/kiosk.log" >>"${AUTOSTART_FILE}"
 chown "${KIOSK_USER}:${KIOSK_USER}" "${AUTOSTART_FILE}"

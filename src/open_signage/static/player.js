@@ -74,7 +74,6 @@ function transitionTo(elements, ready, options = {}) {
     activeHls = options.hls || null;
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
       nextElements.forEach(element => element.classList.add("player-visible"));
-      previousElements.forEach(element => element.classList.add("player-leaving"));
     }));
     window.setTimeout(() => {
       previousElements.forEach(element => element.remove());

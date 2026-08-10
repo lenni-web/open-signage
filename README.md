@@ -237,7 +237,9 @@ verwendet ein eigenes beschreibbares Profil und wird nach einem unerwarteten
 Ende automatisch neu gestartet. Die Browsersprache und bevorzugte
 Webseitensprache sind auf Deutsch eingestellt; die automatische
 Übersetzungsleiste ist für den Kioskbetrieb deaktiviert. Der Vollbild-Player
-blendet den Mauszeiger dauerhaft aus.
+blendet den Mauszeiger dauerhaft aus. Ein nativer Labwc-Cursorwächter erfasst
+dabei auch eingebettete Webseiten und PDFs, deren Cursor sich nicht per
+Player-CSS steuern lässt.
 
 Die Bildschirmsteuerung prüft alle vorhandenen CEC-Adapter. Ein Display gilt
 erst dann als CEC-fähig, wenn es selbst antwortet. Andernfalls schaltet Open
