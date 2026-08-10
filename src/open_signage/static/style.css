@@ -303,11 +303,14 @@ button:disabled { cursor: default; opacity: .35; }
 }
 .player-entering {
   opacity: 0;
+  transform: translate3d(3vw, 0, 0) scale(1.008);
   z-index: 2;
-  will-change: opacity;
-  transition: opacity .9s cubic-bezier(.4, 0, .2, 1);
+  will-change: opacity, transform;
+  transition:
+    opacity 1.4s cubic-bezier(.22, 1, .36, 1),
+    transform 1.4s cubic-bezier(.22, 1, .36, 1);
 }
-.player-entering.player-visible { opacity: 1; }
+.player-entering.player-visible { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 .placeholder.player-entering,
 .stream-status.player-entering { position: absolute; inset: 0; }
 .text-slide {

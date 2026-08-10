@@ -13,9 +13,9 @@ let playerToken = "";
 let transitionGeneration = 0;
 const CACHE_KEY = "open-signage-playlist-v1";
 const CURRENT_KEY = "open-signage-current-content";
-const TRANSITION_MS = 900;
-const WEBSITE_SETTLE_MS = 1000;
-const PDF_SETTLE_MS = 500;
+const TRANSITION_MS = 1400;
+const WEBSITE_SETTLE_MS = 2500;
+const PDF_SETTLE_MS = 800;
 
 function sendHeartbeat(state = playerState, error = playerError) {
   playerState = state;
@@ -65,6 +65,26 @@ function settleAfter(promise, delayMs) {
   }));
 }
 
+function waitForVideoFrame(video) {
+  return waitForEvent(video, "canplay", 10000).then(async () => {
+    try { await video.play(); } catch (_) {}
+    return new Promise(resolve => {
+      const timeout = window.setTimeout(resolve, 1500);
+      if (typeof video.requestVideoFrameCallback === "function") {
+        video.requestVideoFrameCallback(() => {
+          window.clearTimeout(timeout);
+          resolve();
+        });
+      } else {
+        window.setTimeout(() => {
+          window.clearTimeout(timeout);
+          resolve();
+        }, 300);
+      }
+    });
+  });
+}
+
 function transitionTo(elements, ready, options = {}) {
   const generation = ++transitionGeneration;
   const nextElements = Array.isArray(elements) ? elements : [elements];
@@ -87,7 +107,7 @@ function transitionTo(elements, ready, options = {}) {
     window.setTimeout(() => {
       previousElements.forEach(element => element.remove());
       if (previousHls && previousHls !== activeHls) previousHls.destroy();
-    }, TRANSITION_MS + 100);
+    }, TRANSITION_MS + 150);
     options.onVisible?.();
   });
 }
@@ -170,7 +190,7 @@ function show(item) {
       sendHeartbeat("error", "Video konnte nicht abgespielt werden.");
       advance();
     }, { once: true });
-    ready = waitForEvent(element, "canplay");
+    ready = waitForVideoFrame(element);
   } else if (item.kind === "website") {
     element = document.createElement("iframe");
     element.src = item.source;
@@ -195,7 +215,7 @@ function show(item) {
       backgroundVideo.playsInline = true;
       backgroundVideo.addEventListener("error", () => sendHeartbeat("error", "Freitext-Hintergrundvideo konnte nicht abgespielt werden."), { once: true });
       element.append(backgroundVideo);
-      ready = waitForEvent(backgroundVideo, "canplay");
+      ready = waitForVideoFrame(backgroundVideo);
     } else {
       element.style.backgroundImage = `url("${item.source.replaceAll('"', '%22')}")`;
       ready = preloadImage(item.source, true);

@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.13.3] – 2026-08-10
+
 ### Behoben
 
 - Ein nativer Labwc-Cursorwächter blendet den Mauszeiger nun auch über
@@ -16,13 +18,16 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 - Bei Player-Übergängen bleibt der bisherige Inhalt vollständig deckend, bis
   der vorgeladene neue Inhalt darüber eingeblendet ist. Dadurch scheint der
   schwarze Bühnenhintergrund während Bildwechseln nicht mehr durch.
-- Die Vollbild-Deckblende läuft nun ruhiger über 900 Millisekunden. Webseiten
-  und PDFs erhalten nach ihrem Ladeereignis zusätzlich Zeit für den ersten
-  vollständig gerenderten Browserframe, bevor ihre Einblendung beginnt.
+- Webseiten und PDFs erhalten nach ihrem Ladeereignis zusätzlich Zeit für den
+  ersten vollständig gerenderten Browserframe, bevor ihre Einblendung beginnt.
 - WLAN und Ethernet bleiben auf üblichen Browserbreiten zuverlässig
   nebeneinander; erst unter 620 Pixeln wechselt der Netzwerkbereich auf eine
   Spalte. Versionsgebundene CSS-/JavaScript-URLs verhindern nach Updates einen
   Mischstand aus neuem HTML und alten Browser-Cache-Dateien.
+- Inhaltswechsel kombinieren nun eine 1,4 Sekunden lange Deckblende mit einer
+  dezenten Einschubbewegung. Freitext mit Video-Hintergrund wartet auf den
+  ersten tatsächlich gerenderten Videoframe; Webseiten erhalten 2,5 Sekunden
+  zusätzliche Aufbauzeit und PDFs 800 Millisekunden Renderzeit.
 
 ## [0.13.2] – 2026-08-10
 
