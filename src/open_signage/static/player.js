@@ -13,7 +13,7 @@ let playerToken = "";
 let transitionGeneration = 0;
 const CACHE_KEY = "open-signage-playlist-v1";
 const CURRENT_KEY = "open-signage-current-content";
-const TRANSITION_MS = 3000;
+const TRANSITION_MS = 4000;
 const WEBSITE_SETTLE_MS = 4000;
 const PDF_SETTLE_MS = 1200;
 

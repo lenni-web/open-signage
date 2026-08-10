@@ -305,12 +305,14 @@ def test_raspberry_pi_templates_have_expected_placeholders():
     assert "cursor: none !important" in player_style
     assert ".player-transition-source.player-leaving" in player_style
     assert ".content-image" in player_style
+    assert "isolation: isolate" in player_style
+    assert "backface-visibility: hidden" in player_style
     player_script = (
         PROJECT_ROOT / "src/open_signage/static/player.js"
     ).read_text(encoding="utf-8")
     assert "function transitionTo(" in player_script
     assert "previousElements.forEach" in player_script
-    assert "const TRANSITION_MS = 3000" in player_script
+    assert "const TRANSITION_MS = 4000" in player_script
     assert "const WEBSITE_SETTLE_MS = 4000" in player_script
     assert "function settleAfter(" in player_script
     assert "function waitForVideoFrame(" in player_script
