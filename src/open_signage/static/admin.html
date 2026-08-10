@@ -397,14 +397,15 @@
       </section>
 
       <section class="card system-overview">
-        <span class="eyebrow">Geräteverbund</span><h2>Master-/Slave-Synchronisierung</h2>
-        <p>Ein Master verteilt Einstellungen, Playlists und Medien. Slaves behalten bei Ausfall den zuletzt synchronisierten Stand.</p>
+        <span class="eyebrow">Geräteverbund</span><h2>Controller-/Display-Synchronisierung</h2>
+        <p>Ein Controller verteilt Einstellungen, Playlists und Medien. Displays behalten bei Ausfall den zuletzt synchronisierten Stand.</p>
         <form id="device-form">
           <label>Geräte-ID<input name="device_id" readonly></label>
-          <label>Rolle<select name="role"><option value="standalone">Standalone</option><option value="master">Master</option><option value="slave">Slave</option></select></label>
-          <label>Master-Adresse<input name="master_url" type="url" placeholder="http://open-signage-master.local:8080"></label>
-          <label>Pairing-Code<input name="pairing_code" autocomplete="off" placeholder="Beim Master angezeigten Code eingeben"></label>
-          <label>Pairing-Code dieses Masters<input name="master_pairing_code" readonly></label>
+          <label>Betriebsmodus<select name="role"><option value="standalone">Standalone</option><option value="controller">Controller</option><option value="display">Display</option></select></label>
+          <label>Controller-Adresse<input name="controller_url" type="url" placeholder="http://open-signage-controller.local:8080"></label>
+          <label>Pairing-Code<input name="pairing_code" autocomplete="off" placeholder="Beim Controller angezeigten Code eingeben"></label>
+          <label>Pairing-Code dieses Controllers<input name="controller_pairing_code" readonly></label>
+          <label>Administratorpasswort für Moduswechsel<input name="current_password" type="password" autocomplete="current-password"><small>Nur erforderlich, wenn der Betriebsmodus geändert wird.</small></label>
           <small id="sync-status">Synchronisationsstatus: –</small>
           <button>Gerätekonfiguration speichern</button>
           <button id="sync-now" type="button" class="secondary">Jetzt synchronisieren</button>

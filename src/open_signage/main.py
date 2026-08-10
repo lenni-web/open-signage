@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import hashlib
+import os
 import sqlite3
 import uuid
 import zipfile
@@ -23,7 +24,7 @@ from .display_control import (display_config, display_status, request_display_ac
 from .auth import (change_password, clear_login_failures, create_session, destroy_session,
                    ensure_login_allowed, get_setting, password_change_required, player_token,
                    record_login_failure, require_player, require_system_login, screen_name,
-                   session_is_authenticated, set_setting, verify_password)
+                   session_is_authenticated, set_setting, verify_password, device_mode)
 from .application_update import request_update as request_application_update
 from .application_update import update_status as application_update_status
 from .backup import (automatic_backup_if_due, backup_dir, create_backup, list_backups,
@@ -35,7 +36,7 @@ from .image_processing import edit_image, optimize_image
 from .video_processing import video_metadata, video_thumbnail
 from .system_info import collect_system_info
 from .system_update import request_update, update_status
-from .sync import (authenticate_device, pairing_token, register_device, safe_sync_from_master,
+from .sync import (authenticate_device, pairing_token, register_device, safe_sync_from_controller,
                    snapshot as sync_snapshot)
 from .version import __version__
 
@@ -46,6 +47,12 @@ STATIC_DIR = PACKAGE_DIR / "static"
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     initialize()
+    if not get_setting("device_role"):
+        install_mode = os.environ.get("OPEN_SIGNAGE_MODE", "standalone")
+        set_setting("device_role", install_mode if install_mode in {"standalone", "controller", "display"} else "standalone")
+        controller_url = os.environ.get("OPEN_SIGNAGE_CONTROLLER_URL", "").strip()
+        if controller_url: set_setting("controller_url", controller_url)
+    device_mode()
     integrity_check_if_due()
     await asyncio.to_thread(automatic_backup_if_due)
     async def database_maintenance() -> None:
@@ -53,7 +60,7 @@ async def lifespan(_: FastAPI):
         while True:
             await asyncio.sleep(60)
             ticks += 1
-            if get_setting("device_role") == "slave": await asyncio.to_thread(safe_sync_from_master)
+            if device_mode() == "display": await asyncio.to_thread(safe_sync_from_controller)
             if ticks >= 24 * 60:
                 ticks = 0
                 await asyncio.to_thread(integrity_check_if_due)
@@ -134,9 +141,10 @@ class PlaylistScheduleUpdate(BaseModel):
 
 
 class DeviceSettings(BaseModel):
-    role: str = Field(pattern=r"^(standalone|master|slave)$")
-    master_url: str = Field(default="", max_length=2048)
+    role: str = Field(pattern=r"^(standalone|controller|display)$")
+    controller_url: str = Field(default="", max_length=2048)
     pairing_code: str = Field(default="", max_length=200)
+    current_password: str = Field(default="", max_length=200)
 
 
 class SyncRegistration(BaseModel):
@@ -441,27 +449,30 @@ def get_device_settings(_: None = Depends(require_system_login)):
     if not device_id:
         device_id = str(uuid.uuid4())
         set_setting("device_id", device_id)
-    role = get_setting("device_role", "standalone")
-    master_url = get_setting("master_url", "")
+    role = device_mode()
+    controller_url = get_setting("controller_url") or get_setting("master_url", "") or ""
+    if controller_url and not get_setting("controller_url"): set_setting("controller_url", controller_url)
     with connect() as connection:
         devices = [dict(row) for row in connection.execute(
             "SELECT device_id, name, registered_at, last_seen FROM registered_devices ORDER BY name"
-        )] if role == "master" else []
+        )] if role == "controller" else []
     last_success = get_setting("sync_last_success", "")
     last_error = get_setting("sync_last_error", "")
-    return {"device_id": device_id, "role": role, "master_url": master_url,
-            "pairing_code": pairing_token() if role == "master" else "",
+    return {"device_id": device_id, "role": role, "controller_url": controller_url,
+            "pairing_code": pairing_token() if role == "controller" else "",
             "registered_devices": devices, "last_success": last_success, "last_error": last_error,
-            "sync_status": "bereit" if role != "slave" else
+            "sync_status": "bereit" if role != "display" else
                 (f"zuletzt {last_success}" if last_success else f"offline: {last_error}" if last_error else "noch nicht verbunden")}
 
 
 @app.patch("/api/system/device")
 def update_device_settings(payload: DeviceSettings, _: None = Depends(require_system_login)):
-    if payload.role == "slave" and not payload.master_url.strip():
-        raise HTTPException(status_code=422, detail="Für einen Slave ist die Master-Adresse erforderlich")
+    if payload.role != device_mode() and not verify_password(payload.current_password):
+        raise HTTPException(status_code=400, detail="Für den Moduswechsel ist das aktuelle Administratorpasswort erforderlich")
+    if payload.role == "display" and not payload.controller_url.strip():
+        raise HTTPException(status_code=422, detail="Für ein Display ist die Controller-Adresse erforderlich")
     set_setting("device_role", payload.role)
-    set_setting("master_url", payload.master_url.strip())
+    set_setting("controller_url", payload.controller_url.strip())
     if payload.pairing_code.strip():
         set_setting("sync_pairing_code", payload.pairing_code.strip())
         set_setting("sync_device_token", "")
@@ -470,9 +481,9 @@ def update_device_settings(payload: DeviceSettings, _: None = Depends(require_sy
 
 @app.post("/api/system/device/sync")
 def sync_device_now(_: None = Depends(require_system_login)):
-    if get_setting("device_role") != "slave":
-        raise HTTPException(status_code=409, detail="Nur ein Slave kann vom Master synchronisieren")
-    result = safe_sync_from_master()
+    if device_mode() != "display":
+        raise HTTPException(status_code=409, detail="Nur ein Display kann vom Controller synchronisieren")
+    result = safe_sync_from_controller()
     if result["status"] == "offline": raise HTTPException(status_code=502, detail=result["error"])
     return result
 
@@ -485,7 +496,7 @@ def require_sync_device(request: Request) -> None:
 
 @app.post("/api/sync/register")
 def sync_register(payload: SyncRegistration):
-    if get_setting("device_role") != "master": raise HTTPException(status_code=409, detail="Gerät ist kein Master")
+    if device_mode() != "controller": raise HTTPException(status_code=409, detail="Gerät ist kein Controller")
     try:
         token = register_device(payload.device_id, payload.name, payload.pairing_token)
     except PermissionError as error:
@@ -495,7 +506,7 @@ def sync_register(payload: SyncRegistration):
 
 @app.get("/api/sync/snapshot")
 def get_sync_snapshot(_: None = Depends(require_sync_device)):
-    if get_setting("device_role") != "master": raise HTTPException(status_code=409, detail="Gerät ist kein Master")
+    if device_mode() != "controller": raise HTTPException(status_code=409, detail="Gerät ist kein Controller")
     return sync_snapshot()
 
 
@@ -640,7 +651,7 @@ def start_display_action(payload: DisplayAction, _: None = Depends(require_syste
 def system_session(request: Request):
     if not session_is_authenticated(request):
         return {"authenticated": False}
-    return {"authenticated": True, "screen_name": screen_name(),
+    return {"authenticated": True, "screen_name": screen_name(), "device_mode": device_mode(),
             "password_change_required": password_change_required()}
 
 

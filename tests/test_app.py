@@ -23,7 +23,7 @@ from open_signage.system_update import request_update, update_status
 from open_signage.version import __version__
 from open_signage.upload_security import detect_media_type, ensure_free_space
 from open_signage.auth import get_setting, set_setting
-from open_signage.sync import safe_sync_from_master, snapshot as sync_snapshot
+from open_signage.sync import safe_sync_from_controller, snapshot as sync_snapshot
 
 PROJECT_ROOT = Path(__file__).parents[1]
 VALID_PNG = base64.b64decode(
@@ -246,6 +246,9 @@ def test_raspberry_pi_templates_have_expected_placeholders():
     assert "raspi-config nonint do_boot_behaviour B4" in installer
     assert 'KIOSK_USER="signage"' in installer
     assert "ffmpeg" in installer
+    assert "--mode MODUS" in installer
+    assert "--controller-url URL" in installer
+    assert "OPEN_SIGNAGE_MODE" in installer
 
 
 def test_compatible_mp4_probe_has_no_warning():
@@ -1020,11 +1023,62 @@ def test_device_role_and_system_action_are_persisted(tmp_path: Path, monkeypatch
         client.post("/api/system/login", json={"password": "open-signage"})
         first = client.get("/api/system/device").json()
         assert first["role"] == "standalone"
-        updated = client.patch("/api/system/device", json={"role": "slave", "master_url": "http://master.local:8080"})
+        updated = client.patch("/api/system/device", json={"role": "display", "controller_url": "http://controller.local:8080", "current_password": "open-signage"})
         assert updated.status_code == 200
         assert updated.json()["device_id"] == first["device_id"]
         assert client.post("/api/system/action", json={"action": "reboot"}).status_code == 202
     assert (tmp_path / "system-action-request").read_text() == "reboot"
+
+
+def test_installer_environment_initializes_display_mode(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("OPEN_SIGNAGE_MODE", "display")
+    monkeypatch.setenv("OPEN_SIGNAGE_CONTROLLER_URL", "http://controller.local:8080")
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        device = client.get("/api/system/device").json()
+    assert device["role"] == "display"
+    assert device["controller_url"] == "http://controller.local:8080"
+
+
+@pytest.mark.parametrize(("legacy", "expected"), [("master", "controller"), ("slave", "display")])
+def test_legacy_device_roles_are_migrated(tmp_path: Path, monkeypatch, legacy: str, expected: str):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    initialize(); set_setting("device_role", legacy)
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        assert client.get("/api/system/device").json()["role"] == expected
+    assert get_setting("device_role") == expected
+
+
+def test_display_mode_blocks_central_writes_but_allows_mode_change(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        assert client.patch("/api/system/device", json={
+            "role": "display", "controller_url": "http://controller.local:8080",
+            "current_password": "falsch",
+        }).status_code == 400
+        changed = client.patch("/api/system/device", json={
+            "role": "display", "controller_url": "http://controller.local:8080",
+            "current_password": "open-signage",
+        })
+        assert changed.status_code == 200
+        assert client.get("/api/system/session").json()["device_mode"] == "display"
+        blocked = client.post("/api/content/website", json={
+            "name": "Lokal verboten", "url": "https://example.org",
+        })
+        assert blocked.status_code == 403
+        assert "Controller" in blocked.json()["detail"]
+        assert client.patch("/api/system/display-control", json={}).status_code == 403
+        assert client.post("/api/system/display-control/action", json={"action": "status"}).status_code == 202
+        assert client.patch("/api/system/device", json={
+            "role": "standalone", "controller_url": "",
+            "current_password": "open-signage",
+        }).status_code == 200
+        assert client.post("/api/content/website", json={
+            "name": "Lokal erlaubt", "url": "https://example.org",
+        }).status_code == 201
 
 
 def test_display_control_configuration_and_request_are_protected(tmp_path: Path, monkeypatch):
@@ -1177,11 +1231,11 @@ def test_schedule_analysis_detects_overlap_and_next_action():
     assert result["next_action"]["action"] == "on"
 
 
-def test_master_registers_device_and_protects_snapshot(tmp_path: Path, monkeypatch):
+def test_controller_registers_display_and_protects_snapshot(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
     with TestClient(app) as client:
         client.post("/api/system/login", json={"password": "open-signage"})
-        client.patch("/api/system/device", json={"role": "master", "master_url": ""})
+        client.patch("/api/system/device", json={"role": "controller", "controller_url": "", "current_password": "open-signage"})
         pairing = client.get("/api/system/device").json()["pairing_code"]
         assert client.get("/api/sync/snapshot").status_code == 401
         registration = client.post("/api/sync/register", json={
@@ -1196,12 +1250,12 @@ def test_master_registers_device_and_protects_snapshot(tmp_path: Path, monkeypat
         assert devices[0]["device_id"] == "slave-1"
 
 
-def test_slave_applies_snapshot_and_keeps_device_specific_settings(tmp_path: Path, monkeypatch):
+def test_display_applies_snapshot_and_keeps_device_specific_settings(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
     initialize()
-    set_setting("device_id", "local-slave")
-    set_setting("device_role", "slave")
-    set_setting("master_url", "http://master.local:8080")
+    set_setting("device_id", "local-display")
+    set_setting("device_role", "display")
+    set_setting("controller_url", "http://controller.local:8080")
     set_setting("sync_pairing_code", "pair-me")
     master_data = sync_snapshot()
     master_data["settings"]["screen_name"] = "Vom Master"
@@ -1211,11 +1265,11 @@ def test_slave_applies_snapshot_and_keeps_device_specific_settings(tmp_path: Pat
         return {"device_token": "individual-device-token"} if url.endswith("/register") else master_data
 
     monkeypatch.setattr("open_signage.sync._request_json", fake_request)
-    result = safe_sync_from_master()
+    result = safe_sync_from_controller()
     assert result["status"] == "synchronized"
     assert get_setting("screen_name") == "Vom Master"
-    assert get_setting("device_id") == "local-slave"
-    assert get_setting("device_role") == "slave"
+    assert get_setting("device_id") == "local-display"
+    assert get_setting("device_role") == "display"
     assert get_setting("sync_device_token") == "individual-device-token"
     with connect() as connection:
         assert connection.execute("SELECT name FROM playlists WHERE id = 1").fetchone()[0] == "Master-Playlist"

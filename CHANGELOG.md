@@ -8,6 +8,31 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.13.0] – 2026-08-10
+
+### Geändert
+
+- Die bisherigen Rollen `master` und `slave` heißen künftig `controller` und
+  `display`; vorhandene Gerätekonfigurationen werden automatisch migriert.
+- Der Raspberry-Pi-Installer unterstützt `--mode standalone|controller|display`
+  und im Display-Modus eine verpflichtende `--controller-url`.
+- Die Verwaltungsoberfläche reduziert sich im Display-Modus auf lokale Diagnose,
+  Controller-Verbindung, Synchronisierung, Updates, Bildschirmaktionen und einen
+  passwortgeschützten Moduswechsel.
+
+### Sicherheit
+
+- Im Display-Modus blockiert das Backend lokale Änderungen an Inhalten,
+  Playlists, Mediathek, Backups und zentralen Einstellungen unabhängig von der
+  ausgeblendeten Oberfläche. Nur ausdrücklich erlaubte lokale Wartungsaktionen
+  bleiben schreibbar.
+- Jeder nachträgliche Wechsel des Betriebsmodus verlangt erneut das lokale
+  Administratorpasswort.
+
+### Geändert
+
+- Projektversion von `0.12.0` auf `0.13.0` erhöht.
+
 ## [0.12.0] – 2026-08-09
 
 ### Hinzugefügt

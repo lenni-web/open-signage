@@ -15,17 +15,21 @@ readonly APP_ENV_FILE="/etc/open-signage.env"
 
 PORT=8080
 KIOSK_USER="signage"
+MODE="standalone"
+CONTROLLER_URL=""
 
 usage() {
   printf '%s\n' \
     "Open Signage Raspberry-Pi-Installation" \
     "" \
     "Aufruf:" \
-    "  sudo ./scripts/install-raspberry-pi.sh [--port PORT] [--kiosk-user BENUTZER]" \
+    "  sudo ./scripts/install-raspberry-pi.sh [--mode MODUS] [--controller-url URL] [--port PORT] [--kiosk-user BENUTZER]" \
     "" \
     "Optionen:" \
     "  --port PORT              HTTP-Port, Standard: 8080" \
     "  --kiosk-user BENUTZER    Kiosk-Benutzer, Standard: signage" \
+    "  --mode MODUS             standalone, controller oder display" \
+    "  --controller-url URL     Controller-Adresse für den Display-Modus" \
     "  --help                   Diese Hilfe anzeigen"
 }
 
@@ -46,6 +50,16 @@ while (($#)); do
       KIOSK_USER="$2"
       shift 2
       ;;
+    --mode)
+      (($# >= 2)) || fail "Nach --mode fehlt ein Wert."
+      MODE="$2"
+      shift 2
+      ;;
+    --controller-url)
+      (($# >= 2)) || fail "Nach --controller-url fehlt ein Wert."
+      CONTROLLER_URL="$2"
+      shift 2
+      ;;
     --help|-h)
       usage
       exit 0
@@ -60,6 +74,10 @@ done
 [[ "${PORT}" =~ ^[0-9]+$ ]] || fail "Der Port muss eine Zahl sein."
 ((PORT >= 1024 && PORT <= 65535)) || fail "Der Port muss zwischen 1024 und 65535 liegen."
 [[ "${KIOSK_USER}" =~ ^[a-z_][a-z0-9_-]*$ ]] || fail "Ungültiger Kiosk-Benutzername."
+[[ "${MODE}" =~ ^(standalone|controller|display)$ ]] || fail "Modus muss standalone, controller oder display sein."
+if [[ "${MODE}" == "display" ]]; then
+  [[ "${CONTROLLER_URL}" =~ ^https?://[^[:space:]]+$ ]] || fail "Für display ist --controller-url mit http:// oder https:// erforderlich."
+fi
 command -v apt-get >/dev/null 2>&1 || fail "Dieses Skript benötigt Raspberry Pi OS."
 [[ -f /etc/rpi-issue ]] || fail "Unterstützt wird Raspberry Pi OS Lite 64 Bit."
 [[ "$(dpkg --print-architecture)" == "arm64" ]] || fail "Bitte Raspberry Pi OS Lite 64 Bit verwenden."
@@ -122,6 +140,9 @@ if [[ ! -f "${APP_ENV_FILE}" ]]; then
     "${INITIAL_PASSWORD}" "1073741824" >"${APP_ENV_FILE}"
   chmod 0600 "${APP_ENV_FILE}"
 fi
+printf 'OPEN_SIGNAGE_MODE=%s\nOPEN_SIGNAGE_CONTROLLER_URL=%s\n' \
+  "${MODE}" "${CONTROLLER_URL}" >>"${APP_ENV_FILE}"
+chmod 0600 "${APP_ENV_FILE}"
 
 sed "s/@@PORT@@/${PORT}/g" \
   "${PROJECT_DIR}/deploy/open-signage.service" >"${SERVICE_FILE}"
@@ -197,6 +218,7 @@ systemctl enable --now open-signage.service
 "${PROJECT_DIR}/scripts/verify-installation.sh" --port "${PORT}"
 
 printf '\nOpen Signage wurde installiert.\n'
+printf 'Betriebsmodus: %s\n' "${MODE}"
 printf 'Verwaltung: http://%s:%s/\n' "$(hostname -I | awk '{print $1}')" "${PORT}"
 printf 'Player:     http://127.0.0.1:%s/player\n' "${PORT}"
 printf 'Bitte jetzt neu starten: sudo reboot\n'

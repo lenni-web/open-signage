@@ -79,19 +79,19 @@ def _request_json(url: str, method: str = "GET", data: dict | None = None, token
         return json.load(response)
 
 
-def sync_from_master() -> dict:
-    master = (get_setting("master_url") or "").rstrip("/") + "/"
-    if not master.startswith(("http://", "https://")): raise RuntimeError("Master-Adresse fehlt")
+def sync_from_controller() -> dict:
+    controller = (get_setting("controller_url") or get_setting("master_url") or "").rstrip("/") + "/"
+    if not controller.startswith(("http://", "https://")): raise RuntimeError("Controller-Adresse fehlt")
     device_id = get_setting("device_id") or ""
     token = get_setting("sync_device_token") or ""
     if not token:
         pair = get_setting("sync_pairing_code") or ""
-        response = _request_json(urljoin(master, "api/sync/register"), "POST", {
+        response = _request_json(urljoin(controller, "api/sync/register"), "POST", {
             "device_id": device_id, "name": screen_name(), "pairing_token": pair,
         })
         token = response["device_token"]; set_setting("sync_device_token", token)
         set_setting("sync_pairing_code", "")
-    data = _request_json(urljoin(master, "api/sync/snapshot"), token=token)
+    data = _request_json(urljoin(controller, "api/sync/snapshot"), token=token)
     for filename, metadata in data.get("files", {}).items():
         if Path(filename).name != filename: continue
         target = media_dir() / filename
@@ -100,7 +100,7 @@ def sync_from_master() -> dict:
             with target.open("rb") as existing:
                 while chunk := existing.read(1024 * 1024): existing_digest.update(chunk)
             if existing_digest.hexdigest() == metadata.get("sha256"): continue
-        request = urllib.request.Request(urljoin(master, f"api/sync/media/{filename}"),
+        request = urllib.request.Request(urljoin(controller, f"api/sync/media/{filename}"),
                                          headers={"Authorization": f"Bearer {token}"})
         temporary = target.with_suffix(target.suffix + ".sync")
         with urllib.request.urlopen(request, timeout=120) as response, temporary.open("wb") as output:
@@ -130,9 +130,14 @@ def sync_from_master() -> dict:
     return {"status": "synchronized", "at": get_setting("sync_last_success")}
 
 
-def safe_sync_from_master() -> dict:
+def safe_sync_from_controller() -> dict:
     try:
-        return sync_from_master()
+        return sync_from_controller()
     except (OSError, RuntimeError, KeyError, ValueError, urllib.error.URLError) as error:
         set_setting("sync_last_error", str(error)[:500])
         return {"status": "offline", "error": str(error)}
+
+
+# Backward-compatible aliases for integrations using the pre-0.13 names.
+sync_from_master = sync_from_controller
+safe_sync_from_master = safe_sync_from_controller

@@ -20,7 +20,7 @@ Chromium-Kioskfenster an.
 - Responsive Verwaltungsoberfläche für Desktop, Tablet und Smartphone
 - Ausfallsicherer Player mit lokalem Playlist-Cache und Wiederaufnahme
 - Speicherbereinigung, zeitgesteuerte Playlists und sichere Systemaktionen
-- Geräteidentität und Rollenmodell als Grundlage für Master-/Slave-Betrieb
+- Geräteidentität und Betriebsmodi für Standalone, Controller und Display
 - HDMI-CEC-Bildschirmsteuerung mit frei kombinierbaren Zeitfenstern, mehreren
   Ein-/Ausschaltphasen je Wochentag, Eingangswahl und HDMI-Signal-Fallback
 - Kompakte Inhaltsverwaltung mit auswählbaren Formularen sowie Freitext auf
@@ -41,7 +41,7 @@ Chromium-Kioskfenster an.
   Speicher-, Temperatur- und Updatezustand
 - tägliche geprüfte SQLite-Backups, manuelle Komplettsicherungen und Restore
 - Sicherheitsstatus und Mediathek-Audit für fehlende, verwaiste und doppelte Medien
-- Master-/Slave-Synchronisierung mit Geräte-Pairing und lokalem Offline-Stand
+- Controller-/Display-Synchronisierung mit Geräte-Pairing und lokalem Offline-Stand
 
 Weitere SRT-Quellen können später über MediaMTX ergänzt werden.
 
@@ -92,19 +92,34 @@ werden. Vor jeder Wiederherstellung wird automatisch eine vollständige
 Sicherheitssicherung des aktuellen Zustands angelegt. Nach einem Restore sollte
 der Open-Signage-Dienst neu gestartet werden.
 
-### Master und Slaves
+### Controller und Displays
 
-Auf dem Master wird unter **System → Master-/Slave-Synchronisierung** die Rolle
-`Master` gewählt. Der danach angezeigte Pairing-Code wird einmalig auf dem Slave
-zusammen mit der Master-Adresse eingetragen. Bei der ersten Synchronisierung
-registriert der Master das Gerät und vergibt einen eigenen zufälligen Token.
+Auf dem Controller wird unter **System → Controller-/Display-Synchronisierung**
+der Modus `Controller` gewählt. Der danach angezeigte Pairing-Code wird einmalig
+auf dem Display zusammen mit der Controller-Adresse eingetragen. Bei der ersten
+Synchronisierung registriert der Controller das Gerät und vergibt einen eigenen
+zufälligen Token.
 
 Synchronisiert werden Bildschirmname, Bildschirmsteuerung, Playlists, Inhalte
-und Mediathek-Dateien. Der Slave prüft minütlich auf Änderungen; über „Jetzt
-synchronisieren“ lässt sich der Vorgang sofort auslösen. Ist der Master nicht
-erreichbar, spielt der Slave seinen zuletzt vollständig synchronisierten lokalen
+und Mediathek-Dateien. Das Display prüft minütlich auf Änderungen; über „Jetzt
+synchronisieren“ lässt sich der Vorgang sofort auslösen. Ist der Controller nicht
+erreichbar, spielt das Display seinen zuletzt vollständig synchronisierten lokalen
 Stand weiter. Verwaltungspasswörter, Geräterollen und Geräte-Tokens bleiben
 absichtlich gerätespezifisch.
+
+Der Raspberry-Pi-Installer akzeptiert den Betriebsmodus direkt:
+
+```bash
+sudo ./scripts/install-raspberry-pi.sh --mode controller
+sudo ./scripts/install-raspberry-pi.sh --mode display \
+  --controller-url http://open-signage-controller.local:8080
+```
+
+Im Display-Modus zeigt die Verwaltung nur lokale Diagnose, Verbindung,
+Sofortsynchronisierung, Updates, Bildschirmaktionen und den kontrollierten
+Moduswechsel. Inhalts-, Playlist-, Mediathek- und zentrale Einstellungsänderungen
+werden zusätzlich serverseitig blockiert. Bestehende Rollen werden automatisch
+von `master` auf `controller` und von `slave` auf `display` migriert.
 
 ### Open Signage aktualisieren
 
@@ -220,8 +235,8 @@ sudo reboot
 
 ## Roadmap
 
-- Master-/Slave-Betrieb für mehrere Raspberry Pis: Ein Master verwaltet
-  Inhalte und Einstellungen, während verbundene Slaves den Stand automatisch
+- Controller-/Display-Betrieb für mehrere Raspberry Pis: Ein Controller verwaltet
+  Inhalte und Einstellungen, während verbundene Displays den Stand automatisch
   und identisch übernehmen.
 - `open-signage.local` als leicht erreichbarer lokaler Hostname.
 - MediaMTX für zusätzliche direkte SRT-Quellen.

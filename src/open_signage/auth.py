@@ -16,6 +16,11 @@ SESSION_LIFETIME = timedelta(hours=12)
 LOGIN_WINDOW = timedelta(minutes=15)
 LOGIN_BLOCK = timedelta(minutes=15)
 MAX_LOGIN_FAILURES = 5
+DISPLAY_WRITE_PATHS = {
+    "/api/system/password", "/api/system/logout", "/api/system/device",
+    "/api/system/device/sync", "/api/system/action", "/api/system/update",
+    "/api/system/application-update", "/api/system/display-control/action",
+}
 
 
 def _password_hash(password: str, salt: bytes | None = None) -> str:
@@ -45,6 +50,14 @@ def get_setting(key: str, default: str | None = None) -> str | None:
 
 def screen_name() -> str:
     return _setting("screen_name") or "Open Signage"
+
+
+def device_mode() -> str:
+    value = _setting("device_role") or "standalone"
+    migrated = {"master": "controller", "slave": "display"}.get(value, value)
+    if migrated not in {"standalone", "controller", "display"}: migrated = "standalone"
+    if migrated != value: set_setting("device_role", migrated)
+    return migrated
 
 
 def verify_password(password: str) -> bool:
@@ -163,6 +176,15 @@ def require_system_login(request: Request) -> None:
         raise HTTPException(
             status_code=403,
             detail="Das Initialpasswort muss zuerst auf der Systemseite geändert werden.",
+        )
+    if (
+        device_mode() == "display"
+        and request.method not in {"GET", "HEAD"}
+        and request.url.path not in DISPLAY_WRITE_PATHS
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Dieses Gerät wird im Display-Modus vollständig vom Controller verwaltet.",
         )
 
 

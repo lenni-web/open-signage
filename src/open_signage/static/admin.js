@@ -14,6 +14,7 @@ let schedulingPlaylist = null;
 let playlists = [];
 let editingLibraryImage = null;
 let displayControlDirty = false;
+let currentDeviceMode = "standalone";
 const selectedMediaIds = new Set();
 
 function updateAdminClock() {
@@ -81,9 +82,33 @@ function showApplication(settings) {
   document.querySelector("#admin-app").hidden = false;
   document.querySelector('#screen-settings-form [name="screen_name"]').value = settings.screen_name;
   document.querySelector("#content-heading").textContent = `Inhalte – ${settings.screen_name}`;
+  applyDeviceMode(settings.device_mode || "standalone");
   if (settings.password_change_required) {
     notify("Bitte ändere jetzt das Initialpasswort auf der Systemseite.", true, 10000);
     document.querySelector('[data-page="system-page"]')?.click();
+  }
+}
+
+function applyDeviceMode(mode) {
+  const wasDisplay = currentDeviceMode === "display";
+  currentDeviceMode = mode;
+  document.body.dataset.mode = mode;
+  const displayMode = mode === "display";
+  document.querySelectorAll('.nav-button[data-page="content-page"], .nav-button[data-page="library-page"]').forEach(item => { item.hidden = displayMode; });
+  ["#screen-settings-form", "#storage-cleanup", "#storage-orphan-cleanup", "#backup-create", "#backup-restore-form", "#display-control-form"]
+    .forEach(selector => { const item = document.querySelector(selector); if (item) item.hidden = displayMode; });
+  if (displayMode && !wasDisplay) {
+    document.querySelectorAll(".nav-button").forEach(item => item.classList.remove("active"));
+    document.querySelectorAll(".page").forEach(page => { page.hidden = true; });
+    const systemButton = document.querySelector('.nav-button[data-page="system-page"]');
+    systemButton.classList.add("active"); systemButton.hidden = false;
+    document.querySelector("#system-page").hidden = false;
+    openSystemPage();
+  } else if (wasDisplay) {
+    document.querySelectorAll(".nav-button").forEach(item => item.classList.remove("active"));
+    document.querySelectorAll(".page").forEach(page => { page.hidden = true; });
+    const contentButton = document.querySelector('.nav-button[data-page="content-page"]');
+    contentButton.classList.add("active"); document.querySelector("#content-page").hidden = false;
   }
 }
 
@@ -106,7 +131,9 @@ async function boot() {
       return;
     }
     showApplication(session);
-    await Promise.all([loadVersion(), load(), loadLibrary(), loadPlaylists()]);
+    const loaders = [loadVersion()];
+    if (session.device_mode !== "display") loaders.push(load(), loadLibrary(), loadPlaylists());
+    await Promise.all(loaders);
   } catch (_) {
     showLogin();
   }
@@ -641,12 +668,14 @@ async function loadDevice() {
   const form = document.querySelector("#device-form");
   form.elements.device_id.value = device.device_id;
   form.elements.role.value = device.role;
-  form.elements.master_url.value = device.master_url;
-  form.elements.master_pairing_code.value = device.pairing_code || "";
+  form.elements.controller_url.value = device.controller_url;
+  form.elements.controller_pairing_code.value = device.pairing_code || "";
   form.elements.pairing_code.value = "";
-  form.elements.master_pairing_code.closest("label").hidden = device.role !== "master";
-  form.elements.pairing_code.closest("label").hidden = device.role !== "slave";
-  document.querySelector("#sync-now").hidden = device.role !== "slave";
+  form.elements.controller_pairing_code.closest("label").hidden = device.role !== "controller";
+  form.elements.pairing_code.closest("label").hidden = device.role !== "display";
+  form.elements.controller_url.closest("label").hidden = device.role !== "display";
+  document.querySelector("#sync-now").hidden = device.role !== "display";
+  applyDeviceMode(device.role);
   document.querySelector("#sync-status").textContent = `Synchronisationsstatus: ${device.sync_status}`;
   const registered = document.querySelector("#registered-devices");
   registered.replaceChildren(...(device.registered_devices || []).map(item => {
@@ -1376,10 +1405,20 @@ document.querySelector("#device-form").addEventListener("submit", async (event) 
   event.preventDefault();
   const form = new FormData(event.target);
   try {
-    await api("/api/system/device", { method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role: form.get("role"), master_url: form.get("master_url"), pairing_code: form.get("pairing_code") }) });
-    await loadDevice(); notify("Gerätekonfiguration gespeichert");
+    const updated = await api("/api/system/device", { method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: form.get("role"), controller_url: form.get("controller_url"), pairing_code: form.get("pairing_code"), current_password: form.get("current_password") }) });
+    event.target.elements.current_password.value = "";
+    await loadDevice();
+    if (updated.role !== "display") await Promise.all([load(), loadLibrary(), loadPlaylists()]);
+    notify("Gerätekonfiguration gespeichert");
   } catch (error) { notify(error.message, true); }
+});
+
+document.querySelector('#device-form [name="role"]').addEventListener("change", event => {
+  const form = event.target.form; const mode = event.target.value;
+  form.elements.controller_url.closest("label").hidden = mode !== "display";
+  form.elements.pairing_code.closest("label").hidden = mode !== "display";
+  form.elements.controller_pairing_code.closest("label").hidden = mode !== "controller";
 });
 
 document.querySelector("#sync-now").addEventListener("click", async () => {
