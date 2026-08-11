@@ -8,6 +8,11 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Geändert
+
+- Die weiche Player-Deckblende wurde von fünf auf vier Sekunden verkürzt. Ihre
+  ruhige Kurve und die flackerarmen Compositor-Ebenen bleiben unverändert.
+
 ## [0.14.0] – 2026-08-11
 
 ### Geändert
