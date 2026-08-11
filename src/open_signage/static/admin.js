@@ -715,6 +715,7 @@ function renderDisplayControl(data, updateForm = !displayControlDirty) {
     form.elements.cec_address.value = config.cec_address;
     form.elements.activate_source.checked = config.activate_source;
     form.elements.fallback_hdmi_signal.checked = config.fallback_hdmi_signal;
+    form.elements.resolution_mode.value = config.resolution_mode || "1080p60";
     form.elements.schedule_enabled.checked = config.schedule_enabled;
     const target = document.querySelector("#display-schedule-entries");
     target.replaceChildren(...scheduleEntries.map((entry, index) => {
@@ -744,6 +745,9 @@ function renderDisplayControl(data, updateForm = !displayControlDirty) {
     : status.output_name || "–";
   document.querySelector("#display-updated-at").textContent = status.updated_at ? new Date(status.updated_at).toLocaleString("de-DE") : "Noch nie";
   document.querySelector("#display-status-message").textContent = status.message || "";
+  document.querySelector("#display-resolution-status").textContent = status.current_resolution
+    ? `Auflösung: ${status.current_resolution} · ${status.resolution_message || ""}`
+    : `Auflösung: ${status.resolution_message || "noch nicht geprüft"}`;
 }
 
 const displayWeekdays = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
@@ -1470,6 +1474,7 @@ document.querySelector("#display-control-form").addEventListener("submit", async
         cec_address: form.get("cec_address"),
         activate_source: form.get("activate_source") === "on",
         fallback_hdmi_signal: form.get("fallback_hdmi_signal") === "on",
+        resolution_mode: form.get("resolution_mode"),
         schedule_enabled: form.get("schedule_enabled") === "on",
         schedule_entries: [...event.target.querySelectorAll(".display-schedule-row")]
           .map(row => ({ weekday: Number(row.querySelector(".schedule-weekday").value), on: row.querySelector(".day-on").value, off: row.querySelector(".day-off").value })),

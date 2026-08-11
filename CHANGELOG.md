@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.14.0] – 2026-08-11
+
 ### Geändert
 
 - Deckblenden dauern nun fünf Sekunden und verwenden eine besonders flache,
@@ -15,6 +17,11 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
   Player-Ebenen bleiben dauerhaft als isolierte
   Compositor-Flächen vorbereitet, damit insbesondere bei einfachen Bildern
   keine kurzfristige GPU-Umschaltung als dunkler Einzelbildblitz erscheint.
+- Die Systemseite bietet eine dauerhafte Auflösungswahl für automatisch,
+  1080p/60, 1080p/50 und 720p/60. Der HDMI-Ausgang wird automatisch erkannt,
+  der Modus beim Start, nach Hotplug und nach dem Einschalten angewendet. Nicht
+  unterstützte Vorgaben fallen sicher auf den bevorzugten Bildschirmmodus
+  zurück; neue Installationen verwenden standardmäßig 1080p/60.
 
 ## [0.13.5] – 2026-08-10
 

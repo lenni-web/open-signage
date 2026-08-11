@@ -167,12 +167,13 @@ class DisplayControlSettings(BaseModel):
     cec_address: str = Field(default="0", pattern=r"^[0-9A-Fa-f]$")
     activate_source: bool = True
     fallback_hdmi_signal: bool = True
+    resolution_mode: str = Field(default="1080p60", pattern=r"^(auto|1080p60|1080p50|720p60)$")
     schedule_enabled: bool = False
     schedule_entries: list[DisplayScheduleEntry] = Field(default_factory=list, max_length=100)
 
 
 class DisplayAction(BaseModel):
-    action: str = Field(pattern=r"^(on|off|status)$")
+    action: str = Field(pattern=r"^(on|off|status|resolution)$")
 
 
 class ImageEdit(BaseModel):
@@ -639,7 +640,7 @@ def update_display_control(payload: DisplayControlSettings, _: None = Depends(re
         config["schedule_entries"], key=lambda entry: (entry["weekday"], entry["on"], entry["off"])
     )
     save_display_config(config)
-    request_display_action("status")
+    request_display_action("resolution")
     return {"config": config, "status": display_status(), "schedule": schedule_analysis(config)}
 
 

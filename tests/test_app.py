@@ -484,7 +484,7 @@ def test_update_service_is_installed_without_sudo_access():
     assert "ExecStartPre=/bin/sleep 2" in application_service
     assert "PathExists=/var/lib/open-signage/application-update.request" in application_path
     assert "systemctl daemon-reload" in application_script
-    assert "cec-utils locales wlopm wtype" in application_script
+    assert "cec-utils locales wlr-randr wlopm wtype" in application_script
     assert '@@KIOSK_USER@@|${KIOSK_USER}' in application_script
     assert "cec-utils" in installer
     assert "open-signage-display-control.path" in installer
@@ -493,6 +493,7 @@ def test_update_service_is_installed_without_sudo_access():
     display_helper = (PROJECT_ROOT / "deploy/open-signage-display-control").read_text(encoding="utf-8")
     assert "cec-client" in display_helper
     assert "wlopm" in display_helper
+    assert "wlr-randr" in display_helper
     assert "vcgencmd" not in display_helper
     assert "@@KIOSK_USER@@" in display_helper
     assert "sudo" not in display_helper
@@ -528,6 +529,8 @@ def test_admin_contains_system_navigation_and_update_controls():
     assert 'id="monitoring-summary"' in admin
     assert 'id="monitoring-refresh"' in admin
     assert 'id="display-control-form"' in admin
+    assert 'name="resolution_mode"' in admin
+    assert 'id="display-resolution-status"' in admin
 
     admin_script = (
         PROJECT_ROOT / "src/open_signage/static/admin.js"
@@ -1174,8 +1177,10 @@ def test_display_control_configuration_and_request_are_protected(tmp_path: Path,
         client.post("/api/system/login", json={"password": "open-signage"})
         initial = client.get("/api/system/display-control").json()
         assert initial["config"]["cec_address"] == "0"
+        assert initial["config"]["resolution_mode"] == "1080p60"
         updated = client.patch("/api/system/display-control", json={
             "cec_address": "A", "activate_source": True, "fallback_hdmi_signal": True,
+            "resolution_mode": "720p60",
             "schedule_enabled": True, "schedule_entries": [
                 {"weekday": 1, "on": "08:00", "off": "09:00"},
                 {"weekday": 1, "on": "19:30", "off": "21:30"},
@@ -1185,10 +1190,21 @@ def test_display_control_configuration_and_request_are_protected(tmp_path: Path,
         })
         assert updated.status_code == 200
         assert len(updated.json()["config"]["schedule_entries"]) == 4
+        assert updated.json()["config"]["resolution_mode"] == "720p60"
         assert [entry["weekday"] for entry in updated.json()["config"]["schedule_entries"][:2]] == [1, 1]
         assert client.post("/api/system/display-control/action", json={"action": "on"}).status_code == 202
         assert client.post("/api/system/display-control/action", json={"action": "arbitrary"}).status_code == 422
     assert (tmp_path / "display-control-request").read_text() == "on"
+
+
+def test_invalid_display_resolution_is_rejected(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        response = client.patch("/api/system/display-control", json={
+            "resolution_mode": "3840x2160; reboot",
+        })
+    assert response.status_code == 422
 
 
 def test_display_schedule_handles_daytime_and_overnight_windows():
@@ -1212,7 +1228,7 @@ def test_display_schedule_handles_daytime_and_overnight_windows():
     assert scheduled_state(overnight, datetime(2026, 8, 11, 3, 0)) == "off"
 
 
-def test_display_schedule_reasserts_off_but_not_on(tmp_path: Path):
+def test_display_schedule_applies_resolution_and_reasserts_off(tmp_path: Path):
     helper = runpy.run_path(str(PROJECT_ROOT / "deploy/open-signage-display-control"))
     globals_ = helper["main"].__globals__
     request_path = tmp_path / "display-control-request"
@@ -1231,7 +1247,8 @@ def test_display_schedule_reasserts_off_but_not_on(tmp_path: Path):
     try:
         sys.argv = [old_argv[0], "--schedule"]
         assert helper["main"]() == 0
-        assert actions == []
+        assert actions == ["resolution"]
+        actions.clear()
         globals_["scheduled_state"] = lambda _config, _now: "off"
         status_path.write_text(json.dumps({"desired_state": "off"}))
         assert helper["main"]() == 0
@@ -1273,6 +1290,7 @@ def test_privileged_display_helper_sanitizes_its_configuration(tmp_path: Path):
     config_path = tmp_path / "display-control.json"
     config_path.write_text(json.dumps({
         "cec_address": "0\nstandby 0", "schedule_enabled": True,
+        "resolution_mode": "../../bin/sh",
         "schedule_entries": [
             {"weekday": 1, "on": "19:30", "off": "21:30"},
             {"weekday": 1, "on": "08:00", "off": "09:00"},
@@ -1288,6 +1306,7 @@ def test_privileged_display_helper_sanitizes_its_configuration(tmp_path: Path):
         {"weekday": 1, "on": "19:30", "off": "21:30"},
     ]
     assert config["activate_source"] is False
+    assert config["resolution_mode"] == "1080p60"
 
 
 def test_cec_transmit_error_is_failure_even_with_zero_exit_status(monkeypatch):

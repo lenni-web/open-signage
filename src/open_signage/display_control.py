@@ -10,6 +10,7 @@ DEFAULT_CONFIG = {
     "cec_address": "0",
     "activate_source": True,
     "fallback_hdmi_signal": True,
+    "resolution_mode": "1080p60",
     "schedule_enabled": False,
     "schedule_entries": [],
 }
@@ -89,6 +90,9 @@ def display_status() -> dict:
         "method": None,
         "cec_adapter": None,
         "output_name": None,
+        "resolution_mode": None,
+        "current_resolution": None,
+        "resolution_message": "Auflösung wurde noch nicht geprüft.",
         "message": "Status wurde noch nicht abgefragt.",
         "updated_at": None,
     })

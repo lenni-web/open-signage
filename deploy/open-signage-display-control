@@ -18,6 +18,7 @@ REQUEST = DATA_DIR / "display-control-request"
 STATUS = DATA_DIR / "display-control-status.json"
 DEFAULTS = {
     "cec_address": "0", "activate_source": True, "fallback_hdmi_signal": True,
+    "resolution_mode": "1080p60",
     "schedule_enabled": False, "schedule_entries": [],
 }
 KIOSK_USER = "@@KIOSK_USER@@"
@@ -71,6 +72,9 @@ def sanitized_config() -> dict:
         "cec_address": address,
         "activate_source": raw.get("activate_source") is True,
         "fallback_hdmi_signal": raw.get("fallback_hdmi_signal") is True,
+        "resolution_mode": raw.get("resolution_mode") if raw.get("resolution_mode") in {
+            "auto", "1080p60", "1080p50", "720p60"
+        } else "1080p60",
         "schedule_enabled": raw.get("schedule_enabled") is True,
         "schedule_entries": sorted(clean_entries, key=lambda entry: (entry["weekday"], entry["on"], entry["off"])),
     }
@@ -185,6 +189,77 @@ def wayland_signal(on: bool | None) -> tuple[bool, str, str | None]:
     return False, "\n".join(errors) or "Wayland-Ausgang konnte nicht gesteuert werden.", None
 
 
+def wayland_resolution(mode: str) -> tuple[bool, str, str | None, str | None]:
+    executable = shutil.which("wlr-randr")
+    runuser = shutil.which("runuser")
+    if not executable or not runuser:
+        return False, "wlr-randr ist nicht installiert.", None, None
+    try:
+        account = pwd.getpwnam(KIOSK_USER)
+    except KeyError:
+        return False, f"Kiosk-Benutzer {KIOSK_USER} wurde nicht gefunden.", None, None
+    runtime = Path(f"/run/user/{account.pw_uid}")
+    sockets = sorted(path.name for path in runtime.glob("wayland-*") if not path.name.endswith(".lock"))
+    targets = {"1080p60": ("1920x1080", 60.0), "1080p50": ("1920x1080", 50.0),
+               "720p60": ("1280x720", 60.0)}
+    errors = []
+    for socket in sockets:
+        environment = [runuser, "-u", KIOSK_USER, "--", "env", f"HOME={account.pw_dir}",
+                       f"XDG_RUNTIME_DIR={runtime}", f"WAYLAND_DISPLAY={socket}",
+                       f"DBUS_SESSION_BUS_ADDRESS=unix:path={runtime}/bus"]
+        listed = run(environment + [executable])
+        listing = (listed.stdout + listed.stderr).strip()
+        if listed.returncode != 0:
+            errors.append(f"{socket}: {listing}")
+            continue
+        blocks = re.split(r"(?m)^(?=\S)", listing)
+        preferred_outputs = connected_outputs()
+        parsed = []
+        for block in blocks:
+            header = re.match(r"^(\S+)", block)
+            if not header:
+                continue
+            output_name = header.group(1)
+            current_match = re.search(r"(?m)^\s+(\d+x\d+) px,\s*([\d.]+) Hz.*\(.*current.*\)", block)
+            preferred_match = re.search(r"(?m)^\s+(\d+x\d+) px,\s*([\d.]+) Hz.*\(.*preferred.*\)", block)
+            modes = [(match.group(1), float(match.group(2))) for match in
+                     re.finditer(r"(?m)^\s+(\d+x\d+) px,\s*([\d.]+) Hz", block)]
+            parsed.append((output_name, current_match, preferred_match, modes))
+        selected = next((item for name in preferred_outputs for item in parsed if item[0] == name), None)
+        selected = selected or (parsed[0] if parsed else None)
+        if not selected:
+            errors.append(f"{socket}: Kein Ausgang erkannt.")
+            continue
+        output_name, current_match, preferred_match, modes = selected
+        current = f"{current_match.group(1)} @ {float(current_match.group(2)):g} Hz" if current_match else None
+        requested = targets.get(mode)
+        chosen = None if requested is None else next(
+            ((size, refresh) for size, refresh in modes
+             if size == requested[0] and abs(refresh - requested[1]) < 0.2), None
+        )
+        fallback = requested is not None and chosen is None
+        if requested is None or fallback:
+            if not preferred_match:
+                return False, "Bevorzugter Bildschirmmodus konnte nicht ermittelt werden.", output_name, current
+            chosen = (preferred_match.group(1), float(preferred_match.group(2)))
+        desired = f"{chosen[0]} @ {chosen[1]:g} Hz"
+        if current_match and current_match.group(1) == chosen[0] and abs(float(current_match.group(2)) - chosen[1]) < 0.01:
+            message = "Gewählter Modus ist bereits aktiv."
+            if fallback:
+                message = "Gewählter Modus wird nicht unterstützt; bevorzugter Modus ist bereits aktiv."
+            return True, message, output_name, current
+        result = run(environment + [executable, "--output", output_name, "--mode",
+                                    f"{chosen[0]}@{chosen[1]:g}Hz"])
+        result_output = (result.stdout + result.stderr).strip()
+        if result.returncode == 0:
+            message = f"Auf {desired} umgestellt."
+            if fallback:
+                message = f"Gewählter Modus wird nicht unterstützt; auf bevorzugten Modus {desired} zurückgefallen."
+            return True, message, output_name, desired
+        errors.append(f"{socket}/{output_name}: {result_output}")
+    return False, " ".join(errors) or "Keine aktive Wayland-Sitzung gefunden.", None, None
+
+
 def scheduled_state(config: dict, now: datetime) -> str | None:
     if not config.get("schedule_enabled"):
         return None
@@ -202,6 +277,15 @@ def scheduled_state(config: dict, now: datetime) -> str | None:
 
 
 def execute(action: str, config: dict) -> None:
+    if action == "resolution":
+        resolution_ok, resolution_message, output_name, current_resolution = wayland_resolution(
+            config.get("resolution_mode", "1080p60")
+        )
+        write_status(output_name=output_name, resolution_mode=config.get("resolution_mode"),
+                     current_resolution=current_resolution, resolution_message=resolution_message,
+                     message=("Auflösung angewendet. " if resolution_ok else "Auflösung konnte nicht angewendet werden. ")
+                     + resolution_message)
+        return
     address = config.get("cec_address", "0")
     adapter, probe_output = cec_adapter(address)
     fallback_available, fallback_status, fallback_output = wayland_signal(None)
@@ -216,9 +300,15 @@ def execute(action: str, config: dict) -> None:
                 lowered_fallback = fallback_status.lower()
                 power = "off" if re.search(rf"^{re.escape(fallback_output or '')}:?\s+off\s*$", lowered_fallback, re.MULTILINE | re.IGNORECASE) else "on"
                 method, output = "wayland_dpms", fallback_status
+        resolution_ok, resolution_message, resolution_output, current_resolution = wayland_resolution(
+            config.get("resolution_mode", "1080p60")
+        )
         write_status(cec_available=cec_available, hdmi_fallback_available=fallback_available,
                      power_status=power, method=method, cec_adapter=adapter,
-                     output_name=fallback_output, message=output[-500:] or "Status abgefragt.")
+                     output_name=resolution_output or fallback_output,
+                     resolution_mode=config.get("resolution_mode"), current_resolution=current_resolution,
+                     resolution_message=resolution_message,
+                     message=output[-500:] or "Status abgefragt.")
         return
 
     turn_on = action == "on"
@@ -253,16 +343,34 @@ def execute(action: str, config: dict) -> None:
         summary = "CEC nicht erreichbar; Wayland-DPMS-Fallback ausgeführt. "
     else:
         summary = "Bildschirmaktion fehlgeschlagen. "
-    write_status(cec_available=cec_available, hdmi_fallback_available=fallback_available,
-                 power_status=action if ok else "unknown", desired_state=action,
-                 method=method, cec_adapter=adapter, output_name=fallback_output,
-                 message=summary + output[-500:])
+    resolution_message = None
+    current_resolution = None
+    if ok and turn_on:
+        resolution_ok, resolution_message, resolution_output, current_resolution = wayland_resolution(
+            config.get("resolution_mode", "1080p60")
+        )
+        fallback_output = resolution_output or fallback_output
+        if not resolution_ok:
+            output = f"{output}\nAuflösung: {resolution_message}".strip()
+    status_values = {
+        "cec_available": cec_available, "hdmi_fallback_available": fallback_available,
+        "power_status": action if ok else "unknown", "desired_state": action,
+        "method": method, "cec_adapter": adapter, "output_name": fallback_output,
+        "message": summary + output[-500:],
+    }
+    if turn_on:
+        status_values.update(resolution_mode=config.get("resolution_mode"),
+                             current_resolution=current_resolution,
+                             resolution_message=resolution_message)
+    write_status(**status_values)
 
 
 def main() -> int:
     config = sanitized_config()
     if "--schedule" in sys.argv:
         action = scheduled_state(config, datetime.now().astimezone())
+        if action != "off":
+            execute("resolution", config)
         if action is None:
             return 0
         previous = read_json(STATUS, {}).get("desired_state")
@@ -277,7 +385,7 @@ def main() -> int:
         except OSError:
             return 0
         REQUEST.unlink(missing_ok=True)
-    if action not in {"on", "off", "status"}:
+    if action not in {"on", "off", "status", "resolution"}:
         write_status(message="Ungültige Display-Aktion verworfen.", power_status="unknown")
         return 2
     execute(action, config)

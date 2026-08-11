@@ -451,6 +451,16 @@
             </label>
             <label class="inline-check"><input name="activate_source" type="checkbox"><span>Beim Einschalten diesen HDMI-Eingang aktivieren</span></label>
             <label class="inline-check"><input name="fallback_hdmi_signal" type="checkbox"><span>Wayland-DPMS automatisch verwenden, wenn CEC nicht verfügbar ist</span></label>
+            <label>Bildschirmauflösung
+              <select name="resolution_mode">
+                <option value="1080p60">Full HD – 1920 × 1080 bei 60 Hz (empfohlen)</option>
+                <option value="1080p50">Full HD – 1920 × 1080 bei 50 Hz</option>
+                <option value="720p60">HD – 1280 × 720 bei 60 Hz</option>
+                <option value="auto">Automatisch – bevorzugter Modus des Bildschirms</option>
+              </select>
+              <small>Der HDMI-Ausgang wird automatisch erkannt. Ist der gewählte Modus nicht verfügbar, wird der bevorzugte Bildschirmmodus verwendet.</small>
+            </label>
+            <p id="display-resolution-status" class="schedule-note">Auflösung: noch nicht geprüft</p>
             <label class="inline-check"><input name="schedule_enabled" type="checkbox"><span>Automatischen Bildschirm-Zeitplan aktivieren</span></label>
             <fieldset>
               <legend>Schaltplan</legend>

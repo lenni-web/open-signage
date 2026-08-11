@@ -103,6 +103,7 @@ apt-get install --no-install-recommends -y \
   python3-pip \
   python3-venv \
   rpd-wayland-core \
+  wlr-randr \
   wlopm \
   wtype
 
