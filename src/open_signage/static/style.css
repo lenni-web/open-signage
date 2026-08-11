@@ -215,6 +215,9 @@ button:disabled { cursor: default; opacity: .35; }
   flex-direction: row;
 }
 .inline-check input { width: 20px; height: 20px; }
+.compact-range { display: flex; align-items: center; gap: 12px; max-width: 440px; }
+.compact-range input[type="range"] { flex: 1; min-width: 140px; padding: 0; }
+.compact-range output { min-width: 72px; font-variant-numeric: tabular-nums; }
 .empty { color: var(--muted); text-align: center; padding: 25px; }
 .page-title { width: min(1100px, 100%); margin: 0 auto 18px; }
 .playlist-manager { width: min(1100px, 100%); margin: 0 auto 18px; display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 14px; }
@@ -318,7 +321,7 @@ button:disabled { cursor: default; opacity: .35; }
   inset: 0;
   z-index: 2;
   opacity: 1;
-  transition: opacity 4s cubic-bezier(.3, 0, .7, 1);
+  transition: opacity var(--player-transition-ms, 4000ms) cubic-bezier(.3, 0, .7, 1);
 }
 .player-transition-source.player-leaving { opacity: 0; }
 .content-image { background: transparent; }

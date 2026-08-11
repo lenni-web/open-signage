@@ -69,10 +69,12 @@ def test_player_endpoints_require_device_token(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
     with TestClient(app) as client:
         assert client.get("/api/player/content").status_code == 401
+        assert client.get("/api/player/config").status_code == 401
         assert client.post("/api/player/heartbeat", json={"state": "idle"}).status_code == 401
         token = client.get("/api/player/bootstrap").json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         assert client.get("/api/player/content", headers=headers).status_code == 200
+        assert client.get("/api/player/config", headers=headers).json() == {"transition_ms": 4000}
         assert client.post(
             "/api/player/heartbeat", json={"state": "idle"}, headers=headers
         ).status_code == 204
@@ -312,7 +314,8 @@ def test_raspberry_pi_templates_have_expected_placeholders():
     ).read_text(encoding="utf-8")
     assert "function transitionTo(" in player_script
     assert "previousElements.forEach" in player_script
-    assert "const TRANSITION_MS = 4000" in player_script
+    assert "let transitionMs = 4000" in player_script
+    assert 'fetch("/api/player/config"' in player_script
     assert "const WEBSITE_SETTLE_MS = 4000" in player_script
     assert "function settleAfter(" in player_script
     assert "function waitForVideoFrame(" in player_script
@@ -531,6 +534,7 @@ def test_admin_contains_system_navigation_and_update_controls():
     assert 'id="display-control-form"' in admin
     assert 'name="resolution_mode"' in admin
     assert 'id="display-resolution-status"' in admin
+    assert 'name="transition_ms"' in admin
 
     admin_script = (
         PROJECT_ROOT / "src/open_signage/static/admin.js"
@@ -1181,6 +1185,7 @@ def test_display_control_configuration_and_request_are_protected(tmp_path: Path,
         updated = client.patch("/api/system/display-control", json={
             "cec_address": "A", "activate_source": True, "fallback_hdmi_signal": True,
             "resolution_mode": "720p60",
+            "transition_ms": 2300,
             "schedule_enabled": True, "schedule_entries": [
                 {"weekday": 1, "on": "08:00", "off": "09:00"},
                 {"weekday": 1, "on": "19:30", "off": "21:30"},
@@ -1191,6 +1196,7 @@ def test_display_control_configuration_and_request_are_protected(tmp_path: Path,
         assert updated.status_code == 200
         assert len(updated.json()["config"]["schedule_entries"]) == 4
         assert updated.json()["config"]["resolution_mode"] == "720p60"
+        assert updated.json()["config"]["transition_ms"] == 2300
         assert [entry["weekday"] for entry in updated.json()["config"]["schedule_entries"][:2]] == [1, 1]
         assert client.post("/api/system/display-control/action", json={"action": "on"}).status_code == 202
         assert client.post("/api/system/display-control/action", json={"action": "arbitrary"}).status_code == 422
@@ -1205,6 +1211,16 @@ def test_invalid_display_resolution_is_rejected(tmp_path: Path, monkeypatch):
             "resolution_mode": "3840x2160; reboot",
         })
     assert response.status_code == 422
+
+
+def test_transition_duration_is_limited_server_side(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        too_short = client.patch("/api/system/display-control", json={"transition_ms": 999})
+        too_long = client.patch("/api/system/display-control", json={"transition_ms": 6001})
+    assert too_short.status_code == 422
+    assert too_long.status_code == 422
 
 
 def test_display_schedule_handles_daytime_and_overnight_windows():
@@ -1307,6 +1323,7 @@ def test_privileged_display_helper_sanitizes_its_configuration(tmp_path: Path):
     ]
     assert config["activate_source"] is False
     assert config["resolution_mode"] == "1080p60"
+    assert config["transition_ms"] == 4000
 
 
 def test_cec_transmit_error_is_failure_even_with_zero_exit_status(monkeypatch):

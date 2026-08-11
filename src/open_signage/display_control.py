@@ -11,6 +11,7 @@ DEFAULT_CONFIG = {
     "activate_source": True,
     "fallback_hdmi_signal": True,
     "resolution_mode": "1080p60",
+    "transition_ms": 4000,
     "schedule_enabled": False,
     "schedule_entries": [],
 }
@@ -35,6 +36,9 @@ def display_config() -> dict:
         ]
     if not isinstance(config.get("schedule_entries"), list):
         config["schedule_entries"] = []
+    transition_ms = config.get("transition_ms")
+    if not isinstance(transition_ms, int) or not 1000 <= transition_ms <= 6000:
+        config["transition_ms"] = 4000
     for legacy in ("schedule_weekdays", "schedule_on", "schedule_off"):
         config.pop(legacy, None)
     return config

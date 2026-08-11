@@ -19,6 +19,7 @@ STATUS = DATA_DIR / "display-control-status.json"
 DEFAULTS = {
     "cec_address": "0", "activate_source": True, "fallback_hdmi_signal": True,
     "resolution_mode": "1080p60",
+    "transition_ms": 4000,
     "schedule_enabled": False, "schedule_entries": [],
 }
 KIOSK_USER = "@@KIOSK_USER@@"
@@ -75,6 +76,8 @@ def sanitized_config() -> dict:
         "resolution_mode": raw.get("resolution_mode") if raw.get("resolution_mode") in {
             "auto", "1080p60", "1080p50", "720p60"
         } else "1080p60",
+        "transition_ms": raw.get("transition_ms") if isinstance(raw.get("transition_ms"), int)
+        and 1000 <= raw.get("transition_ms") <= 6000 else 4000,
         "schedule_enabled": raw.get("schedule_enabled") is True,
         "schedule_entries": sorted(clean_entries, key=lambda entry: (entry["weekday"], entry["on"], entry["off"])),
     }

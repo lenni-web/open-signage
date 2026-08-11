@@ -13,7 +13,7 @@ let playerToken = "";
 let transitionGeneration = 0;
 const CACHE_KEY = "open-signage-playlist-v1";
 const CURRENT_KEY = "open-signage-current-content";
-const TRANSITION_MS = 4000;
+let transitionMs = 4000;
 const WEBSITE_SETTLE_MS = 4000;
 const PDF_SETTLE_MS = 1200;
 
@@ -90,12 +90,17 @@ function waitForVideoFrame(video) {
 }
 
 function transitionTo(elements, ready, options = {}) {
+  const transitionDuration = transitionMs;
   const generation = ++transitionGeneration;
   const nextElements = Array.isArray(elements) ? elements : [elements];
   const previousElements = [...stage.children];
   const previousHls = activeHls;
-  previousElements.forEach(element => element.classList.add("player-transition-source"));
+  previousElements.forEach(element => {
+    element.style.setProperty("--player-transition-ms", `${transitionDuration}ms`);
+    element.classList.add("player-transition-source");
+  });
   nextElements.forEach(element => {
+    element.style.setProperty("--player-transition-ms", `${transitionDuration}ms`);
     element.classList.add("player-preparing");
     stage.append(element);
   });
@@ -117,7 +122,7 @@ function transitionTo(elements, ready, options = {}) {
         element.classList.add("player-current");
       });
       if (previousHls && previousHls !== activeHls) previousHls.destroy();
-    }, TRANSITION_MS + 200);
+    }, transitionDuration + 200);
     options.onVisible?.();
   });
 }
@@ -391,6 +396,19 @@ async function refreshPlaylist() {
   }
 }
 
+async function refreshPlayerConfig() {
+  try {
+    const response = await fetch("/api/player/config", {
+      cache: "no-store", headers: { "Authorization": `Bearer ${playerToken}` },
+    });
+    if (!response.ok) return;
+    const config = await response.json();
+    if (Number.isInteger(config.transition_ms) && config.transition_ms >= 1000 && config.transition_ms <= 6000) {
+      transitionMs = config.transition_ms;
+    }
+  } catch (_) {}
+}
+
 try {
   const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "[]");
   if (Array.isArray(cached) && cached.length) {
@@ -407,8 +425,10 @@ async function startPlayer() {
     if (response.ok) playerToken = (await response.json()).token;
   } catch (_) {}
   if (!playerToken) return;
+  await refreshPlayerConfig();
   refreshPlaylist();
   window.setInterval(refreshPlaylist, 5000);
+  window.setInterval(refreshPlayerConfig, 5000);
   window.setInterval(() => sendHeartbeat(), 10000);
 }
 startPlayer();

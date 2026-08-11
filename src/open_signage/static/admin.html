@@ -461,6 +461,10 @@
               <small>Der HDMI-Ausgang wird automatisch erkannt. Ist der gewählte Modus nicht verfügbar, wird der bevorzugte Bildschirmmodus verwendet.</small>
             </label>
             <p id="display-resolution-status" class="schedule-note">Auflösung: noch nicht geprüft</p>
+            <label class="transition-setting">Überblendzeit
+              <span class="compact-range"><input name="transition_ms" type="range" min="1000" max="6000" step="100" value="4000"><output id="transition-ms-output">4000 ms</output></span>
+              <small>Zwischen 1.000 und 6.000 Millisekunden. Der Player übernimmt Änderungen automatisch.</small>
+            </label>
             <label class="inline-check"><input name="schedule_enabled" type="checkbox"><span>Automatischen Bildschirm-Zeitplan aktivieren</span></label>
             <fieldset>
               <legend>Schaltplan</legend>

@@ -12,6 +12,9 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 - Die weiche Player-Deckblende wurde von fünf auf vier Sekunden verkürzt. Ihre
   ruhige Kurve und die flackerarmen Compositor-Ebenen bleiben unverändert.
+- Unter Einstellungen lässt sich die Überblendzeit mit einem kompakten Regler
+  zwischen 1.000 und 6.000 Millisekunden festlegen. Der authentifizierte Player
+  übernimmt Änderungen automatisch; Standardwert sind 4.000 Millisekunden.
 
 ## [0.14.0] – 2026-08-11
 

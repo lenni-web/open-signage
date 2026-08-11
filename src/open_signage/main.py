@@ -168,6 +168,7 @@ class DisplayControlSettings(BaseModel):
     activate_source: bool = True
     fallback_hdmi_signal: bool = True
     resolution_mode: str = Field(default="1080p60", pattern=r"^(auto|1080p60|1080p50|720p60)$")
+    transition_ms: int = Field(default=4000, ge=1000, le=6000)
     schedule_enabled: bool = False
     schedule_entries: list[DisplayScheduleEntry] = Field(default_factory=list, max_length=100)
 
@@ -721,6 +722,11 @@ def player_bootstrap(request: Request):
 @app.get("/api/player/content")
 def player_content(_: None = Depends(require_player)):
     return content_rows(enabled_only=True)
+
+
+@app.get("/api/player/config")
+def player_config(_: None = Depends(require_player)):
+    return {"transition_ms": display_config().get("transition_ms", 4000)}
 
 
 @app.get("/api/playlists")

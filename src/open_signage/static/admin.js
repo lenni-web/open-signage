@@ -716,6 +716,8 @@ function renderDisplayControl(data, updateForm = !displayControlDirty) {
     form.elements.activate_source.checked = config.activate_source;
     form.elements.fallback_hdmi_signal.checked = config.fallback_hdmi_signal;
     form.elements.resolution_mode.value = config.resolution_mode || "1080p60";
+    form.elements.transition_ms.value = config.transition_ms || 4000;
+    document.querySelector("#transition-ms-output").value = `${form.elements.transition_ms.value} ms`;
     form.elements.schedule_enabled.checked = config.schedule_enabled;
     const target = document.querySelector("#display-schedule-entries");
     target.replaceChildren(...scheduleEntries.map((entry, index) => {
@@ -1475,6 +1477,7 @@ document.querySelector("#display-control-form").addEventListener("submit", async
         activate_source: form.get("activate_source") === "on",
         fallback_hdmi_signal: form.get("fallback_hdmi_signal") === "on",
         resolution_mode: form.get("resolution_mode"),
+        transition_ms: Number(form.get("transition_ms")),
         schedule_enabled: form.get("schedule_enabled") === "on",
         schedule_entries: [...event.target.querySelectorAll(".display-schedule-row")]
           .map(row => ({ weekday: Number(row.querySelector(".schedule-weekday").value), on: row.querySelector(".day-on").value, off: row.querySelector(".day-off").value })),
@@ -1487,6 +1490,9 @@ document.querySelector("#display-control-form").addEventListener("submit", async
 });
 
 document.querySelector("#display-control-form").addEventListener("input", event => {
+  if (event.target.name === "transition_ms") {
+    document.querySelector("#transition-ms-output").value = `${event.target.value} ms`;
+  }
   displayControlDirty = true;
 });
 
