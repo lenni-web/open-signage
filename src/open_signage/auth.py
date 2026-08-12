@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import os
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -16,6 +17,10 @@ SESSION_LIFETIME = timedelta(hours=12)
 LOGIN_WINDOW = timedelta(minutes=15)
 LOGIN_BLOCK = timedelta(minutes=15)
 MAX_LOGIN_FAILURES = 5
+LOCAL_PLAYER_NETWORKS = tuple(ipaddress.ip_network(network) for network in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8",
+    "169.254.0.0/16", "fc00::/7", "fe80::/10", "::1/128",
+))
 DISPLAY_WRITE_PATHS = {
     "/api/system/password", "/api/system/logout", "/api/system/device",
     "/api/system/device/sync", "/api/system/action", "/api/system/update",
@@ -137,6 +142,16 @@ def player_token() -> str:
         token = secrets.token_urlsafe(32)
         set_setting("player_token", token)
     return token
+
+
+def local_player_client(request: Request) -> bool:
+    if not request.client:
+        return False
+    try:
+        address = ipaddress.ip_address(request.client.host.split("%", 1)[0])
+    except ValueError:
+        return request.client.host == "testclient"
+    return any(address in network for network in LOCAL_PLAYER_NETWORKS)
 
 
 def require_player(request: Request) -> None:

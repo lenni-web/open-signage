@@ -13,6 +13,7 @@ let playerToken = "";
 let transitionGeneration = 0;
 const CACHE_KEY = "open-signage-playlist-v1";
 const CURRENT_KEY = "open-signage-current-content";
+const PLAYER_TOKEN_KEY = "open-signage-player-token";
 let transitionMs = 4000;
 const WEBSITE_SETTLE_MS = 4000;
 const PDF_SETTLE_MS = 1200;
@@ -420,15 +421,41 @@ try {
   }
 } catch (_) {}
 async function startPlayer() {
+  try { playerToken = localStorage.getItem(PLAYER_TOKEN_KEY) || ""; } catch (_) {}
   try {
-    const response = await fetch("/api/player/bootstrap", { cache: "no-store" });
+    const response = await fetch("/api/player/bootstrap", {
+      cache: "no-store",
+      headers: playerToken ? { "Authorization": `Bearer ${playerToken}` } : {},
+    });
     if (response.ok) playerToken = (await response.json()).token;
+    else playerToken = "";
   } catch (_) {}
-  if (!playerToken) return;
+  if (!playerToken) {
+    document.querySelector("#player-pair-form").hidden = false;
+    return;
+  }
+  try { localStorage.setItem(PLAYER_TOKEN_KEY, playerToken); } catch (_) {}
   await refreshPlayerConfig();
   refreshPlaylist();
   window.setInterval(refreshPlaylist, 5000);
   window.setInterval(refreshPlayerConfig, 5000);
   window.setInterval(() => sendHeartbeat(), 10000);
 }
+document.querySelector("#player-pair-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  const error = document.querySelector("#player-pair-error");
+  error.textContent = "";
+  try {
+    const response = await fetch("/api/player/pair", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: new FormData(event.target).get("password") }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.detail || "Freischaltung fehlgeschlagen");
+    playerToken = body.token;
+    localStorage.setItem(PLAYER_TOKEN_KEY, playerToken);
+    event.target.hidden = true;
+    await startPlayer();
+  } catch (failure) { error.textContent = failure.message; }
+});
 startPlayer();

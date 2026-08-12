@@ -23,7 +23,7 @@ from .display_control import (display_config, display_status, request_display_ac
                               save_display_config, schedule_analysis)
 from .auth import (change_password, clear_login_failures, create_session, destroy_session,
                    ensure_login_allowed, get_setting, password_change_required, player_token,
-                   record_login_failure, require_player, require_system_login, screen_name,
+                   local_player_client, record_login_failure, require_player, require_system_login, screen_name,
                    session_is_authenticated, set_setting, verify_password, device_mode)
 from .application_update import request_update as request_application_update
 from .application_update import update_status as application_update_status
@@ -83,6 +83,10 @@ class WebsiteCreate(BaseModel):
 
 
 class LoginRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=200)
+
+
+class PlayerPairRequest(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
 
@@ -714,8 +718,18 @@ def content_rows(enabled_only: bool = False) -> list[dict]:
 
 @app.get("/api/player/bootstrap")
 def player_bootstrap(request: Request):
-    if not request.client or request.client.host not in {"127.0.0.1", "::1", "testclient"}:
-        require_system_login(request)
+    if not local_player_client(request):
+        require_player(request)
+    return {"token": player_token()}
+
+
+@app.post("/api/player/pair")
+def pair_player(payload: PlayerPairRequest, request: Request):
+    ensure_login_allowed(request)
+    if not verify_password(payload.password):
+        record_login_failure(request)
+        raise HTTPException(status_code=401, detail="Falsches Passwort")
+    clear_login_failures(request)
     return {"token": player_token()}
 
 

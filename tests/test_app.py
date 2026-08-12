@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from open_signage.database import initialize
 from open_signage.database import connect, integrity_check_if_due
@@ -23,7 +24,7 @@ from open_signage.media_probe import evaluate_video_probe
 from open_signage.system_update import request_update, update_status
 from open_signage.version import __version__
 from open_signage.upload_security import detect_media_type, ensure_free_space
-from open_signage.auth import get_setting, set_setting
+from open_signage.auth import get_setting, local_player_client, set_setting
 from open_signage.sync import safe_sync_from_controller, snapshot as sync_snapshot
 
 PROJECT_ROOT = Path(__file__).parents[1]
@@ -78,6 +79,39 @@ def test_player_endpoints_require_device_token(tmp_path: Path, monkeypatch):
         assert client.post(
             "/api/player/heartbeat", json={"state": "idle"}, headers=headers
         ).status_code == 204
+
+
+def test_network_player_can_pair_without_admin_session(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        assert client.post("/api/player/pair", json={"password": "falsch"}).status_code == 401
+        paired = client.post("/api/player/pair", json={"password": "open-signage"})
+        assert paired.status_code == 200
+        token = paired.json()["token"]
+        assert token
+        assert "open_signage_session" not in paired.cookies
+        headers = {"Authorization": f"Bearer {token}"}
+        assert client.get("/api/player/content", headers=headers).status_code == 200
+        assert client.get("/api/player/config", headers=headers).status_code == 200
+
+
+@pytest.mark.parametrize("address", [
+    "10.20.30.40", "172.16.5.10", "172.31.255.250", "192.168.142.192",
+    "169.254.10.5", "127.0.0.1", "fd12:3456::10", "fe80::1234", "::1",
+])
+def test_private_network_clients_are_automatic_players(address: str):
+    request = Request({"type": "http", "method": "GET", "path": "/api/player/bootstrap",
+                       "headers": [], "client": (address, 12345), "server": ("test", 80),
+                       "scheme": "http", "query_string": b""})
+    assert local_player_client(request) is True
+
+
+@pytest.mark.parametrize("address", ["8.8.8.8", "172.32.0.1", "203.0.113.10", "2001:4860:4860::8888"])
+def test_public_network_clients_are_not_automatic_players(address: str):
+    request = Request({"type": "http", "method": "GET", "path": "/api/player/bootstrap",
+                       "headers": [], "client": (address, 12345), "server": ("test", 80),
+                       "scheme": "http", "query_string": b""})
+    assert local_player_client(request) is False
 
 
 def test_player_skips_missing_local_media_file(tmp_path: Path, monkeypatch):
@@ -316,6 +350,8 @@ def test_raspberry_pi_templates_have_expected_placeholders():
     assert "previousElements.forEach" in player_script
     assert "let transitionMs = 4000" in player_script
     assert 'fetch("/api/player/config"' in player_script
+    assert 'fetch("/api/player/pair"' in player_script
+    assert "PLAYER_TOKEN_KEY" in player_script
     assert "const WEBSITE_SETTLE_MS = 4000" in player_script
     assert "function settleAfter(" in player_script
     assert "function waitForVideoFrame(" in player_script
@@ -535,6 +571,9 @@ def test_admin_contains_system_navigation_and_update_controls():
     assert 'name="resolution_mode"' in admin
     assert 'id="display-resolution-status"' in admin
     assert 'name="transition_ms"' in admin
+    player_html = (PROJECT_ROOT / "src/open_signage/static/player.html").read_text(encoding="utf-8")
+    assert 'id="player-pair-form"' in player_html
+    assert 'name="password"' in player_html
 
     admin_script = (
         PROJECT_ROOT / "src/open_signage/static/admin.js"

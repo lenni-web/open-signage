@@ -14,6 +14,13 @@
       <span>Warte auf Inhalte …</span>
     </div>
   </div>
+  <form id="player-pair-form" class="player-pair" hidden>
+    <strong>Player freischalten</strong>
+    <span>Dieses Netzwerkgerät muss einmalig autorisiert werden.</span>
+    <label>Administratorpasswort<input name="password" type="password" autocomplete="current-password" required></label>
+    <button>Player starten</button>
+    <small id="player-pair-error" role="alert"></small>
+  </form>
   <script src="/static/vendor/hls.min.js?v=@@VERSION@@"></script>
   <script src="/static/player.js?v=@@VERSION@@"></script>
 </body>

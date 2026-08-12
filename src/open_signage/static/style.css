@@ -291,6 +291,16 @@ button:disabled { cursor: default; opacity: .35; }
 #message.error { background: var(--danger); color: white; }
 
 .player { overflow: hidden; background: black; }
+.player-pair {
+  position: fixed; inset: 50% auto auto 50%; z-index: 20;
+  width: min(420px, calc(100vw - 32px)); transform: translate(-50%, -50%);
+  padding: 28px; border-radius: 16px; background: #152231; color: white;
+  box-shadow: 0 24px 80px #000a;
+}
+.player-pair:not([hidden]) { display: grid; gap: 14px; }
+.player-pair strong { font-size: 1.35rem; }
+.player-pair span, .player-pair small { color: #b9c7d5; }
+.player-pair small { min-height: 1.2em; }
 .stage { position: relative; overflow: hidden; background: black; isolation: isolate; }
 .player-layer {
   position: absolute;

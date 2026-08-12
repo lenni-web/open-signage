@@ -16,6 +16,14 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
   zwischen 1.000 und 6.000 Millisekunden festlegen. Der authentifizierte Player
   übernimmt Änderungen automatisch; Standardwert sind 4.000 Millisekunden.
 
+### Behoben
+
+- Netzwerkbrowser bleiben auf der Player-Seite nicht mehr irreführend bei
+  „Warte auf Inhalte“ stehen. Geräte aus privaten IPv4-/IPv6-Netzen werden
+  automatisch als reine Player autorisiert, erhalten aber keine Verwaltungs-
+  sitzung. Nur Zugriffe außerhalb lokaler Netze benötigen eine einmalige
+  geschützte Player-Freischaltung.
+
 ## [0.14.0] – 2026-08-11
 
 ### Geändert
