@@ -67,7 +67,7 @@ function organizeAdministrationPages() {
 }
 
 async function openSettingsPage() {
-  await Promise.all([loadBackups(), loadDevice(), loadDisplayControl()]);
+  await Promise.all([loadBackups(), loadDevice(), loadDisplayControl(), loadPlayerAccess()]);
 }
 
 organizeAdministrationPages();

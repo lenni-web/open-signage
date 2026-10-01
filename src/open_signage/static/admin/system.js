@@ -47,6 +47,11 @@ async function loadSecurityStatus() {
   target.append(details);
 }
 
+async function loadPlayerAccess() {
+  const access = await api("/api/system/player-access");
+  document.querySelector('#player-access-form [name="lan_access"]').checked = access.lan_access;
+}
+
 async function loadDevice() {
   const device = await api("/api/system/device");
   const form = document.querySelector("#device-form");
@@ -251,6 +256,18 @@ document.querySelector("#password-form").addEventListener("submit", async (event
     });
     event.target.reset();
     notify("Passwort geändert");
+  } catch (error) { notify(error.message, true); }
+});
+
+document.querySelector("#player-access-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const access = await api("/api/system/player-access", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lan_access: event.currentTarget.elements.lan_access.checked }),
+    });
+    notify(access.lan_access ? "Player im lokalen Netz freigegeben" : "Player benötigen jetzt eine Freischaltung");
   } catch (error) { notify(error.message, true); }
 });
 

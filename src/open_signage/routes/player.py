@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from ..auth import (clear_login_failures, ensure_login_allowed, local_player_client, player_token,
-                    record_login_failure, require_player, verify_password)
+from ..auth import (automatic_player_client, clear_login_failures, ensure_login_allowed, player_token,
+                    record_login_failure, require_player, set_player_cookie, verify_password)
 from ..database import connect
 from ..display_control import display_config
 from .common import content_rows
@@ -47,19 +47,21 @@ def player_heartbeat(payload: PlayerHeartbeat, _: None = Depends(require_player)
 
 
 @router.get("/api/player/bootstrap")
-def player_bootstrap(request: Request):
-    if not local_player_client(request):
+def player_bootstrap(request: Request, response: Response):
+    if not automatic_player_client(request):
         require_player(request)
+    set_player_cookie(response)
     return {"token": player_token()}
 
 
 @router.post("/api/player/pair")
-def pair_player(payload: PlayerPairRequest, request: Request):
+def pair_player(payload: PlayerPairRequest, request: Request, response: Response):
     ensure_login_allowed(request)
     if not verify_password(payload.password):
         record_login_failure(request)
         raise HTTPException(status_code=401, detail="Falsches Passwort")
     clear_login_failures(request)
+    set_player_cookie(response)
     return {"token": player_token()}
 
 

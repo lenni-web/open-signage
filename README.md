@@ -56,10 +56,17 @@ Bildschirmname vergeben und ein Betriebssystemupdate gestartet werden.
 
 Die Anmeldung schützt die gesamte Verwaltungsoberfläche einschließlich der
 Inhalte-Seite. Nach fünf Fehlversuchen innerhalb von 15 Minuten wird die
-Client-Adresse für 15 Minuten gesperrt. Der lokale Vollbild-Player authentifiziert
-sich mit einem automatisch erzeugten Geräteschlüssel, der nur über die
-Loopback-Schnittstelle ausgegeben wird. Eine Anmeldung bleibt auch während eines Anwendungsneustarts gültig
-und läuft nach zwölf Stunden ab.
+Client-Adresse für 15 Minuten gesperrt. Eine Anmeldung bleibt auch während eines
+Anwendungsneustarts gültig und läuft nach zwölf Stunden ab.
+
+Der Player authentifiziert sich mit einem automatisch erzeugten Geräteschlüssel.
+Der Kiosk auf dem Gerät selbst erhält ihn immer, Geräte aus privaten IPv4-/IPv6-
+Netzen standardmäßig ebenfalls ohne Anmeldung. Unter **Einstellungen →
+Sicherheit → Player-Zugriff** lässt sich diese LAN-Freigabe abschalten; andere
+Geräte müssen den Player dann einmalig mit dem Verwaltungspasswort
+freischalten. Mediendateien unter `/media` werden nach derselben Regel
+ausgeliefert: an berechtigte Player und angemeldete Verwaltungssitzungen, aber
+nicht an unbekannte Clients außerhalb lokaler Netze.
 
 Uploads werden anhand ihres tatsächlichen Dateiinhalts geprüft und standardmäßig
 auf 1 GiB begrenzt. Mindestens 512 MiB beziehungsweise fünf Prozent des

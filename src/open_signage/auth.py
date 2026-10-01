@@ -13,6 +13,8 @@ from .database import connect
 
 DEFAULT_PASSWORD = "open-signage"
 SESSION_COOKIE = "open_signage_session"
+PLAYER_COOKIE = "open_signage_player"
+PLAYER_COOKIE_LIFETIME = timedelta(days=400)
 SESSION_LIFETIME = timedelta(hours=12)
 LOGIN_WINDOW = timedelta(minutes=15)
 LOGIN_BLOCK = timedelta(minutes=15)
@@ -21,10 +23,12 @@ LOCAL_PLAYER_NETWORKS = tuple(ipaddress.ip_network(network) for network in (
     "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8",
     "169.254.0.0/16", "fc00::/7", "fe80::/10", "::1/128",
 ))
+LOOPBACK_NETWORKS = tuple(ipaddress.ip_network(network) for network in ("127.0.0.0/8", "::1/128"))
 DISPLAY_WRITE_PATHS = {
     "/api/system/password", "/api/system/logout", "/api/system/device",
     "/api/system/device/sync", "/api/system/action", "/api/system/update",
     "/api/system/application-update", "/api/system/display-control/action",
+    "/api/system/player-access",
 }
 
 
@@ -144,20 +148,46 @@ def player_token() -> str:
     return token
 
 
-def local_player_client(request: Request) -> bool:
+def _client_in(request: Request, networks: tuple) -> bool:
     if not request.client:
         return False
     try:
         address = ipaddress.ip_address(request.client.host.split("%", 1)[0])
     except ValueError:
         return request.client.host == "testclient"
-    return any(address in network for network in LOCAL_PLAYER_NETWORKS)
+    return any(address in network for network in networks)
+
+
+def local_player_client(request: Request) -> bool:
+    return _client_in(request, LOCAL_PLAYER_NETWORKS)
+
+
+def lan_player_access_enabled() -> bool:
+    return _setting("player_lan_access") != "0"
+
+
+def automatic_player_client(request: Request) -> bool:
+    """Der lokale Kiosk ist immer berechtigt, andere private Netze nur bei aktiver LAN-Freigabe."""
+    if _client_in(request, LOOPBACK_NETWORKS):
+        return True
+    return lan_player_access_enabled() and local_player_client(request)
+
+
+def set_player_cookie(response: Response) -> None:
+    # Bild-, Video- und PDF-Elemente können keinen Authorization-Header senden.
+    response.set_cookie(
+        PLAYER_COOKIE, player_token(), max_age=int(PLAYER_COOKIE_LIFETIME.total_seconds()),
+        httponly=True, samesite="strict",
+    )
 
 
 def require_player(request: Request) -> None:
     authorization = request.headers.get("Authorization", "")
     supplied = authorization.removeprefix("Bearer ") if authorization.startswith("Bearer ") else ""
     if supplied and hmac.compare_digest(supplied, player_token()):
+        return
+    cookie = request.cookies.get(PLAYER_COOKIE, "")
+    if cookie and hmac.compare_digest(cookie, player_token()):
         return
     session = request.cookies.get(SESSION_COOKIE, "")
     if session:

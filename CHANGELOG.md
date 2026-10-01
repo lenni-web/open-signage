@@ -8,6 +8,24 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- Unter Einstellungen → Sicherheit lässt sich festlegen, ob Player im ganzen
+  lokalen Netz ohne Freischaltung laufen dürfen (Standard: an). Ist dies
+  ausgeschaltet, müssen andere Geräte den Player einmalig mit dem
+  Verwaltungspasswort freischalten; der Kiosk auf dem Gerät selbst bleibt
+  immer berechtigt.
+
+### Sicherheit
+
+- Mediendateien unter `/media` werden nur noch an berechtigte Player,
+  angemeldete Verwaltungssitzungen und – bei aktiver LAN-Freigabe – an Geräte
+  aus lokalen Netzen ausgeliefert. Freigeschaltete Player erhalten dafür
+  zusätzlich ein HttpOnly-Cookie, da Bilder, Videos und PDFs keinen
+  Authorization-Header senden können.
+- Medien werden mit `Cache-Control: private` ausgeliefert, damit Proxys im
+  Netzwerk keine Kopien vorhalten.
+
 ## [0.15.0] – 2026-10-01
 
 ### Geändert

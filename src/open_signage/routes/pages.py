@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 
+from ..auth import automatic_player_client, require_player
 from ..database import media_dir
 from ..version import __version__
 from .common import STATIC_DIR
@@ -32,7 +33,9 @@ def health():
 
 
 @router.get("/media/{filename}", include_in_schema=False)
-def serve_media(filename: str):
+def serve_media(filename: str, request: Request):
+    if not automatic_player_client(request):
+        require_player(request)
     safe_name = Path(filename).name
     if safe_name != filename:
         raise HTTPException(status_code=404)
@@ -41,5 +44,5 @@ def serve_media(filename: str):
         raise HTTPException(status_code=404)
     return FileResponse(
         path,
-        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        headers={"Cache-Control": "private, max-age=31536000, immutable"},
     )

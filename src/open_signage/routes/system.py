@@ -11,8 +11,8 @@ from pydantic import BaseModel, Field
 
 from ..application_update import (request_update as request_application_update, update_status as
                                   application_update_status)
-from ..auth import (device_mode, get_setting, password_change_required, require_system_login,
-                    set_setting, verify_password)
+from ..auth import (device_mode, get_setting, lan_player_access_enabled, password_change_required,
+                    require_system_login, set_setting, verify_password)
 from ..backup import list_backups
 from ..database import connect, data_dir
 from ..display_control import (display_config, display_status, request_display_action,
@@ -54,6 +54,10 @@ class DisplayControlSettings(BaseModel):
 
 class DisplayAction(BaseModel):
     action: str = Field(pattern=r"^(on|off|status|resolution)$")
+
+
+class PlayerAccessSettings(BaseModel):
+    lan_access: bool
 
 
 @router.get("/api/system/monitoring")
@@ -222,3 +226,14 @@ def update_display_control(payload: DisplayControlSettings, _: None = Depends(re
 def start_display_action(payload: DisplayAction, _: None = Depends(require_system_login)):
     request_display_action(payload.action)
     return {"queued": True, "action": payload.action}
+
+
+@router.get("/api/system/player-access")
+def get_player_access(_: None = Depends(require_system_login)):
+    return {"lan_access": lan_player_access_enabled()}
+
+
+@router.patch("/api/system/player-access")
+def update_player_access(payload: PlayerAccessSettings, _: None = Depends(require_system_login)):
+    set_setting("player_lan_access", "1" if payload.lan_access else "0")
+    return {"lan_access": lan_player_access_enabled()}

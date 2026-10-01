@@ -675,7 +675,7 @@ def test_pdf_can_be_uploaded_and_deleted(tmp_path: Path, monkeypatch):
         assert stored.exists()
 
         served = client.get(item["source"])
-        assert served.headers["cache-control"] == "public, max-age=31536000, immutable"
+        assert served.headers["cache-control"] == "private, max-age=31536000, immutable"
 
         deleted = client.delete(f"/api/content/{item['id']}")
         assert deleted.status_code == 204
@@ -1618,3 +1618,60 @@ def test_cached_file_hash_is_invalidated_when_file_changes(tmp_path: Path):
     os.utime(path, ns=(path.stat().st_atime_ns, path.stat().st_mtime_ns + 1_000_000))
     assert file_sha256(path) != first
     assert file_sha256(path) == hashlib.sha256(b"zweit").hexdigest()
+
+
+def upload_test_image(client) -> str:
+    client.post("/api/system/login", json={"password": "open-signage"})
+    item = client.post(
+        "/api/content/upload", files={"file": ("bild.png", VALID_PNG, "image/png")}
+    ).json()
+    client.post("/api/system/logout")
+    return item["source"]
+
+
+def test_media_is_served_to_lan_players_but_not_to_external_clients(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as local:
+        source = upload_test_image(local)
+    with TestClient(app, client=("192.168.1.50", 50000)) as lan:
+        assert lan.get(source).status_code == 200
+        assert "open_signage_player" in lan.get("/api/player/bootstrap").cookies
+    with TestClient(app, client=("203.0.113.10", 50000)) as external:
+        assert external.get(source).status_code == 401
+        assert external.get("/media/nicht-vorhanden.png").status_code == 401
+        assert external.get("/api/player/bootstrap").status_code == 401
+        paired = external.post("/api/player/pair", json={"password": "open-signage"})
+        assert paired.status_code == 200
+        assert "open_signage_player" in paired.cookies
+        assert external.get(source).status_code == 200
+        external.cookies.clear()
+        token = paired.json()["token"]
+        assert external.get(source, headers={"Authorization": f"Bearer {token}"}).status_code == 200
+        external.post("/api/system/login", json={"password": "open-signage"})
+        assert external.get(source).status_code == 200
+
+
+def test_disabled_lan_access_requires_player_pairing_except_for_local_kiosk(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as local:
+        source = upload_test_image(local)
+        local.post("/api/system/login", json={"password": "open-signage"})
+        assert local.get("/api/system/player-access").json() == {"lan_access": True}
+        assert local.patch("/api/system/player-access", json={"lan_access": False}).json() == {"lan_access": False}
+        local.post("/api/system/logout")
+    with TestClient(app, client=("127.0.0.1", 50000)) as kiosk:
+        assert kiosk.get("/api/player/bootstrap").status_code == 200
+        kiosk.cookies.clear()
+        assert kiosk.get(source).status_code == 200
+    with TestClient(app, client=("192.168.1.50", 50000)) as lan:
+        assert lan.get("/api/player/bootstrap").status_code == 401
+        assert lan.get(source).status_code == 401
+        assert lan.post("/api/player/pair", json={"password": "open-signage"}).status_code == 200
+        assert lan.get(source).status_code == 200
+
+
+def test_player_access_setting_requires_login(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        assert client.get("/api/system/player-access").status_code == 401
+        assert client.patch("/api/system/player-access", json={"lan_access": False}).status_code == 401
