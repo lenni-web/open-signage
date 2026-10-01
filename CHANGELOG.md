@@ -15,6 +15,11 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 - Unter Einstellungen lässt sich die Überblendzeit mit einem kompakten Regler
   zwischen 1.000 und 6.000 Millisekunden festlegen. Der authentifizierte Player
   übernimmt Änderungen automatisch; Standardwert sind 4.000 Millisekunden.
+- Controller und Displays berechnen Prüfsummen unveränderter Mediendateien
+  nicht mehr bei jeder Synchronisierung neu. Das entlastet Prozessor und
+  Speicherkarte besonders bei großen Videos.
+- Displays entfernen nach einer erfolgreichen Synchronisierung Mediendateien,
+  die der Controller-Stand nicht mehr verwendet.
 
 ### Behoben
 
@@ -23,6 +28,12 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
   automatisch als reine Player autorisiert, erhalten aber keine Verwaltungs-
   sitzung. Nur Zugriffe außerhalb lokaler Netze benötigen eine einmalige
   geschützte Player-Freischaltung.
+- PDFs, Freitext-Logos und direkt hochgeladene Freitext-Hintergründe werden
+  jetzt auf Displays synchronisiert. Die Speicherprüfung meldet sie nicht mehr
+  als verwaist, und „Verwaiste Dateien bereinigen“ löscht sie nicht mehr.
+- Die Display-Synchronisierung bleibt auch dann funktionsfähig, wenn der
+  Controller eine neuere Version mit zusätzlichen Datenbankspalten verwendet.
+  Datenbankfehler beenden die minütliche Synchronisierung nicht mehr dauerhaft.
 
 ## [0.14.0] – 2026-08-11
 

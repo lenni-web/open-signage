@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
+import sqlite3
 import urllib.error
 import urllib.request
 from datetime import UTC, datetime
@@ -12,6 +13,9 @@ from urllib.parse import urljoin
 from .auth import get_setting, screen_name, set_setting
 from .database import connect, media_dir
 from .display_control import display_config, save_display_config
+from .media_files import file_sha256, referenced_media_files, remember_sha256
+
+SYNCED_TABLES = ("playlists", "media_library", "content")
 
 
 def pairing_token() -> str:
@@ -54,17 +58,12 @@ def snapshot() -> dict:
         playlists = [dict(row) for row in connection.execute("SELECT * FROM playlists ORDER BY id")]
         media = [dict(row) for row in connection.execute("SELECT * FROM media_library ORDER BY id")]
         content = [dict(row) for row in connection.execute("SELECT * FROM content ORDER BY id")]
+        referenced = referenced_media_files(connection)
     files = {}
-    for item in media:
-        for field in ("source", "original_source", "thumbnail_source"):
-            source = item.get(field)
-            if source:
-                path = media_dir() / Path(source).name
-                if path.is_file():
-                    digest = hashlib.sha256()
-                    with path.open("rb") as source_file:
-                        while chunk := source_file.read(1024 * 1024): digest.update(chunk)
-                    files[path.name] = {"size": path.stat().st_size, "sha256": digest.hexdigest()}
+    for name in sorted(referenced):
+        path = media_dir() / name
+        if path.is_file():
+            files[name] = {"size": path.stat().st_size, "sha256": file_sha256(path)}
     return {"format": 1, "generated_at": datetime.now(UTC).isoformat(),
             "settings": {"screen_name": screen_name()}, "display_control": display_config(),
             "playlists": playlists, "media": media, "content": content, "files": files}
@@ -95,11 +94,9 @@ def sync_from_controller() -> dict:
     for filename, metadata in data.get("files", {}).items():
         if Path(filename).name != filename: continue
         target = media_dir() / filename
-        if target.is_file() and target.stat().st_size == metadata.get("size"):
-            existing_digest = hashlib.sha256()
-            with target.open("rb") as existing:
-                while chunk := existing.read(1024 * 1024): existing_digest.update(chunk)
-            if existing_digest.hexdigest() == metadata.get("sha256"): continue
+        if (target.is_file() and target.stat().st_size == metadata.get("size")
+                and file_sha256(target) == metadata.get("sha256")):
+            continue
         request = urllib.request.Request(urljoin(controller, f"api/sync/media/{filename}"),
                                          headers={"Authorization": f"Bearer {token}"})
         temporary = target.with_suffix(target.suffix + ".sync")
@@ -112,28 +109,44 @@ def sync_from_controller() -> dict:
             temporary.unlink(missing_ok=True)
             raise RuntimeError(f"Mediendatei {filename} wurde unvollständig übertragen")
         temporary.replace(target)
+        remember_sha256(target, digest.hexdigest())
     with connect() as connection:
         connection.execute("DELETE FROM content")
         connection.execute("DELETE FROM media_library")
         connection.execute("DELETE FROM playlists")
-        for table in ("playlists", "media_library", "content"):
+        for table in SYNCED_TABLES:
+            # Controller und Display können unterschiedliche Versionen haben:
+            # Spalten, die das Display noch nicht kennt, werden ignoriert.
+            local_columns = {row["name"] for row in connection.execute(f"PRAGMA table_info({table})")}
             for row in data["media" if table == "media_library" else table]:
-                columns = list(row)
+                columns = [column for column in row if column in local_columns]
                 connection.execute(
                     f"INSERT INTO {table} ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})",
                     tuple(row[column] for column in columns),
                 )
+    removed_files = remove_unreferenced_media()
     set_setting("screen_name", data.get("settings", {}).get("screen_name", "Open Signage"))
     save_display_config(data.get("display_control") or display_config())
     set_setting("sync_last_success", datetime.now(UTC).isoformat())
     set_setting("sync_last_error", "")
-    return {"status": "synchronized", "at": get_setting("sync_last_success")}
+    return {"status": "synchronized", "at": get_setting("sync_last_success"), "removed_files": removed_files}
+
+
+def remove_unreferenced_media() -> int:
+    """Delete media files that the synchronized state no longer references."""
+    with connect() as connection:
+        referenced = referenced_media_files(connection)
+    removed = 0
+    for path in media_dir().iterdir():
+        if path.is_file() and path.name not in referenced:
+            path.unlink(missing_ok=True); removed += 1
+    return removed
 
 
 def safe_sync_from_controller() -> dict:
     try:
         return sync_from_controller()
-    except (OSError, RuntimeError, KeyError, ValueError, urllib.error.URLError) as error:
+    except (OSError, RuntimeError, KeyError, ValueError, sqlite3.Error, urllib.error.URLError) as error:
         set_setting("sync_last_error", str(error)[:500])
         return {"status": "offline", "error": str(error)}
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import hashlib
 import os
 import sqlite3
 import uuid
@@ -30,6 +29,7 @@ from .application_update import update_status as application_update_status
 from .backup import (automatic_backup_if_due, backup_dir, create_backup, list_backups,
                      restore_backup, validate_backup)
 from .conversion_jobs import conversion_status, queue_conversion
+from .media_files import file_sha256, referenced_media_files
 from .media_probe import inspect_video, validate_video
 from .upload_security import ensure_free_space, save_upload
 from .image_processing import edit_image, optimize_image
@@ -303,13 +303,6 @@ def local_media_exists(source: str | None) -> bool:
     return (media_dir() / Path(parsed.path).name).is_file()
 
 
-def file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        while chunk := source.read(1024 * 1024): digest.update(chunk)
-    return digest.hexdigest()
-
-
 def serialize_playlist(row) -> dict:
     item = dict(row)
     item["active"] = bool(item["active"])
@@ -531,9 +524,8 @@ def storage_status(_: None = Depends(require_system_login)):
     with connect() as connection:
         rows = connection.execute("SELECT * FROM media_library").fetchall()
         used = {row[0] for row in connection.execute("SELECT DISTINCT media_id FROM content WHERE media_id IS NOT NULL")}
+        known = referenced_media_files(connection)
     files = [path for path in media_dir().iterdir() if path.is_file()]
-    known = {Path(source).name for row in rows for source in
-             (row["source"], row["original_source"], row["thumbnail_source"]) if source}
     missing = [row["id"] for row in rows if not local_media_exists(row["source"])]
     orphan = [path for path in files if path.name not in known]
     hashes: dict[str, list[int]] = {}
@@ -614,8 +606,7 @@ def cleanup_storage(_: None = Depends(require_system_login)):
 @app.post("/api/system/storage/orphans/cleanup")
 def cleanup_orphan_files(_: None = Depends(require_system_login)):
     with connect() as connection:
-        rows = connection.execute("SELECT source, original_source, thumbnail_source FROM media_library").fetchall()
-    known = {Path(source).name for row in rows for source in row if source}
+        known = referenced_media_files(connection)
     removed = 0; removed_bytes = 0
     for path in media_dir().iterdir():
         if path.is_file() and path.name not in known:

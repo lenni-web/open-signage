@@ -1,5 +1,8 @@
 import sqlite3
 import base64
+import hashlib
+import io
+import os
 import json
 import subprocess
 import runpy
@@ -15,10 +18,11 @@ from fastapi.testclient import TestClient
 from starlette.requests import Request
 
 from open_signage.database import initialize
-from open_signage.database import connect, integrity_check_if_due
+from open_signage.database import connect, integrity_check_if_due, media_dir
 from open_signage.application_update import request_update as request_application_update
 from open_signage.application_update import update_status as application_update_status
 from open_signage.main import app, scheduled_now
+from open_signage.media_files import file_sha256
 from open_signage.display_control import schedule_analysis
 from open_signage.media_probe import evaluate_video_probe
 from open_signage.system_update import request_update, update_status
@@ -1514,3 +1518,94 @@ def test_display_applies_snapshot_and_keeps_device_specific_settings(tmp_path: P
     assert get_setting("sync_device_token") == "individual-device-token"
     with connect() as connection:
         assert connection.execute("SELECT name FROM playlists WHERE id = 1").fetchone()[0] == "Master-Playlist"
+
+
+VALID_PDF = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF"
+
+
+def create_non_library_media(client) -> tuple[dict, dict]:
+    pdf = client.post(
+        "/api/content/upload", files={"file": ("plan.pdf", VALID_PDF, "application/pdf")}
+    ).json()
+    text = client.post(
+        "/api/content/text",
+        data={"name": "Hinweis", "headline": "Willkommen"},
+        files={
+            "background": ("foyer.png", VALID_PNG, "image/png"),
+            "logo": ("logo.png", VALID_PNG, "image/png"),
+        },
+    ).json()
+    return pdf, text
+
+
+def test_pdfs_text_backgrounds_and_logos_are_synced_and_not_orphans(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        pdf, text = create_non_library_media(client)
+        (tmp_path / "media" / "orphan.bin").write_bytes(b"orphan")
+        expected = {
+            Path(pdf["source"]).name,
+            Path(text["source"]).name,
+            Path(text["text_config"]["logo_source"]).name,
+        }
+        assert expected.issubset(sync_snapshot()["files"])
+        assert "orphan.bin" not in sync_snapshot()["files"]
+        assert client.get("/api/system/storage").json()["orphan_file_count"] == 1
+        assert client.post("/api/system/storage/orphans/cleanup").json()["removed_files"] == 1
+        assert all((tmp_path / "media" / name).is_file() for name in expected)
+
+
+def test_display_sync_downloads_media_ignores_unknown_columns_and_removes_stale_files(
+    tmp_path: Path, monkeypatch
+):
+    controller_dir = tmp_path / "controller"
+    display_dir = tmp_path / "display"
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(controller_dir))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        pdf, text = create_non_library_media(client)
+        controller_data = sync_snapshot()
+    for row in controller_data["content"]:
+        row["future_column"] = "aus einer neueren Version"
+
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(display_dir))
+    initialize()
+    set_setting("device_id", "local-display")
+    set_setting("device_role", "display")
+    set_setting("controller_url", "http://controller.local:8080")
+    set_setting("sync_device_token", "device-token")
+    stale = media_dir() / "stale.png"
+    stale.write_bytes(VALID_PNG)
+    downloads = []
+
+    def fake_urlopen(request, timeout=0):
+        filename = request.full_url.rsplit("/", 1)[-1]
+        downloads.append(filename)
+        return io.BytesIO((controller_dir / "media" / filename).read_bytes())
+
+    monkeypatch.setattr("open_signage.sync._request_json", lambda *args, **kwargs: controller_data)
+    monkeypatch.setattr("open_signage.sync.urllib.request.urlopen", fake_urlopen)
+    result = safe_sync_from_controller()
+    assert result["status"] == "synchronized", result
+    assert result["removed_files"] == 1
+    assert not stale.exists()
+    assert sorted(downloads) == sorted(controller_data["files"])
+    for name in controller_data["files"]:
+        assert (display_dir / "media" / name).read_bytes() == (controller_dir / "media" / name).read_bytes()
+    with connect() as connection:
+        assert {row[0] for row in connection.execute("SELECT id FROM content")} == {pdf["id"], text["id"]}
+
+    downloads.clear()
+    assert safe_sync_from_controller()["status"] == "synchronized"
+    assert downloads == []
+
+
+def test_cached_file_hash_is_invalidated_when_file_changes(tmp_path: Path):
+    path = tmp_path / "datei.bin"
+    path.write_bytes(b"erste")
+    first = file_sha256(path)
+    path.write_bytes(b"zweit")
+    os.utime(path, ns=(path.stat().st_atime_ns, path.stat().st_mtime_ns + 1_000_000))
+    assert file_sha256(path) != first
+    assert file_sha256(path) == hashlib.sha256(b"zweit").hexdigest()
