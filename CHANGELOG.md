@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.15.0] – 2026-10-01
+
 ### Geändert
 
 - Die weiche Player-Deckblende wurde von fünf auf vier Sekunden verkürzt. Ihre
