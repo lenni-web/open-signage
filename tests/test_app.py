@@ -37,6 +37,15 @@ VALID_PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 )
 
+ADMIN_SCRIPTS = ("core", "content", "library", "playlists", "display", "system", "session")
+
+
+def admin_scripts() -> str:
+    return "\n".join(
+        (PROJECT_ROOT / f"src/open_signage/static/admin/{module}.js").read_text(encoding="utf-8")
+        for module in ADMIN_SCRIPTS
+    )
+
 
 @pytest.fixture(autouse=True)
 def legacy_test_initial_password(monkeypatch):
@@ -277,7 +286,8 @@ def test_html_pages_version_static_assets_and_disable_document_cache():
     assert admin.headers["cache-control"] == "no-store"
     assert player.headers["cache-control"] == "no-store"
     assert f"/static/style.css?v={__version__}" in admin.text
-    assert f"/static/admin.js?v={__version__}" in admin.text
+    for module in ADMIN_SCRIPTS:
+        assert f"/static/admin/{module}.js?v={__version__}" in admin.text
     assert f"/static/player.js?v={__version__}" in player.text
 
 
@@ -580,9 +590,7 @@ def test_admin_contains_system_navigation_and_update_controls():
     assert 'id="player-pair-form"' in player_html
     assert 'name="password"' in player_html
 
-    admin_script = (
-        PROJECT_ROOT / "src/open_signage/static/admin.js"
-    ).read_text(encoding="utf-8")
+    admin_script = admin_scripts()
     assert "function organizeAdministrationPages()" in admin_script
     assert "async function openSettingsPage()" in admin_script
     assert 'id="admin-clock"' in admin
@@ -590,7 +598,7 @@ def test_admin_contains_system_navigation_and_update_controls():
     assert 'data-display-action="off"' in admin
     assert 'id="add-content-type"' in admin
     assert 'video/mp4,video/webm' in admin
-    admin_js = (PROJECT_ROOT / "src/open_signage/static/admin.js").read_text(encoding="utf-8")
+    admin_js = admin_scripts()
     assert "preview.poster = item.thumbnail_source" in admin_js
     assert "Optimal konvertieren" in admin_js
     assert admin.count('class="card update-card collapsible-card"') == 2
