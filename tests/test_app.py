@@ -21,7 +21,8 @@ from open_signage.database import initialize
 from open_signage.database import connect, integrity_check_if_due, media_dir
 from open_signage.application_update import request_update as request_application_update
 from open_signage.application_update import update_status as application_update_status
-from open_signage.main import app, scheduled_now
+from open_signage.main import app
+from open_signage.routes.common import scheduled_now
 from open_signage.media_files import file_sha256
 from open_signage.display_control import schedule_analysis
 from open_signage.media_probe import evaluate_video_probe
@@ -405,7 +406,7 @@ def test_video_upload_returns_compatibility_result(tmp_path: Path, monkeypatch):
         "warnings": ["Für zuverlässige Wiedergabe H.264/AVC verwenden."],
         "recommendation": "Empfohlen: MP4 mit H.264/AVC und AAC.",
     }
-    monkeypatch.setattr("open_signage.main.validate_video", lambda _path: compatibility)
+    monkeypatch.setattr("open_signage.routes.content.validate_video", lambda _path: compatibility)
 
     with TestClient(app) as client:
         client.post("/api/system/login", json={"password": "open-signage"})
@@ -829,7 +830,7 @@ def test_text_content_requires_background_and_some_text(tmp_path: Path, monkeypa
 def test_text_content_supports_video_background(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
     monkeypatch.setattr(
-        "open_signage.main.validate_video",
+        "open_signage.routes.content.validate_video",
         lambda _path: {"checked": True, "video_codecs": ["h264"]},
     )
     with TestClient(app) as client:
