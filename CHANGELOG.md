@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.16.0] – 2026-10-01
+
 ### Hinzugefügt
 
 - Unter Einstellungen → Sicherheit lässt sich festlegen, ob Player im ganzen
