@@ -232,6 +232,11 @@ button:disabled { cursor: default; opacity: .35; }
 .live-obs summary { cursor: pointer; color: var(--muted); }
 .live-obs .info-list { grid-template-columns: 1fr; margin: 12px 0; }
 .live-obs code { user-select: all; }
+.live-guide { margin: 0 0 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; }
+.live-guide summary { cursor: pointer; font-weight: 600; }
+.live-guide ol, .live-guide ul { display: grid; gap: 6px; margin: 10px 0; padding-left: 22px; }
+.live-guide ol ul { margin: 6px 0 2px; }
+.live-guide p { margin: 10px 0 4px; }
 .playlist-list { display: grid; gap: 8px; margin-top: 12px; }
 .playlist-list article { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px; border: 1px solid var(--line); border-radius: 9px; }
 .playlist-actions, .system-actions { display: flex; flex-wrap: wrap; gap: 8px; }

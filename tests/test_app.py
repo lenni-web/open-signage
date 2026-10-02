@@ -589,6 +589,7 @@ def test_admin_contains_system_navigation_and_update_controls():
     assert 'name="resolution_mode"' in admin
     assert 'id="display-resolution-status"' in admin
     assert 'name="transition_ms"' in admin
+    assert 'id="live-obs-guide"' in admin
     player_html = (PROJECT_ROOT / "src/open_signage/static/player.html").read_text(encoding="utf-8")
     assert 'id="player-pair-form"' in player_html
     assert 'name="password"' in player_html

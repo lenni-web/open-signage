@@ -88,9 +88,43 @@
         <div><dt>Server</dt><dd><code id="live-server-url">–</code></dd></div>
         <div><dt>Bearer-Token</dt><dd><code id="live-token">–</code></dd></div>
       </dl>
-      <small>In OBS unter Einstellungen → Stream eintragen. Empfohlen unter Ausgabe: 1080p30,
-        Keyframe-Intervall 1 s und keine B-Frames (x264: Profil „baseline“). Bei Controller
-        und Displays sendet OBS nur an den Controller; alle Displays übernehmen das Bild.</small>
+      <details id="live-obs-guide" class="live-guide">
+        <summary>Anleitung: OBS Schritt für Schritt einrichten</summary>
+        <ol>
+          <li><strong>OBS Studio ab Version 30</strong> öffnen und <em>Einstellungen → Stream</em> wählen.</li>
+          <li>Als <strong>Dienst „WHIP“</strong> auswählen.</li>
+          <li>Bei <strong>Server</strong> die oben angezeigte Adresse und bei <strong>Bearer-Token</strong>
+            das oben angezeigte Token (<code>obs:…</code>) einfügen, dann <em>Übernehmen</em>.</li>
+          <li>Unter <em>Einstellungen → Video</em> die Ausgabeauflösung <strong>1920×1080</strong> und
+            <strong>30 FPS</strong> einstellen.</li>
+          <li>Unter <em>Einstellungen → Ausgabe</em> den Ausgabemodus <strong>„Erweitert“</strong> wählen und im
+            Reiter <em>Streaming</em> einstellen:
+            <ul>
+              <li>Bitratenregelung <strong>CBR</strong>, Bitrate <strong>4000–6000 kbit/s</strong></li>
+              <li>Keyframe-Intervall <strong>1 s</strong></li>
+              <li>bei x264: Profil <strong>„baseline“</strong>, Optimierung <strong>„zerolatency“</strong>,
+                CPU-Voreinstellung „veryfast“</li>
+              <li>bei Hardware-Encodern (NVENC, QuickSync, Apple): <strong>B-Frames auf 0</strong></li>
+            </ul>
+          </li>
+          <li>Unter <em>Einstellungen → Audio</em> die Abtastrate <strong>48 kHz</strong> wählen.</li>
+          <li>Im Hauptfenster <strong>„Stream starten“</strong>. Oben rechts in dieser Karte erscheint nach
+            wenigen Sekunden <strong>„OBS sendet“</strong>.</li>
+          <li>Mit <strong>„Live jetzt übernehmen“</strong> erscheint das Bild auf allen Playern – oder einen
+            Inhalt „Live-Übertragung aus OBS“ in die Playlist aufnehmen.</li>
+        </ol>
+        <p><strong>Bei Controller und Displays</strong> sendet OBS nur an den Controller; alle Displays
+          übernehmen das Bild automatisch.</p>
+        <p><strong>Wenn es nicht klappt:</strong></p>
+        <ul>
+          <li><em>Kein Signal:</em> Adresse und Token prüfen; im Netzwerk müssen Port 8889/TCP und
+            8189/UDP vom OBS-Rechner zum Pi erreichbar sein.</li>
+          <li><em>Signal, aber kein Bild:</em> B-Frames abschalten bzw. x264-Profil „baseline“ wählen.</li>
+          <li><em>Ruckeln oder Aussetzer:</em> Bitrate senken und OBS-Rechner wie Pi per Netzwerkkabel
+            anschließen.</li>
+          <li><em>Neues Token erzeugt:</em> das neue Token in OBS eintragen und den Stream neu starten.</li>
+        </ul>
+      </details>
       <button id="live-password" class="secondary" type="button">Neues Token erzeugen</button>
     </details>
   </section>

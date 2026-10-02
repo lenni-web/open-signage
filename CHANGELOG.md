@@ -26,6 +26,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
   SHA-256-Prüfsumme als eigenen Dienst ein. Nach einem Update fordert Open
   Signage die Einrichtung selbst an; in der Verwaltung steht zusätzlich
   „Live-Server einrichten“ bereit.
+- Unter „OBS einrichten“ erklärt eine ausklappbare Schritt-für-Schritt-Anleitung
+  die passenden OBS-Einstellungen und hilft bei typischen Problemen.
 
 ### Geändert
 
