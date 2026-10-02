@@ -1,3 +1,3 @@
 """Single source of truth for the Open Signage version."""
 
-__version__ = "0.16.0"
+__version__ = "0.17.0"

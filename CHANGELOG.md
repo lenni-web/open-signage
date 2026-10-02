@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.17.0] – 2026-10-02
+
 ### Hinzugefügt
 
 - Live-Übertragungen aus OBS Studio lassen sich mit geringer Verzögerung per
