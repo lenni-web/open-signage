@@ -8,6 +8,34 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- Live-Übertragungen aus OBS Studio lassen sich mit geringer Verzögerung per
+  WebRTC wiedergeben. OBS sendet per WHIP an den mitgelieferten Live-Server
+  MediaMTX; Player spielen das Bild über eine authentifizierte
+  WHEP-Weiterleitung von Open Signage ab.
+- „Live jetzt übernehmen“ unterbricht die Playlist auf allen Playern und
+  kehrt nach „Live beenden“ – optional automatisch, wenn OBS den Stream
+  beendet – zur Playlist zurück. Ton lässt sich dabei zu- oder abschalten.
+- Neuer Inhaltstyp „Live-Übertragung aus OBS“ für die Playlist. Ohne Signal
+  wird er übersprungen; folgt er auf sich selbst, bleibt die Verbindung
+  bestehen.
+- Im Controller-Betrieb beziehen Displays das Live-Bild bei Bedarf über RTSP
+  vom Controller und übernehmen den Live-Zustand innerhalb weniger Sekunden.
+- Installer und Anwendungsupdater richten MediaMTX v1.21.1 mit geprüfter
+  SHA-256-Prüfsumme als eigenen Dienst ein. Nach einem Update fordert Open
+  Signage die Einrichtung selbst an; in der Verwaltung steht zusätzlich
+  „Live-Server einrichten“ bereit.
+
+### Geändert
+
+- Player fragen ihre Konfiguration alle zwei statt fünf Sekunden ab, damit
+  eine Live-Übernahme schnell sichtbar wird.
+- Die Inhaltstabelle wird beim ersten Start einmalig verlustfrei für den neuen
+  Inhaltstyp umgebaut. Displays sollten zusammen mit dem Controller
+  aktualisiert werden, da ältere Versionen Live-Inhalte nicht übernehmen
+  können.
+
 ## [0.16.0] – 2026-10-01
 
 ### Hinzugefügt

@@ -238,6 +238,10 @@ if [[ -n "${INITIAL_PASSWORD}" ]]; then
 fi
 systemctl enable --now open-signage.service
 
+printf 'Richte Live-Server (MediaMTX) für OBS-Übertragungen ein …\n'
+"${SYSTEM_ACTION_COMMAND}" setup_live || \
+  printf 'Warnung: Live-Server konnte nicht eingerichtet werden. Später unter Inhalte → Live erneut versuchen.\n'
+
 "${PROJECT_DIR}/scripts/verify-installation.sh" --port "${PORT}"
 
 printf '\nOpen Signage wurde installiert.\n'

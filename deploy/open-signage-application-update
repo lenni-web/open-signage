@@ -95,6 +95,8 @@ if ! command -v cec-client >/dev/null 2>&1 || ! command -v wlopm >/dev/null 2>&1
   install -o root -g root -m 0644 \
     "${release_dir}/deploy/open-signage-system-action.path" \
     /etc/systemd/system/open-signage-system-action.path
+  /usr/local/sbin/open-signage-system-action setup_live || \
+    printf 'Warnung: Live-Server konnte nicht eingerichtet werden.\n'
   sed "s|@@KIOSK_USER@@|${KIOSK_USER}|g" \
     "${release_dir}/deploy/open-signage-display-control" \
     >/usr/local/sbin/open-signage-display-control

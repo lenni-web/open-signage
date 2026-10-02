@@ -57,6 +57,9 @@ def initialize() -> None:
             or "media_id" not in existing_columns
         ):
             connection.execute("ALTER TABLE content RENAME TO content_legacy")
+        elif existing and "'live'" not in existing["sql"]:
+            # Neuer Inhaltstyp: Tabelle verlustfrei mit erweitertem CHECK neu aufbauen.
+            connection.execute("ALTER TABLE content RENAME TO content_upgrade")
 
         connection.executescript(
             """
@@ -93,7 +96,7 @@ def initialize() -> None:
             CREATE TABLE IF NOT EXISTS content (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
-                kind TEXT NOT NULL CHECK(kind IN ('image', 'video', 'pdf', 'website', 'stream', 'text')),
+                kind TEXT NOT NULL CHECK(kind IN ('image', 'video', 'pdf', 'website', 'stream', 'text', 'live')),
                 source TEXT NOT NULL,
                 duration_seconds INTEGER NOT NULL DEFAULT 10
                     CHECK(duration_seconds BETWEEN 1 AND 86400),
@@ -189,6 +192,15 @@ def initialize() -> None:
                 ON content(enabled, position, id)
                 """
             )
+        if connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'content_upgrade'"
+        ).fetchone():
+            shared = [row["name"] for row in connection.execute("PRAGMA table_info(content_upgrade)")
+                      if row["name"] in {item["name"] for item in connection.execute("PRAGMA table_info(content)")}]
+            column_list = ", ".join(shared)
+            connection.execute(f"INSERT INTO content({column_list}) SELECT {column_list} FROM content_upgrade")
+            connection.execute("DROP TABLE content_upgrade")
+            connection.execute("CREATE INDEX IF NOT EXISTS idx_content_playlist ON content(enabled, position, id)")
         columns = {row["name"] for row in connection.execute("PRAGMA table_info(content)")}
         for name, definition in {
             "schedule_start": "TEXT",

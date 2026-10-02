@@ -1,7 +1,7 @@
 // Inhalte der Playlist: Liste, Uploads, Webseiten, Livestreams, Freitext und Zeitpläne.
 
 function kindLabel(kind) {
-  return { image: "Bild", video: "Video", pdf: "PDF", website: "Webseite", stream: "Livestream", text: "Freitext" }[kind] || kind;
+  return { image: "Bild", video: "Video", pdf: "PDF", website: "Webseite", stream: "Livestream", text: "Freitext", live: "Live (OBS)" }[kind] || kind;
 }
 
 function hasSchedule(item) {
@@ -164,7 +164,7 @@ function render(items) {
         <input type="checkbox" ${item.enabled ? "checked" : ""}>
         <span>Aktiv</span>
       </label>
-      ${["stream", "video"].includes(item.kind) ? `
+      ${["stream", "video", "live"].includes(item.kind) ? `
         <label class="toggle sound-toggle">
           <input type="checkbox" ${item.muted ? "" : "checked"}>
           <span>Ton</span>
@@ -181,7 +181,7 @@ function render(items) {
       <button class="danger delete">Löschen</button>
     `;
     row.querySelector("strong").textContent = item.name;
-    row.querySelector("small").textContent = item.source;
+    row.querySelector("small").textContent = item.kind === "live" ? "OBS über WebRTC" : item.source;
     row.querySelector(".duration input").addEventListener("change", async (event) => {
       try {
         await updateItem(item.id, { duration_seconds: Number(event.target.value) });

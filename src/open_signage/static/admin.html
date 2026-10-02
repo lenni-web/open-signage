@@ -57,6 +57,43 @@
       <div id="playlist-list" class="playlist-list"></div>
     </details>
   </section>
+  <section id="live-card" class="card live-card">
+    <div class="section-heading">
+      <div>
+        <span class="eyebrow">OBS · WebRTC</span>
+        <h2>Live-Übertragung</h2>
+      </div>
+      <span id="live-signal" class="live-signal">Prüfe Signal …</span>
+    </div>
+    <p id="live-takeover-status" class="live-takeover-status">Die Playlist läuft normal.</p>
+    <div class="live-options">
+      <label class="inline-check">
+        <input id="live-sound" type="checkbox" checked>
+        <span>Mit Ton</span>
+      </label>
+      <label class="inline-check">
+        <input id="live-auto-end" type="checkbox" checked>
+        <span>Automatisch zur Playlist zurückkehren, wenn OBS den Stream beendet</span>
+      </label>
+    </div>
+    <div class="live-actions">
+      <button id="live-takeover-start" type="button">Live jetzt übernehmen</button>
+      <button id="live-takeover-stop" class="danger" type="button" hidden>Live beenden</button>
+      <button id="live-setup" class="secondary" type="button" hidden>Live-Server einrichten</button>
+    </div>
+    <details class="live-obs">
+      <summary>OBS einrichten</summary>
+      <dl class="info-list">
+        <div><dt>Dienst</dt><dd>WHIP</dd></div>
+        <div><dt>Server</dt><dd><code id="live-server-url">–</code></dd></div>
+        <div><dt>Bearer-Token</dt><dd><code id="live-token">–</code></dd></div>
+      </dl>
+      <small>In OBS unter Einstellungen → Stream eintragen. Empfohlen unter Ausgabe: 1080p30,
+        Keyframe-Intervall 1 s und keine B-Frames (x264: Profil „baseline“). Bei Controller
+        und Displays sendet OBS nur an den Controller; alle Displays übernehmen das Bild.</small>
+      <button id="live-password" class="secondary" type="button">Neues Token erzeugen</button>
+    </details>
+  </section>
   <main id="content-main">
     <section class="card add-content-card" data-add-type="medium" hidden>
       <h2>Medium hochladen</h2>
@@ -116,6 +153,24 @@
           <span>Stumm starten (zuverlässiges Autoplay)</span>
         </label>
         <button>Livestream hinzufügen</button>
+      </form>
+    </section>
+
+    <section class="card stream-card add-content-card" data-add-type="live" hidden>
+      <h2>Live-Übertragung aus OBS hinzufügen</h2>
+      <form id="live-form">
+        <label>Name
+          <input name="name" placeholder="Live aus OBS" required>
+        </label>
+        <label>Dauer in Sekunden
+          <input name="duration_seconds" type="number" min="1" max="86400" value="300" required>
+        </label>
+        <label class="inline-check">
+          <input name="sound" type="checkbox" checked>
+          <span>Mit Ton abspielen</span>
+        </label>
+        <small>Sendet OBS gerade nicht, überspringt der Player diesen Inhalt automatisch.</small>
+        <button>Live-Inhalt hinzufügen</button>
       </form>
     </section>
 
@@ -234,6 +289,7 @@
           <option value="medium">Bild, Video oder PDF hochladen</option>
           <option value="website">Webseite</option>
           <option value="stream">Owncast-Livestream</option>
+          <option value="live">Live-Übertragung aus OBS</option>
           <option value="text">Freitext mit Bild- oder Videohintergrund</option>
         </select>
       </label>
@@ -636,6 +692,7 @@
   <script src="/static/admin/content.js?v=@@VERSION@@"></script>
   <script src="/static/admin/library.js?v=@@VERSION@@"></script>
   <script src="/static/admin/playlists.js?v=@@VERSION@@"></script>
+  <script src="/static/admin/live.js?v=@@VERSION@@"></script>
   <script src="/static/admin/display.js?v=@@VERSION@@"></script>
   <script src="/static/admin/system.js?v=@@VERSION@@"></script>
   <script src="/static/admin/session.js?v=@@VERSION@@"></script>

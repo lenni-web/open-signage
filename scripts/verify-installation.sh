@@ -35,6 +35,8 @@ if command -v systemctl >/dev/null 2>&1; then
     printf 'Anwendungsupdate-Überwachung ist nicht aktiv.\n' >&2
     exit 1
   }
+  systemctl is-active --quiet open-signage-mediamtx.service || \
+    printf 'Hinweis: Live-Server (MediaMTX) ist nicht aktiv; OBS-Übertragungen sind nicht möglich.\n' >&2
 fi
 
 readonly BASE_URL="http://127.0.0.1:${PORT}"

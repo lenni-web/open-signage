@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urljoin
 
+from . import live
 from .auth import get_setting, screen_name, set_setting
 from .database import connect, media_dir
 from .display_control import display_config, save_display_config
@@ -66,6 +67,7 @@ def snapshot() -> dict:
             files[name] = {"size": path.stat().st_size, "sha256": file_sha256(path)}
     return {"format": 1, "generated_at": datetime.now(UTC).isoformat(),
             "settings": {"screen_name": screen_name()}, "display_control": display_config(),
+            "live": {"read_password": live.read_password()},
             "playlists": playlists, "media": media, "content": content, "files": files}
 
 
@@ -127,6 +129,9 @@ def sync_from_controller() -> dict:
     removed_files = remove_unreferenced_media()
     set_setting("screen_name", data.get("settings", {}).get("screen_name", "Open Signage"))
     save_display_config(data.get("display_control") or display_config())
+    read_password = (data.get("live") or {}).get("read_password")
+    if read_password: set_setting("live_read_password", read_password)
+    live.write_config()
     set_setting("sync_last_success", datetime.now(UTC).isoformat())
     set_setting("sync_last_error", "")
     return {"status": "synchronized", "at": get_setting("sync_last_success"), "removed_files": removed_files}

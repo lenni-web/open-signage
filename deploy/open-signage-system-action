@@ -2,13 +2,69 @@
 set -euo pipefail
 
 readonly REQUEST="/var/lib/open-signage/system-action-request"
-[[ -f "${REQUEST}" ]] || exit 0
-action="$(tr -d '\r\n' <"${REQUEST}")"
-rm -f "${REQUEST}"
+readonly MEDIAMTX_VERSION="v1.21.1"
+readonly MEDIAMTX_SHA256="6a3aa635fb60ea9b8d566ec306f0a42ff1b6b52a3942bc2baffbe55880d4c3dd"
+readonly MEDIAMTX_DIR="/usr/local/lib/open-signage"
+readonly MEDIAMTX_UNIT="/etc/systemd/system/open-signage-mediamtx.service"
+
+# Installiert den Live-Server MediaMTX in einer festen, per SHA-256 geprüften
+# Version und richtet seinen Dienst ein. Die Konfiguration erzeugt Open Signage.
+setup_live() {
+  if [[ "$(cat "${MEDIAMTX_DIR}/mediamtx.version" 2>/dev/null || true)" != "${MEDIAMTX_VERSION}" ]]; then
+    local work
+    work="$(mktemp -d)"
+    trap 'rm -rf "${work}"' RETURN
+    curl --fail --location --silent --show-error --max-time 300 \
+      --output "${work}/mediamtx.tar.gz" \
+      "https://github.com/bluenviron/mediamtx/releases/download/${MEDIAMTX_VERSION}/mediamtx_${MEDIAMTX_VERSION}_linux_arm64.tar.gz"
+    printf '%s  %s\n' "${MEDIAMTX_SHA256}" "${work}/mediamtx.tar.gz" | sha256sum --check --status || {
+      printf 'Prüfsumme von MediaMTX stimmt nicht.\n' >&2
+      return 1
+    }
+    tar -xzf "${work}/mediamtx.tar.gz" -C "${work}" mediamtx
+    install -d -o root -g root -m 0755 "${MEDIAMTX_DIR}"
+    install -o root -g root -m 0755 "${work}/mediamtx" "${MEDIAMTX_DIR}/mediamtx"
+    printf '%s\n' "${MEDIAMTX_VERSION}" >"${MEDIAMTX_DIR}/mediamtx.version"
+  fi
+  cat >"${MEDIAMTX_UNIT}" <<'UNIT'
+[Unit]
+Description=Open Signage live server (MediaMTX)
+After=network-online.target open-signage.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=open-signage
+Group=open-signage
+ExecStart=/usr/local/lib/open-signage/mediamtx /var/lib/open-signage/mediamtx.yml
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  chmod 0644 "${MEDIAMTX_UNIT}"
+  systemctl daemon-reload
+  systemctl enable open-signage-mediamtx.service
+  systemctl restart open-signage-mediamtx.service
+}
+
+if (($#)); then
+  action="$1"
+else
+  [[ -f "${REQUEST}" ]] || exit 0
+  action="$(tr -d '\r\n' <"${REQUEST}")"
+  rm -f "${REQUEST}"
+fi
 
 case "${action}" in
   restart_service) systemctl restart open-signage.service ;;
   reboot) systemctl reboot ;;
   poweroff) systemctl poweroff ;;
+  setup_live) setup_live ;;
   *) printf 'Unbekannte Systemaktion: %s\n' "${action}" >&2; exit 2 ;;
 esac

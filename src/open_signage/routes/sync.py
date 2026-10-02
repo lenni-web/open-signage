@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from .. import live
 from ..auth import device_mode
 from ..database import media_dir
 from ..sync import authenticate_device, register_device, snapshot as sync_snapshot
@@ -41,6 +42,13 @@ def sync_register(payload: SyncRegistration):
 def get_sync_snapshot(_: None = Depends(require_sync_device)):
     if device_mode() != "controller": raise HTTPException(status_code=409, detail="Gerät ist kein Controller")
     return sync_snapshot()
+
+
+@router.get("/api/sync/live")
+def get_sync_live(_: None = Depends(require_sync_device)):
+    if device_mode() != "controller": raise HTTPException(status_code=409, detail="Gerät ist kein Controller")
+    state = live.local_state()
+    return {key: state[key] for key in ("server_running", "available", "takeover", "sound")}
 
 
 @router.get("/api/sync/media/{filename}")

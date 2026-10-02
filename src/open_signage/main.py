@@ -7,11 +7,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from . import live
 from .auth import device_mode, get_setting, set_setting
 from .backup import automatic_backup_if_due
 from .database import initialize, integrity_check_if_due
-from .routes import (content, media_library, pages, player, playlists, session, storage, sync,
-                     system)
+from .routes import (content, live as live_routes, media_library, pages, player, playlists, session,
+                     storage, sync, system)
 from .routes.common import STATIC_DIR
 from .sync import safe_sync_from_controller
 from .version import __version__
@@ -26,6 +27,8 @@ async def lifespan(_: FastAPI):
         controller_url = os.environ.get("OPEN_SIGNAGE_CONTROLLER_URL", "").strip()
         if controller_url: set_setting("controller_url", controller_url)
     device_mode()
+    live.write_config()
+    live.request_server_setup()
     integrity_check_if_due()
     await asyncio.to_thread(automatic_backup_if_due)
     async def database_maintenance() -> None:
@@ -47,5 +50,5 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Open Signage", version=__version__, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-for module in (pages, player, system, sync, storage, session, playlists, content, media_library):
+for module in (pages, player, system, sync, storage, session, playlists, content, media_library, live_routes):
     app.include_router(module.router)

@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from .. import live
 from ..application_update import (request_update as request_application_update, update_status as
                                   application_update_status)
 from ..auth import (device_mode, get_setting, lan_player_access_enabled, password_change_required,
@@ -184,6 +185,7 @@ def update_device_settings(payload: DeviceSettings, _: None = Depends(require_sy
     if payload.pairing_code.strip():
         set_setting("sync_pairing_code", payload.pairing_code.strip())
         set_setting("sync_device_token", "")
+    live.write_config()
     return get_device_settings(_)
 
 

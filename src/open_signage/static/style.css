@@ -222,6 +222,16 @@ button:disabled { cursor: default; opacity: .35; }
 .page-title { width: min(1100px, 100%); margin: 0 auto 18px; }
 .playlist-manager { width: min(1100px, 100%); margin: 0 auto 18px; display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 14px; }
 .playlist-manager details { grid-column: 1 / -1; }
+.live-card { width: min(1100px, 100%); margin: 0 auto 18px; display: grid; gap: 14px; }
+.live-card h2, .live-card p { margin: 0; }
+.live-signal { padding: 5px 10px; border-radius: 999px; background: rgba(139, 148, 158, .15); color: var(--muted); font-weight: 600; white-space: nowrap; }
+.live-signal.on { background: rgba(57, 217, 138, .15); color: var(--accent); }
+.live-signal.off { background: rgba(255, 107, 107, .12); color: var(--danger); }
+.live-card.active { border-color: var(--danger); }
+.live-options, .live-actions { display: flex; flex-wrap: wrap; gap: 10px 22px; }
+.live-obs summary { cursor: pointer; color: var(--muted); }
+.live-obs .info-list { grid-template-columns: 1fr; margin: 12px 0; }
+.live-obs code { user-select: all; }
 .playlist-list { display: grid; gap: 8px; margin-top: 12px; }
 .playlist-list article { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px; border: 1px solid var(--line); border-radius: 9px; }
 .playlist-actions, .system-actions { display: flex; flex-wrap: wrap; gap: 8px; }

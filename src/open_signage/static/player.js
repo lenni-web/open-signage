@@ -4,6 +4,9 @@ let currentIndex = -1;
 let timer;
 let playlistSignature = "";
 let activeHls;
+let activeLive = null;
+let liveState = { available: false, takeover: false, sound: true };
+let liveTakeoverActive = false;
 let reconnectTimer;
 const imagePreloads = new Map();
 let currentItem = null;
@@ -41,6 +44,10 @@ function clearStage() {
   if (activeHls) {
     activeHls.destroy();
     activeHls = null;
+  }
+  if (activeLive) {
+    activeLive.close();
+    activeLive = null;
   }
   stage.replaceChildren();
 }
@@ -96,6 +103,7 @@ function transitionTo(elements, ready, options = {}) {
   const nextElements = Array.isArray(elements) ? elements : [elements];
   const previousElements = [...stage.children];
   const previousHls = activeHls;
+  const previousLive = activeLive;
   previousElements.forEach(element => {
     element.style.setProperty("--player-transition-ms", `${transitionDuration}ms`);
     element.classList.add("player-transition-source");
@@ -110,9 +118,11 @@ function transitionTo(elements, ready, options = {}) {
       nextElements.forEach(element => element.remove());
       previousElements.forEach(element => element.classList.remove("player-transition-source"));
       options.hls?.destroy();
+      options.live?.close();
       return;
     }
     activeHls = options.hls || null;
+    activeLive = options.live || null;
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
       previousElements.forEach(element => element.classList.add("player-leaving"));
     }));
@@ -123,6 +133,7 @@ function transitionTo(elements, ready, options = {}) {
         element.classList.add("player-current");
       });
       if (previousHls && previousHls !== activeHls) previousHls.destroy();
+      if (previousLive && previousLive !== activeLive) previousLive.close();
     }, transitionDuration + 200);
     options.onVisible?.();
   });
@@ -171,6 +182,7 @@ function showPlaceholder() {
 }
 
 function advance() {
+  if (liveTakeoverActive) return;
   if (!items.length) return showPlaceholder();
   currentIndex = (currentIndex + 1) % items.length;
   show(items[currentIndex]);
@@ -179,6 +191,7 @@ function advance() {
 function show(item) {
   window.clearTimeout(timer);
   window.clearTimeout(reconnectTimer);
+  const previousItem = currentItem;
   currentItem = item;
   try { localStorage.setItem(CURRENT_KEY, String(item.id)); } catch (_) {}
   sendHeartbeat("playing", null);
@@ -268,6 +281,17 @@ function show(item) {
     element.dataset.slideClasses = `align-${align} position-${vertical} font-${font} size-${size} template-${template}`;
   } else if (item.kind === "stream") {
     showStream(item);
+    return;
+  } else if (item.kind === "live") {
+    if (activeLive && previousItem?.kind === "live" && previousItem.id === item.id) {
+      // Gleicher Live-Inhalt folgt auf sich selbst: Verbindung behalten, nur neu takten.
+      timer = window.setTimeout(advance, item.duration_seconds * 1000);
+    } else if (liveState.available) {
+      showLive(item);
+    } else {
+      // Ohne Signal aus OBS wird der Live-Inhalt übersprungen.
+      timer = window.setTimeout(advance, 1000);
+    }
     return;
   }
   element.className = item.kind === "text"
@@ -373,6 +397,154 @@ function showStream(item) {
   } });
 }
 
+function waitForIceGathering(peer, timeoutMs = 2000) {
+  if (peer.iceGatheringState === "complete") return Promise.resolve();
+  return new Promise(resolve => {
+    const timeout = window.setTimeout(resolve, timeoutMs);
+    peer.addEventListener("icegatheringstatechange", () => {
+      if (peer.iceGatheringState === "complete") {
+        window.clearTimeout(timeout);
+        resolve();
+      }
+    });
+  });
+}
+
+function connectLive(video, { onStatus, onFailure }) {
+  let closed = false;
+  let peer = null;
+  let sessionUrl = null;
+  let retryTimer;
+  let disconnectTimer;
+  const cleanup = () => {
+    window.clearTimeout(disconnectTimer);
+    if (peer) {
+      peer.close();
+      peer = null;
+    }
+    if (sessionUrl) {
+      fetch(sessionUrl, { method: "DELETE", headers: { "Authorization": `Bearer ${playerToken}` } }).catch(() => {});
+      sessionUrl = null;
+    }
+  };
+  const retry = (text) => {
+    cleanup();
+    if (closed) return;
+    if (onFailure?.()) return;
+    onStatus(text);
+    window.clearTimeout(retryTimer);
+    retryTimer = window.setTimeout(connect, 3000);
+  };
+  async function connect() {
+    if (closed) return;
+    try {
+      peer = new RTCPeerConnection();
+      const current = peer;
+      peer.addTransceiver("video", { direction: "recvonly" });
+      peer.addTransceiver("audio", { direction: "recvonly" });
+      const stream = new MediaStream();
+      video.srcObject = stream;
+      peer.addEventListener("track", event => stream.addTrack(event.track));
+      peer.addEventListener("connectionstatechange", () => {
+        if (current !== peer) return;
+        if (["failed", "closed"].includes(peer.connectionState)) {
+          retry("Verbindung unterbrochen – neuer Versuch …");
+        } else if (peer.connectionState === "disconnected") {
+          window.clearTimeout(disconnectTimer);
+          disconnectTimer = window.setTimeout(() => {
+            if (current === peer && peer.connectionState !== "connected") retry("Verbindung unterbrochen – neuer Versuch …");
+          }, 4000);
+        }
+      });
+      await peer.setLocalDescription(await peer.createOffer());
+      await waitForIceGathering(peer);
+      const response = await fetch("/api/player/live/whep", {
+        method: "POST",
+        headers: { "Content-Type": "application/sdp", "Authorization": `Bearer ${playerToken}` },
+        body: peer.localDescription.sdp,
+      });
+      if (!response.ok) throw new Error("offline");
+      sessionUrl = response.headers.get("Location");
+      if (current !== peer) return;
+      await peer.setRemoteDescription({ type: "answer", sdp: await response.text() });
+    } catch (_) {
+      retry("Warte auf Signal aus OBS …");
+    }
+  }
+  connect();
+  return {
+    close() {
+      closed = true;
+      window.clearTimeout(retryTimer);
+      cleanup();
+    },
+  };
+}
+
+function showLive(item) {
+  window.clearTimeout(timer);
+  window.clearTimeout(reconnectTimer);
+  const takeover = !item;
+  currentItem = item || { id: null, name: "Live-Übertragung" };
+  const video = document.createElement("video");
+  video.className = "content";
+  video.autoplay = true;
+  video.playsInline = true;
+  video.controls = false;
+  video.muted = takeover ? !liveState.sound : item.muted;
+
+  const status = document.createElement("div");
+  status.className = "stream-status";
+  status.innerHTML = "<strong>Live-Übertragung</strong><span>Verbindung wird hergestellt …</span>";
+  const setStatus = (text, visible = true) => {
+    status.querySelector("span").textContent = text;
+    status.classList.toggle("hidden", !visible);
+  };
+  let liveReady;
+  const ready = new Promise(resolve => { liveReady = resolve; });
+  const readyFallback = window.setTimeout(liveReady, 6000);
+  video.addEventListener("playing", () => {
+    window.clearTimeout(readyFallback);
+    liveReady();
+    setStatus("", false);
+    sendHeartbeat("playing", null);
+  });
+  video.addEventListener("loadedmetadata", () => {
+    video.play().catch(() => {
+      // Ohne Autoplay-Freigabe für Ton lieber stumm weiterspielen als gar nicht.
+      video.muted = true;
+      video.play().catch(() => setStatus("Wiedergabe wurde vom Browser blockiert."));
+    });
+  });
+
+  const session = connectLive(video, {
+    onStatus: text => setStatus(text),
+    onFailure: () => {
+      if (takeover) return false;
+      sendHeartbeat("error", "Live-Übertragung ist nicht erreichbar.");
+      advance();
+      return true;
+    },
+  });
+  const layer = document.createElement("div");
+  layer.className = "player-layer";
+  layer.append(video, status);
+  transitionTo(layer, ready, { live: session, onVisible: () => {
+    if (!takeover) timer = window.setTimeout(advance, item.duration_seconds * 1000);
+  } });
+}
+
+function applyLiveState(nextState) {
+  liveState = nextState;
+  if (liveState.takeover && !liveTakeoverActive) {
+    liveTakeoverActive = true;
+    showLive(null);
+  } else if (!liveState.takeover && liveTakeoverActive) {
+    liveTakeoverActive = false;
+    advance();
+  }
+}
+
 async function refreshPlaylist() {
   try {
     const response = await fetch("/api/player/content", {
@@ -407,6 +579,7 @@ async function refreshPlayerConfig() {
     if (Number.isInteger(config.transition_ms) && config.transition_ms >= 1000 && config.transition_ms <= 6000) {
       transitionMs = config.transition_ms;
     }
+    if (config.live) applyLiveState(config.live);
   } catch (_) {}
 }
 
@@ -438,7 +611,7 @@ async function startPlayer() {
   await refreshPlayerConfig();
   refreshPlaylist();
   window.setInterval(refreshPlaylist, 5000);
-  window.setInterval(refreshPlayerConfig, 5000);
+  window.setInterval(refreshPlayerConfig, 2000);
   window.setInterval(() => sendHeartbeat(), 10000);
 }
 document.querySelector("#player-pair-form").addEventListener("submit", async event => {

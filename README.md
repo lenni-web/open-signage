@@ -31,6 +31,8 @@ Chromium-Kioskfenster an.
 - Mediathek-Suche, Kategorien, Nutzungsfilter, Mehrfachauswahl, Video-
   Thumbnails, direkte Vorschau und optimale Konvertierung nach MP4/H.264/AAC
 - Owncast-Livestreams direkt per HLS wiedergeben
+- Live-Übertragungen aus OBS mit geringer Verzögerung per WebRTC (WHIP/WHEP)
+  wiedergeben, als Playlist-Inhalt oder per „Live jetzt übernehmen“
 - Inhalte aktivieren, sortieren und mit einer Anzeigedauer versehen
 - Inhalte nach Datum, Uhrzeit und Wochentagen zeitgesteuert anzeigen
 - Mehrere getrennte Playlists anlegen und die aktive Wiedergabe umschalten
@@ -44,7 +46,7 @@ Chromium-Kioskfenster an.
 - Sicherheitsstatus und Mediathek-Audit für fehlende, verwaiste und doppelte Medien
 - Controller-/Display-Synchronisierung mit Geräte-Pairing und lokalem Offline-Stand
 
-Weitere SRT-Quellen können später über MediaMTX ergänzt werden.
+Weitere SRT-Quellen können später über den bereits enthaltenen MediaMTX-Server ergänzt werden.
 
 ### Systemverwaltung
 
@@ -264,7 +266,47 @@ sudo reboot
   Inhalte und Einstellungen, während verbundene Displays den Stand automatisch
   und identisch übernehmen.
 - `open-signage.local` als leicht erreichbarer lokaler Hostname.
-- MediaMTX für zusätzliche direkte SRT-Quellen.
+- Zusätzliche direkte SRT-Quellen über MediaMTX.
+
+## Live-Übertragung aus OBS
+
+Für Live-Bilder mit möglichst geringer Verzögerung sendet OBS Studio (ab
+Version 30) per WebRTC an den mitgelieferten Live-Server
+[MediaMTX](https://github.com/bluenviron/mediamtx). Der Player spielt das Bild
+ohne erneutes Codieren ab; die Verzögerung liegt typischerweise unter einer
+Sekunde.
+
+Die Zugangsdaten stehen unter **Inhalte → Live-Übertragung → OBS einrichten**.
+In OBS unter *Einstellungen → Stream*:
+
+- Dienst: `WHIP`
+- Server: `http://<adresse-des-pi>:8889/live/whip`
+- Bearer-Token: der angezeigte Wert `obs:…`
+
+Empfohlen unter *Ausgabe*: 1080p30, Keyframe-Intervall 1 s und keine B-Frames
+(bei x264 das Profil „baseline“).
+
+Die Wiedergabe lässt sich auf zwei Arten nutzen:
+
+- **Live jetzt übernehmen** unterbricht die Playlist sofort auf allen Playern.
+  Nach **Live beenden** – oder optional automatisch 20 Sekunden nachdem OBS den
+  Stream beendet hat – läuft die Playlist weiter.
+- Der Inhaltstyp **Live-Übertragung aus OBS** spielt das Live-Bild als
+  regulären Playlist-Eintrag. Sendet OBS nicht, wird er übersprungen.
+
+Im Controller-Betrieb sendet OBS nur an den Controller. Displays beziehen das
+Bild bei Bedarf über RTSP vom Controller, die Übernahme wird innerhalb weniger
+Sekunden auf alle Displays übertragen. Im Netzwerk müssen dafür die Ports
+8889/TCP (WHIP), 8189/UDP (WebRTC) und 8554 (RTSP zwischen Controller und
+Displays) erreichbar sein.
+
+Der Installer und der Anwendungsupdater richten MediaMTX in einer festen,
+per SHA-256 geprüften Version als Dienst `open-signage-mediamtx.service` ein.
+Bei einem Update von einer älteren Version fordert Open Signage die
+Einrichtung nach dem Neustart selbst an; alternativ steht in der Verwaltung
+**Live-Server einrichten** zur Verfügung. Die Konfiguration erzeugt Open
+Signage unter `/var/lib/open-signage/mediamtx.yml`. Abspielen dürfen nur der
+lokale Server und berechtigte Player; Senden erfordert das OBS-Token.
 
 ## Owncast-Livestream
 

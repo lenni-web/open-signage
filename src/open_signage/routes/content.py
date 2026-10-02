@@ -36,6 +36,12 @@ class StreamCreate(BaseModel):
     muted: bool = True
 
 
+class LiveCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    duration_seconds: int = Field(default=300, ge=1, le=86400)
+    muted: bool = False
+
+
 class ContentUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     duration_seconds: int | None = Field(default=None, ge=1, le=86400)
@@ -441,6 +447,27 @@ def create_stream(payload: StreamCreate, _: None = Depends(require_system_login)
                 int(payload.muted),
                 playlist_id,
             ),
+        )
+        content_id = cursor.lastrowid
+    return serialize(get_content_or_404(content_id))
+
+
+@router.post("/api/content/live", status_code=201)
+def create_live(payload: LiveCreate, _: None = Depends(require_system_login)):
+    playlist_id = active_playlist_id()
+    with connect() as connection:
+        position = connection.execute(
+            "SELECT COALESCE(MAX(position), -1) + 1 FROM content WHERE playlist_id = ?",
+            (playlist_id,),
+        ).fetchone()[0]
+        cursor = connection.execute(
+            """
+            INSERT INTO content(
+                name, kind, source, duration_seconds, position, muted, playlist_id
+            )
+            VALUES (?, 'live', 'live', ?, ?, ?, ?)
+            """,
+            (payload.name, payload.duration_seconds, position, int(payload.muted), playlist_id),
         )
         content_id = cursor.lastrowid
     return serialize(get_content_or_404(content_id))
