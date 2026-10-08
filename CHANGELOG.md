@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.18.0] – 2026-10-08
+
 ### Hinzugefügt
 
 - Live-Übertragungen lassen sich nach Zeitplan automatisch zeigen, etwa
