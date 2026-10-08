@@ -6,7 +6,7 @@ import asyncio
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .. import live
 from ..auth import automatic_player_client, require_player, require_system_login
@@ -21,6 +21,18 @@ class LiveTakeover(BaseModel):
     active: bool
     auto_end: bool = True
     sound: bool = True
+
+
+class LiveScheduleEntry(BaseModel):
+    weekday: int = Field(ge=0, le=6)
+    start: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    end: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+class LiveSchedule(BaseModel):
+    enabled: bool = False
+    sound: bool = True
+    entries: list[LiveScheduleEntry] = Field(default_factory=list, max_length=50)
 
 
 def require_live_player(request: Request) -> None:
@@ -41,7 +53,19 @@ def get_live(_: None = Depends(require_system_login)):
 
 @router.post("/api/live/takeover")
 def update_takeover(payload: LiveTakeover, _: None = Depends(require_system_login)):
-    return live.set_takeover(payload.active, payload.auto_end, payload.sound)
+    if payload.active:
+        return live.set_takeover(True, payload.auto_end, payload.sound)
+    return live.stop_takeover(payload.auto_end, payload.sound)
+
+
+@router.put("/api/live/schedule")
+def update_schedule(payload: LiveSchedule, _: None = Depends(require_system_login)):
+    if any(entry.start == entry.end for entry in payload.entries):
+        raise HTTPException(status_code=422, detail="Beginn und Ende eines Zeitfensters müssen sich unterscheiden")
+    schedule = payload.model_dump()
+    schedule["entries"] = sorted(schedule["entries"], key=lambda entry: (entry["weekday"], entry["start"]))
+    live.save_live_schedule(schedule)
+    return live.local_state()
 
 
 @router.post("/api/live/password")

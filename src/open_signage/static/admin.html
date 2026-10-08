@@ -81,6 +81,28 @@
       <button id="live-takeover-stop" class="danger" type="button" hidden>Live beenden</button>
       <button id="live-setup" class="secondary" type="button" hidden>Live-Server einrichten</button>
     </div>
+    <details class="live-schedule">
+      <summary>Zeitplan für automatische Live-Übertragungen</summary>
+      <form id="live-schedule-form">
+        <p class="live-schedule-hint">Sendet OBS innerhalb eines Zeitfensters, wird das Live-Bild automatisch auf
+          allen Displays gezeigt. Am Ende des Zeitfensters geht es zurück zur Playlist. Sendet OBS nicht,
+          läuft die Playlist normal weiter.</p>
+        <label class="inline-check">
+          <input name="enabled" type="checkbox">
+          <span>Zeitplan aktiv</span>
+        </label>
+        <label class="inline-check">
+          <input name="sound" type="checkbox" checked>
+          <span>Mit Ton</span>
+        </label>
+        <div id="live-schedule-entries" class="live-schedule-entries"></div>
+        <div class="live-actions">
+          <button id="live-schedule-add" class="secondary" type="button">Zeitfenster hinzufügen</button>
+          <button>Zeitplan speichern</button>
+        </div>
+        <small id="live-schedule-status"></small>
+      </form>
+    </details>
     <details class="live-obs">
       <summary>OBS einrichten</summary>
       <dl class="info-list">

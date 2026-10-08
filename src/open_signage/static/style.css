@@ -229,7 +229,17 @@ button:disabled { cursor: default; opacity: .35; }
 .live-signal.off { background: rgba(255, 107, 107, .12); color: var(--danger); }
 .live-card.active { border-color: var(--danger); }
 .live-options, .live-actions { display: flex; flex-wrap: wrap; gap: 10px 22px; }
-.live-obs summary { cursor: pointer; color: var(--muted); }
+.live-obs summary, .live-schedule summary { cursor: pointer; color: var(--muted); }
+.live-schedule form { display: grid; gap: 12px; margin-top: 12px; }
+.live-schedule-hint { color: var(--muted); }
+.live-schedule-entries { display: grid; gap: 8px; }
+.live-schedule-row { display: grid; grid-template-columns: minmax(130px, 1fr) auto auto auto auto; align-items: center; gap: 8px; }
+.live-schedule-row span { color: var(--muted); }
+@media (max-width: 640px) {
+  .live-schedule-row { grid-template-columns: 1fr 1fr; }
+  .live-schedule-row select, .live-schedule-row button { grid-column: 1 / -1; }
+  .live-schedule-row span { display: none; }
+}
 .live-obs .info-list { grid-template-columns: 1fr; margin: 12px 0; }
 .live-obs code { user-select: all; }
 .live-guide { margin: 0 0 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; }

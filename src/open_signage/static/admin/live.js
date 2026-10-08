@@ -1,6 +1,61 @@
 // Live-Übertragung aus OBS: Signalstatus, Übernahme der Wiedergabe und OBS-Zugangsdaten.
 
 let liveStatus = null;
+let liveScheduleDirty = false;
+
+function formatLiveTime(value) {
+  return new Date(value).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatLiveMoment(value) {
+  const moment = new Date(value);
+  const weekday = moment.toLocaleDateString("de-DE", { weekday: "long" });
+  return `${weekday}, ${formatLiveTime(value)} Uhr`;
+}
+
+function createLiveScheduleRow(entry = { weekday: 6, start: "11:00", end: "12:30" }) {
+  // displayWeekdays stammt aus display.js (Montag = 0) und steht beim Aufruf bereit.
+  const row = document.createElement("div");
+  row.className = "live-schedule-row";
+  row.innerHTML = `
+    <select name="weekday" aria-label="Wochentag">
+      ${displayWeekdays.map((day, index) => `<option value="${index}">${day}</option>`).join("")}
+    </select>
+    <input name="start" type="time" required aria-label="Beginn">
+    <span>bis</span>
+    <input name="end" type="time" required aria-label="Ende">
+    <button class="danger icon remove" type="button" title="Zeitfenster entfernen">×</button>
+  `;
+  row.querySelector('[name="weekday"]').value = String(entry.weekday);
+  row.querySelector('[name="start"]').value = entry.start;
+  row.querySelector('[name="end"]').value = entry.end;
+  row.querySelector(".remove").addEventListener("click", () => {
+    row.remove();
+    liveScheduleDirty = true;
+  });
+  return row;
+}
+
+function renderLiveSchedule(status) {
+  const form = document.querySelector("#live-schedule-form");
+  if (!liveScheduleDirty) {
+    form.elements.enabled.checked = status.schedule.enabled;
+    form.elements.sound.checked = status.schedule.sound;
+    document.querySelector("#live-schedule-entries")
+      .replaceChildren(...status.schedule.entries.map(createLiveScheduleRow));
+  }
+  let text = "Der Zeitplan ist ausgeschaltet.";
+  if (status.schedule.enabled && status.schedule_active_until) {
+    text = status.schedule_takeover
+      ? `Zeitfenster läuft bis ${formatLiveTime(status.schedule_active_until)} Uhr – Live wird gezeigt.`
+      : `Zeitfenster läuft bis ${formatLiveTime(status.schedule_active_until)} Uhr – wartet auf Signal aus OBS.`;
+  } else if (status.schedule.enabled && status.schedule_next) {
+    text = `Nächstes Zeitfenster: ${formatLiveMoment(status.schedule_next)}.`;
+  } else if (status.schedule.enabled) {
+    text = "Der Zeitplan ist aktiv, enthält aber kein Zeitfenster.";
+  }
+  document.querySelector("#live-schedule-status").textContent = text;
+}
 
 function renderLive(status) {
   liveStatus = status;
@@ -20,12 +75,16 @@ function renderLive(status) {
   document.querySelector("#live-takeover-start").hidden = status.takeover;
   document.querySelector("#live-takeover-stop").hidden = !status.takeover;
   document.querySelector("#live-setup").hidden = status.server_installed && status.server_running;
-  const started = status.takeover_started_at
-    ? new Date(status.takeover_started_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : "";
-  document.querySelector("#live-takeover-status").textContent = status.takeover
-    ? `Live hat die Wiedergabe seit ${started} Uhr übernommen${status.available ? "." : " – wartet auf Signal aus OBS."}`
-    : "Die Playlist läuft normal.";
-  if (status.takeover) {
+  let takeoverText = "Die Playlist läuft normal.";
+  if (status.manual_takeover) {
+    const started = status.takeover_started_at ? formatLiveTime(status.takeover_started_at) : "";
+    takeoverText = `Live hat die Wiedergabe seit ${started} Uhr übernommen${status.available ? "." : " – wartet auf Signal aus OBS."}`;
+  } else if (status.schedule_takeover) {
+    takeoverText = `Live läuft nach Zeitplan bis ${formatLiveTime(status.schedule_active_until)} Uhr.`;
+  }
+  document.querySelector("#live-takeover-status").textContent = takeoverText;
+  renderLiveSchedule(status);
+  if (status.manual_takeover) {
     document.querySelector("#live-sound").checked = status.sound;
     document.querySelector("#live-auto-end").checked = status.auto_end;
   }
@@ -60,6 +119,33 @@ async function setLiveTakeover(active) {
 
 document.querySelector("#live-takeover-start").addEventListener("click", () => setLiveTakeover(true));
 document.querySelector("#live-takeover-stop").addEventListener("click", () => setLiveTakeover(false));
+
+document.querySelector("#live-schedule-add").addEventListener("click", () => {
+  document.querySelector("#live-schedule-entries").append(createLiveScheduleRow());
+  liveScheduleDirty = true;
+});
+
+document.querySelector("#live-schedule-form").addEventListener("input", () => { liveScheduleDirty = true; });
+
+document.querySelector("#live-schedule-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.target;
+  const entries = [...document.querySelectorAll("#live-schedule-entries .live-schedule-row")].map(row => ({
+    weekday: Number(row.querySelector('[name="weekday"]').value),
+    start: row.querySelector('[name="start"]').value,
+    end: row.querySelector('[name="end"]').value,
+  }));
+  try {
+    const status = await api("/api/live/schedule", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: form.elements.enabled.checked, sound: form.elements.sound.checked, entries }),
+    });
+    liveScheduleDirty = false;
+    renderLive({ ...liveStatus, ...status });
+    notify("Zeitplan gespeichert");
+  } catch (error) { notify(error.message, true); }
+});
 
 document.querySelector("#live-setup").addEventListener("click", async () => {
   try {

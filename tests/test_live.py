@@ -195,3 +195,91 @@ def test_whep_proxy_reports_unavailable_live_server(tmp_path: Path, monkeypatch)
     monkeypatch.setattr("open_signage.live.urllib.request.urlopen", refused)
     with TestClient(app) as client:
         assert client.post("/api/player/live/whep", content=b"v=0 offer").status_code == 503
+
+
+SUNDAY_SERVICE = {"enabled": True, "sound": False,
+                  "entries": [{"weekday": 6, "start": "11:00", "end": "12:30"}]}
+
+
+def local_time(day: int, hour: int, minute: int = 0) -> datetime:
+    # 2026-10-11 ist ein Sonntag.
+    return datetime(2026, 10, day, hour, minute).astimezone()
+
+
+def test_live_schedule_windows_cover_weekdays_and_overnight():
+    entries = SUNDAY_SERVICE["entries"] + [{"weekday": 5, "start": "23:00", "end": "01:00"}]
+    assert live.schedule_window(entries, local_time(11, 11, 30))[0] == local_time(11, 12, 30)
+    current, upcoming = live.schedule_window(entries, local_time(11, 10, 0))
+    assert current is None and upcoming == local_time(11, 11, 0)
+    assert live.schedule_window(entries, local_time(11, 0, 30))[0] == local_time(11, 1, 0)
+    assert live.schedule_window(entries, local_time(11, 12, 30))[0] is None
+    assert live.schedule_window(entries, local_time(12, 11, 30))[0] is None
+
+
+def test_live_schedule_takes_over_only_with_signal_inside_window(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    initialize()
+    live.save_live_schedule(SUNDAY_SERVICE)
+    offline_live(monkeypatch, available=False)
+    waiting = live.local_state(local_time(11, 11, 5))
+    assert waiting["takeover"] is False
+    assert waiting["schedule_active_until"] is not None
+
+    offline_live(monkeypatch, available=True)
+    running = live.local_state(local_time(11, 11, 10))
+    assert running["takeover"] is True and running["schedule_takeover"] is True
+    assert running["manual_takeover"] is False and running["sound"] is False
+
+    offline_live(monkeypatch, available=False)
+    assert live.local_state(local_time(11, 11, 10) + timedelta(seconds=10))["takeover"] is True
+    assert live.local_state(local_time(11, 11, 11))["takeover"] is False
+
+    offline_live(monkeypatch, available=True)
+    assert live.local_state(local_time(11, 12, 29))["takeover"] is True
+    after = live.local_state(local_time(11, 12, 31))
+    assert after["takeover"] is False
+    assert after["schedule_next"] == local_time(18, 11, 0).isoformat()
+
+
+def test_ending_live_early_suspends_current_window_only(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    initialize()
+    live.save_live_schedule(SUNDAY_SERVICE)
+    offline_live(monkeypatch, available=True)
+    monkeypatch.setattr("open_signage.live._now", lambda: local_time(11, 11, 30))
+    assert live.local_state()["takeover"] is True
+    assert live.stop_takeover()["takeover"] is False
+    assert live.local_state(local_time(11, 12, 0))["takeover"] is False
+    assert live.local_state(local_time(18, 11, 30))["takeover"] is True
+    assert live.set_takeover(True)["takeover"] is True
+    assert live.local_state(local_time(11, 12, 0))["schedule_takeover"] is True
+
+
+def test_live_schedule_api_validates_and_reaches_players_and_displays(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    offline_live(monkeypatch, available=True)
+    monkeypatch.setattr("open_signage.live._now", lambda: local_time(11, 11, 30))
+    with TestClient(app) as client:
+        assert client.put("/api/live/schedule", json=SUNDAY_SERVICE).status_code == 401
+        client.post("/api/system/login", json={"password": "open-signage"})
+        invalid = {"enabled": True, "entries": [{"weekday": 6, "start": "11:00", "end": "11:00"}]}
+        assert client.put("/api/live/schedule", json=invalid).status_code == 422
+        invalid["entries"][0]["end"] = "25:00"
+        assert client.put("/api/live/schedule", json=invalid).status_code == 422
+        saved = client.put("/api/live/schedule", json=SUNDAY_SERVICE).json()
+        assert saved["schedule"] == SUNDAY_SERVICE
+        assert saved["schedule_takeover"] is True
+        assert client.get("/api/live").json()["schedule"]["entries"][0]["start"] == "11:00"
+        token = client.get("/api/player/bootstrap").json()["token"]
+        config = client.get("/api/player/config", headers={"Authorization": f"Bearer {token}"}).json()
+        assert config["live"] == {"available": True, "takeover": True, "sound": False}
+
+        client.patch("/api/system/device", json={"role": "controller", "controller_url": "", "current_password": "open-signage"})
+        pairing = client.get("/api/system/device").json()["pairing_code"]
+        device_token = client.post("/api/sync/register", json={
+            "device_id": "display-1", "name": "Foyer", "pairing_token": pairing}).json()["device_token"]
+        shared = client.get("/api/sync/live", headers={"Authorization": f"Bearer {device_token}"}).json()
+        assert shared["takeover"] is True and shared["sound"] is False
+
+        stopped = client.post("/api/live/takeover", json={"active": False}).json()
+        assert stopped["takeover"] is False

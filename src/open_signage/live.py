@@ -177,36 +177,117 @@ def _flag(key: str, default: bool) -> bool:
     return default if value is None else value == "1"
 
 
+def _now() -> datetime:
+    return datetime.now().astimezone()
+
+
+def live_schedule() -> dict:
+    try:
+        value = json.loads(get_setting("live_schedule") or "{}")
+    except ValueError:
+        value = {}
+    if not isinstance(value, dict):
+        value = {}
+    entries = [entry for entry in value.get("entries") or [] if isinstance(entry, dict)]
+    return {"enabled": bool(value.get("enabled")), "sound": bool(value.get("sound", True)), "entries": entries}
+
+
+def save_live_schedule(schedule: dict) -> dict:
+    set_setting("live_schedule", json.dumps(schedule))
+    return live_schedule()
+
+
+def _minutes(value: str) -> int:
+    hours, minutes = value.split(":")
+    return int(hours) * 60 + int(minutes)
+
+
+def schedule_window(entries: list[dict], now: datetime) -> tuple[datetime | None, datetime | None]:
+    """Ende des aktuell laufenden und Beginn des nächsten Zeitfensters.
+
+    Wochentage zählen ab Montag (0). Endet ein Fenster vor seinem Beginn, reicht
+    es über Mitternacht in den Folgetag.
+    """
+    current_end = None
+    next_start = None
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    for offset in range(-1, 8):
+        day = midnight + timedelta(days=offset)
+        for entry in entries:
+            try:
+                if day.weekday() != int(entry["weekday"]):
+                    continue
+                start_minutes, end_minutes = _minutes(entry["start"]), _minutes(entry["end"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            start = day + timedelta(minutes=start_minutes)
+            end = day + timedelta(days=0 if end_minutes > start_minutes else 1, minutes=end_minutes)
+            if start <= now < end:
+                current_end = max(current_end, end) if current_end else end
+            elif start > now and (next_start is None or start < next_start):
+                next_start = start
+    return current_end, next_start
+
+
 def set_takeover(active: bool, auto_end: bool = True, sound: bool = True) -> dict:
     set_setting("live_takeover", "1" if active else "0")
     set_setting("live_takeover_auto_end", "1" if auto_end else "0")
     set_setting("live_takeover_sound", "1" if sound else "0")
     set_setting("live_takeover_started_at", datetime.now(UTC).isoformat() if active else "")
     set_setting("live_last_available_at", "")
+    if active:
+        set_setting("live_schedule_suppressed_until", "")
     return local_state()
 
 
-def local_state() -> dict:
-    """Live-Zustand eines Controllers oder Einzelgeräts inklusive automatischem Ende."""
+def stop_takeover(auto_end: bool = True, sound: bool = True) -> dict:
+    """Beendet Live sofort – auch ein laufendes Zeitfenster bis zu dessen Ende."""
+    schedule = live_schedule()
+    window_end, _ = schedule_window(schedule["entries"], _now()) if schedule["enabled"] else (None, None)
+    set_setting("live_schedule_suppressed_until", window_end.isoformat() if window_end else "")
+    return set_takeover(False, auto_end, sound)
+
+
+def local_state(now: datetime | None = None) -> dict:
+    """Live-Zustand eines Controllers oder Einzelgeräts.
+
+    ``takeover`` ist der wirksame Zustand für Player und Displays: manuell
+    übernommen oder ein Zeitfenster läuft und OBS sendet.
+    """
+    now = now or _now()
     status = stream_status()
-    takeover = _flag("live_takeover", False)
+    manual = _flag("live_takeover", False)
     auto_end = _flag("live_takeover_auto_end", True)
-    now = datetime.now(UTC)
-    if takeover and status["available"]:
-        last = get_setting("live_last_available_at")
-        if not last or now - datetime.fromisoformat(last) > timedelta(seconds=5):
-            set_setting("live_last_available_at", now.isoformat())
-    elif takeover and auto_end:
-        last = get_setting("live_last_available_at")
-        if last and now - datetime.fromisoformat(last) > AUTO_END_GRACE:
-            set_takeover(False, auto_end, _flag("live_takeover_sound", True))
-            takeover = False
+    last = get_setting("live_last_available_at")
+    last_at = datetime.fromisoformat(last) if last else None
+    if status["available"]:
+        if not last_at or now - last_at > timedelta(seconds=5):
+            set_setting("live_last_available_at", now.astimezone(UTC).isoformat())
+            last_at = now
+    elif manual and auto_end and last_at and now - last_at > AUTO_END_GRACE:
+        set_takeover(False, auto_end, _flag("live_takeover_sound", True))
+        manual = False
+    # Kurze Aussetzer überbrücken, damit ein Zeitfenster nicht flackert.
+    recently_available = status["available"] or bool(last_at and now - last_at <= AUTO_END_GRACE)
+
+    schedule = live_schedule()
+    window_end, next_start = (schedule_window(schedule["entries"], now)
+                              if schedule["enabled"] else (None, None))
+    suppressed_until = get_setting("live_schedule_suppressed_until")
+    if window_end and suppressed_until and now < datetime.fromisoformat(suppressed_until):
+        window_end = None
+    schedule_takeover = bool(window_end) and recently_available
     return {
         **status,
-        "takeover": takeover,
+        "takeover": manual or schedule_takeover,
+        "manual_takeover": manual,
+        "schedule_takeover": schedule_takeover,
         "takeover_started_at": get_setting("live_takeover_started_at") or None,
         "auto_end": auto_end,
-        "sound": _flag("live_takeover_sound", True),
+        "sound": _flag("live_takeover_sound", True) if manual else schedule["sound"],
+        "schedule": schedule,
+        "schedule_active_until": window_end.isoformat() if window_end else None,
+        "schedule_next": next_start.isoformat() if next_start else None,
     }
 
 

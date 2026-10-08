@@ -294,6 +294,12 @@ Die Wiedergabe lässt sich auf zwei Arten nutzen:
   Stream beendet hat – läuft die Playlist weiter.
 - Der Inhaltstyp **Live-Übertragung aus OBS** spielt das Live-Bild als
   regulären Playlist-Eintrag. Sendet OBS nicht, wird er übersprungen.
+- Ein **Zeitplan** (z. B. sonntags 11:00–12:30 Uhr) zeigt das Live-Bild
+  automatisch, sobald OBS innerhalb eines Zeitfensters sendet, und kehrt am
+  Ende des Zeitfensters zur Playlist zurück. Sendet OBS nicht, läuft die
+  Playlist normal weiter; Aussetzer bis 20 Sekunden werden überbrückt.
+  „Live beenden“ beendet ein laufendes Zeitfenster vorzeitig. Zeitfenster
+  dürfen über Mitternacht reichen.
 
 Im Controller-Betrieb sendet OBS nur an den Controller. Displays beziehen das
 Bild bei Bedarf über RTSP vom Controller, die Übernahme wird innerhalb weniger

@@ -8,6 +8,16 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- Live-Übertragungen lassen sich nach Zeitplan automatisch zeigen, etwa
+  sonntags von 11:00 bis 12:30 Uhr. Sendet OBS innerhalb eines Zeitfensters,
+  erscheint das Live-Bild auf allen Displays; am Ende des Zeitfensters geht es
+  zurück zur Playlist. Ohne Signal läuft die Playlist weiter, kurze Aussetzer
+  werden überbrückt, und „Live beenden“ beendet ein laufendes Zeitfenster
+  vorzeitig. Der Zeitplan steht unter Inhalte → Live-Übertragung; auch Displays
+  mit Version 0.17 folgen ihm.
+
 ## [0.17.1] – 2026-10-08
 
 ### Geändert
