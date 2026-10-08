@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.19.0] – 2026-10-08
+
 ### Hinzugefügt
 
 - Display-Übersicht auf der Systemseite des Controllers: Alle gekoppelten
