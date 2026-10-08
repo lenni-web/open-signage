@@ -48,7 +48,7 @@ async function loadSettings() {
 }
 
 async function openSystemPage() {
-  await Promise.all([loadSystemInfo(), loadMonitoring(), loadUpdateStatus(), loadApplicationUpdateStatus(), loadStorage(), loadSecurityStatus()]);
+  await Promise.all([loadSystemInfo(), loadMonitoring(), loadUpdateStatus(), loadApplicationUpdateStatus(), loadStorage(), loadSecurityStatus(), loadDisplayOverview()]);
 }
 
 function organizeAdministrationPages() {

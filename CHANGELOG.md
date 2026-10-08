@@ -8,6 +8,30 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- Display-Übersicht auf der Systemseite des Controllers: Alle gekoppelten
+  Displays melden minütlich aktuellen Inhalt, Player-Zustand, Version,
+  Temperatur, freien Speicher, Uhrzeit und Synchronisationsstatus. Offline-
+  Displays, veraltete Versionen, eine nicht synchronisierte Uhr und weitere
+  Probleme werden hervorgehoben.
+- Die Systemseite zeigt Uhrzeit, Zeitzone und ob die Uhr mit einem Zeitserver
+  synchronisiert ist. Monitoring und Sicherheitsstatus warnen, wenn die Uhr
+  nicht synchronisiert oder UTC als Zeitzone eingestellt ist, da Zeitpläne
+  sonst zur falschen Zeit schalten.
+
+### Geändert
+
+- Installer und Anwendungsupdater richten die Systemintegration über dasselbe
+  Skript `open-signage-post-update` ein. Updates aktualisieren dabei nun auch
+  den Hauptdienst `open-signage.service` und die Systemupdate-Dienste.
+
+### Behoben
+
+- Die CPU-Temperatur wurde nie ausgelesen und in Systeminformationen und
+  Monitoring stets als „–“ angezeigt; die Warnung ab 80 °C konnte daher nie
+  erscheinen.
+
 ## [0.18.0] – 2026-10-08
 
 ### Hinzugefügt

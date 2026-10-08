@@ -129,6 +129,13 @@ Moduswechsel. Inhalts-, Playlist-, Mediathek- und zentrale Einstellungsänderung
 werden zusätzlich serverseitig blockiert. Bestehende Rollen werden automatisch
 von `master` auf `controller` und von `slave` auf `display` migriert.
 
+Auf dem Controller zeigt **System → Display-Übersicht** alle gekoppelten
+Displays auf einen Blick: aktueller Inhalt, Erreichbarkeit, Version,
+Temperatur, freier Speicher, Uhrzeit und Synchronisationsstatus. Displays
+melden ihren Zustand minütlich; nach drei Minuten ohne Meldung gelten sie als
+offline. Hinweise wie eine veraltete Version oder eine nicht synchronisierte
+Uhr werden hervorgehoben.
+
 Controller und Displays dürfen kurzzeitig unterschiedliche Versionen haben.
 Einträge, die ein älteres Display noch nicht kennt – etwa ein neuer
 Inhaltstyp –, überspringt es beim Abgleich und weist im
@@ -146,7 +153,8 @@ Healthcheck stellt er automatisch die vorherige Version wieder her.
 
 Pakete, Systemdienste und Kiosk-Einstellungen richtet das Skript
 `deploy/open-signage-post-update` der *neuen* Version ein, bevor umgeschaltet
-wird. Dadurch kann jede Version eigene Systemdienste mitbringen. Schlägt ein
+wird. Der Installer verwendet dasselbe Skript, sodass Erstinstallation und
+Update dieselbe Systemintegration erhalten. Dadurch kann jede Version eigene Systemdienste mitbringen. Schlägt ein
 Schritt vor der Umschaltung fehl, bricht der Updater ab und die laufende
 Version bleibt unverändert.
 
@@ -258,6 +266,13 @@ Webseitensprache sind auf Deutsch eingestellt; die automatische
 blendet den Mauszeiger dauerhaft aus. Ein nativer Labwc-Cursorwächter erfasst
 dabei auch eingebettete Webseiten und PDFs, deren Cursor sich nicht per
 Player-CSS steuern lässt.
+
+Alle Zeitpläne richten sich nach der Uhr des Raspberry Pi. Da er keine
+Batterie-Uhr besitzt, synchronisiert er die Uhrzeit nach dem Start über das
+Netzwerk. Die Systemseite zeigt Uhrzeit, Zeitzone und Synchronisationsstatus
+und warnt, wenn die Uhr nicht synchronisiert oder als Zeitzone UTC eingestellt
+ist. Die Zeitzone lässt sich mit `sudo raspi-config` unter *Localisation
+Options → Timezone* auf `Europe/Berlin` stellen.
 
 Die Bildschirmsteuerung prüft alle vorhandenen CEC-Adapter. Ein Display gilt
 erst dann als CEC-fähig, wenn es selbst antwortet. Andernfalls schaltet Open

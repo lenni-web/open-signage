@@ -16,6 +16,7 @@ from ..auth import (device_mode, get_setting, lan_player_access_enabled, passwor
                     require_system_login, set_setting, verify_password)
 from ..backup import list_backups
 from ..database import connect, data_dir
+from ..device_status import local_device_status, player_status
 from ..display_control import (display_config, display_status, request_display_action,
                                save_display_config, schedule_analysis)
 from ..sync import pairing_token, safe_sync_from_controller
@@ -24,6 +25,9 @@ from ..system_update import request_update, update_status
 from ..version import __version__
 
 router = APIRouter()
+
+# Displays melden sich minütlich; nach drei verpassten Meldungen gelten sie als offline.
+DISPLAY_ONLINE_SECONDS = 180
 
 
 class DeviceSettings(BaseModel):
@@ -65,15 +69,10 @@ class PlayerAccessSettings(BaseModel):
 def monitoring(_: None = Depends(require_system_login)):
     info = collect_system_info()
     with connect() as connection:
-        row = connection.execute("SELECT * FROM player_status WHERE id = 1").fetchone()
         events = connection.execute(
             "SELECT * FROM player_events ORDER BY id DESC LIMIT 20"
         ).fetchall()
-    player = dict(row) if row else None
-    if player:
-        age = (datetime.now(UTC) - datetime.fromisoformat(player["last_seen"])).total_seconds()
-        player["online"] = age < 25
-        player["age_seconds"] = round(age)
+    player = player_status()
     disk = info["disk"]
     free_ratio = (disk["total_bytes"] - disk["used_bytes"]) / disk["total_bytes"] if disk["total_bytes"] else 0
     warnings = []
@@ -81,16 +80,43 @@ def monitoring(_: None = Depends(require_system_login)):
         warnings.append("Weniger als 10 % Datenspeicher frei.")
     if info["temperature_celsius"] is not None and info["temperature_celsius"] >= 80:
         warnings.append("CPU-Temperatur beträgt mindestens 80 °C.")
+    warnings += info["clock"]["warnings"]
     return {
-        "player": player or {"online": False, "state": "unknown", "last_seen": None},
+        "player": player,
         "disk": disk,
         "temperature_celsius": info["temperature_celsius"],
+        "clock": info["clock"],
         "warnings": warnings,
         "events": [dict(event) for event in events],
         "system_update": update_status(),
         "application_update": application_update_status(),
         "version": __version__,
     }
+
+
+@router.get("/api/system/displays")
+def display_overview(_: None = Depends(require_system_login)):
+    if device_mode() != "controller":
+        return {"enabled": False, "controller": None, "displays": []}
+    now = datetime.now(UTC)
+    with connect() as connection:
+        rows = connection.execute(
+            "SELECT device_id, name, last_seen, status_json, status_at FROM registered_devices ORDER BY name"
+        ).fetchall()
+    displays = []
+    for row in rows:
+        try:
+            status = json.loads(row["status_json"]) if row["status_json"] else None
+        except ValueError:
+            status = None
+        age = (now - datetime.fromisoformat(row["status_at"])).total_seconds() if row["status_at"] else None
+        displays.append({
+            "device_id": row["device_id"], "name": row["name"], "last_seen": row["last_seen"],
+            "status": status, "status_at": row["status_at"],
+            "online": age is not None and age < DISPLAY_ONLINE_SECONDS,
+        })
+    return {"enabled": True, "controller": local_device_status(), "live": live.player_state(),
+            "displays": displays}
 
 
 @router.get("/api/system/info")
@@ -116,6 +142,7 @@ def security_status(request: Request, _: None = Depends(require_system_login)):
         "backup_available": bool(backups),
         "storage_healthy": info["disk"]["used_bytes"] < info["disk"]["total_bytes"] * 0.9,
         "https": request.url.scheme == "https",
+        "clock_synchronized": info["clock"]["synchronized"] is not False,
     }
     return {"checks": checks, "integrity_checked_at": integrity_at["value"] if integrity_at else None,
             "last_backup_at": backups[0]["created_at"] if backups else None,

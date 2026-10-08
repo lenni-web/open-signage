@@ -7,8 +7,10 @@ from fastapi.testclient import TestClient
 
 from open_signage.auth import get_setting, set_setting
 from open_signage.database import connect, initialize, media_dir
+from open_signage.device_status import local_device_status
 from open_signage.main import app
-from open_signage.sync import safe_sync_from_controller, snapshot as sync_snapshot
+from open_signage.sync import report_status_to_controller, safe_sync_from_controller, snapshot as sync_snapshot
+from open_signage.version import __version__
 
 from helpers import VALID_PNG
 
@@ -165,3 +167,44 @@ def test_display_skips_entries_its_version_does_not_support(tmp_path: Path, monk
     controller_data["content"] = controller_data["content"][:1]
     assert safe_sync_from_controller()["skipped"] == 0
     assert get_setting("sync_last_warning") in (None, "")
+
+
+def test_displays_report_status_to_controller_overview(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        assert client.get("/api/system/displays").json()["enabled"] is False
+        assert client.post("/api/sync/status", json={}).status_code == 409
+        client.patch("/api/system/device", json={"role": "controller", "controller_url": "", "current_password": "open-signage"})
+        pairing = client.get("/api/system/device").json()["pairing_code"]
+        token = client.post("/api/sync/register", json={
+            "device_id": "display-1", "name": "Foyer", "pairing_token": pairing}).json()["device_token"]
+        overview = client.get("/api/system/displays").json()
+        assert overview["enabled"] is True
+        assert overview["displays"][0]["status"] is None and overview["displays"][0]["online"] is False
+
+        report = local_device_status()
+        report["player"]["content_name"] = "Gottesdienst live"
+        headers = {"Authorization": f"Bearer {token}"}
+        assert client.post("/api/sync/status", json=report).status_code == 401
+        assert client.post("/api/sync/status", json={"x": "y" * 40_000}, headers=headers).status_code == 413
+        assert client.post("/api/sync/status", json=report, headers=headers).status_code == 204
+        display = client.get("/api/system/displays").json()["displays"][0]
+        assert display["name"] == "Foyer" and display["online"] is True
+        assert display["status"]["player"]["content_name"] == "Gottesdienst live"
+        assert display["status"]["version"] == __version__
+
+
+def test_display_sends_its_status_with_device_token(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    initialize()
+    assert report_status_to_controller() is False
+    set_setting("controller_url", "http://controller.local:8080")
+    set_setting("sync_device_token", "device-token")
+    sent = []
+    monkeypatch.setattr("open_signage.sync._request_json",
+                        lambda url, method="GET", data=None, token="": sent.append((url, method, data, token)) or {})
+    assert report_status_to_controller() is True
+    url, method, data, token = sent[0]
+    assert (url, method, token) == ("http://controller.local:8080/api/sync/status", "POST", "device-token")
+    assert data["version"] == __version__ and "player" in data and "clock" in data

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -11,9 +12,12 @@ from pydantic import BaseModel, Field
 from .. import live
 from ..auth import device_mode
 from ..database import media_dir
-from ..sync import authenticate_device, register_device, snapshot as sync_snapshot
+from ..sync import (authenticate_device, device_for_token, register_device, snapshot as sync_snapshot,
+                    store_device_status)
 
 router = APIRouter()
+
+MAX_STATUS_BYTES = 32 * 1024
 
 
 class SyncRegistration(BaseModel):
@@ -49,6 +53,17 @@ def get_sync_live(_: None = Depends(require_sync_device)):
     if device_mode() != "controller": raise HTTPException(status_code=409, detail="Gerät ist kein Controller")
     state = live.local_state()
     return {key: state[key] for key in ("server_running", "available", "takeover", "sound")}
+
+
+@router.post("/api/sync/status", status_code=204)
+def receive_device_status(payload: dict, request: Request):
+    if device_mode() != "controller": raise HTTPException(status_code=409, detail="Gerät ist kein Controller")
+    authorization = request.headers.get("Authorization", "")
+    device_id = device_for_token(authorization.removeprefix("Bearer ") if authorization.startswith("Bearer ") else "")
+    if not device_id: raise HTTPException(status_code=401, detail="Ungültiger Geräte-Token")
+    if len(json.dumps(payload)) > MAX_STATUS_BYTES:
+        raise HTTPException(status_code=413, detail="Statusmeldung ist zu groß")
+    store_device_status(device_id, payload)
 
 
 @router.get("/api/sync/media/{filename}")

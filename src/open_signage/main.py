@@ -14,7 +14,7 @@ from .database import initialize, integrity_check_if_due
 from .routes import (content, live as live_routes, media_library, pages, player, playlists, session,
                      storage, sync, system)
 from .routes.common import STATIC_DIR
-from .sync import safe_sync_from_controller
+from .sync import report_status_to_controller, safe_sync_from_controller
 from .version import __version__
 
 
@@ -36,7 +36,9 @@ async def lifespan(_: FastAPI):
         while True:
             await asyncio.sleep(60)
             ticks += 1
-            if device_mode() == "display": await asyncio.to_thread(safe_sync_from_controller)
+            if device_mode() == "display":
+                await asyncio.to_thread(safe_sync_from_controller)
+                await asyncio.to_thread(report_status_to_controller)
             if ticks >= 24 * 60:
                 ticks = 0
                 await asyncio.to_thread(integrity_check_if_due)

@@ -13,6 +13,7 @@ from urllib.parse import urljoin
 from . import live
 from .auth import get_setting, screen_name, set_setting
 from .database import connect, media_dir
+from .device_status import local_device_status
 from .display_control import display_config, save_display_config
 from .media_files import file_sha256, referenced_media_files, remember_sha256
 
@@ -41,8 +42,9 @@ def register_device(device_id: str, name: str, supplied_pairing_token: str) -> s
     return token
 
 
-def authenticate_device(token: str) -> bool:
-    if not token: return False
+def device_for_token(token: str) -> str | None:
+    """Gerätekennung eines registrierten Displays; aktualisiert dessen letzten Kontakt."""
+    if not token: return None
     digest = hashlib.sha256(token.encode()).hexdigest()
     with connect() as connection:
         row = connection.execute(
@@ -51,7 +53,32 @@ def authenticate_device(token: str) -> bool:
         if row:
             connection.execute("UPDATE registered_devices SET last_seen = ? WHERE device_id = ?",
                                (datetime.now(UTC).isoformat(), row["device_id"]))
-    return bool(row)
+    return row["device_id"] if row else None
+
+
+def authenticate_device(token: str) -> bool:
+    return device_for_token(token) is not None
+
+
+def store_device_status(device_id: str, status: dict) -> None:
+    with connect() as connection:
+        connection.execute(
+            "UPDATE registered_devices SET status_json = ?, status_at = ? WHERE device_id = ?",
+            (json.dumps(status, ensure_ascii=False), datetime.now(UTC).isoformat(), device_id),
+        )
+
+
+def report_status_to_controller() -> bool:
+    """Meldet den eigenen Zustand an den Controller für dessen Display-Übersicht."""
+    controller = (get_setting("controller_url") or get_setting("master_url") or "").rstrip("/") + "/"
+    token = get_setting("sync_device_token") or ""
+    if not controller.startswith(("http://", "https://")) or not token:
+        return False
+    try:
+        _request_json(urljoin(controller, "api/sync/status"), "POST", local_device_status(), token)
+    except (OSError, ValueError, urllib.error.URLError):
+        return False
+    return True
 
 
 def snapshot() -> dict:
@@ -77,7 +104,8 @@ def _request_json(url: str, method: str = "GET", data: dict | None = None, token
     if token: headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(url, data=body, headers=headers, method=method)
     with urllib.request.urlopen(request, timeout=30) as response:
-        return json.load(response)
+        content = response.read()
+    return json.loads(content) if content else {}
 
 
 def sync_from_controller() -> dict:

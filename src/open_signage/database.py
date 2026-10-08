@@ -221,6 +221,10 @@ def initialize() -> None:
         }.items():
             if name not in media_columns:
                 connection.execute(f"ALTER TABLE media_library ADD COLUMN {name} {definition}")
+        device_columns = {row["name"] for row in connection.execute("PRAGMA table_info(registered_devices)")}
+        for name in ("status_json", "status_at"):
+            if name not in device_columns:
+                connection.execute(f"ALTER TABLE registered_devices ADD COLUMN {name} TEXT")
         playlist_columns = {row["name"] for row in connection.execute("PRAGMA table_info(playlists)")}
         for name, definition in {
             "schedule_enabled": "INTEGER NOT NULL DEFAULT 0", "schedule_start": "TEXT",

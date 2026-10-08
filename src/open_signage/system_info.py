@@ -6,9 +6,13 @@ import platform
 import shutil
 import socket
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 from .database import data_dir
+
+# systemd-timesyncd legt diese Datei an, sobald die Uhr synchronisiert ist.
+TIMESYNC_FLAG = Path("/run/systemd/timesync/synchronized")
 
 
 def _read_text(path: str) -> str | None:
@@ -89,9 +93,13 @@ def _uptime_seconds() -> int | None:
         return None
 
 
-def _temperature_celsius() -> float | None:
+def temperature_celsius() -> float | None:
     text = _read_text("/sys/class/thermal/thermal_zone0/temp")
     if not text:
+        return None
+    try:
+        return round(float(text) / 1000, 1)
+    except ValueError:
         return None
 
 
@@ -102,10 +110,33 @@ def _operating_system() -> str:
             if line.startswith("PRETTY_NAME="):
                 return line.partition("=")[2].strip().strip('"')
     return platform.platform()
-    try:
-        return round(float(text) / 1000, 1)
-    except ValueError:
-        return None
+
+
+def clock_status() -> dict:
+    """Uhrzeit, Zeitzone und ob die Uhr mit einem Zeitserver synchronisiert ist.
+
+    Ein Raspberry Pi hat keine Batterie-Uhr; ohne Synchronisierung schalten
+    Zeitpläne zur falschen Zeit. ``synchronized`` ist ``None``, wenn sich der
+    Zustand nicht ermitteln lässt (etwa in der Entwicklungsumgebung).
+    """
+    synchronized = None
+    if TIMESYNC_FLAG.exists():
+        synchronized = True
+    else:
+        value = _run_text(["timedatectl", "show", "--property=NTPSynchronized", "--value"])
+        synchronized = {"yes": True, "no": False}.get(value or "")
+    timezone = (_run_text(["timedatectl", "show", "--property=Timezone", "--value"])
+                or _read_text("/etc/timezone"))
+    now = datetime.now().astimezone()
+    warnings = []
+    if synchronized is False:
+        warnings.append("Die Systemuhr ist nicht mit einem Zeitserver synchronisiert – Zeitpläne können zur "
+                        "falschen Zeit schalten. Bitte Netzwerk- und Internetverbindung prüfen.")
+    if timezone in {"UTC", "Etc/UTC", "Universal", "Zulu"}:
+        warnings.append("Als Zeitzone ist UTC eingestellt. Für Zeitpläne in Deutschland bitte „Europe/Berlin“ "
+                        "einstellen (sudo raspi-config → Localisation Options → Timezone).")
+    return {"synchronized": synchronized, "timezone": timezone, "local_time": now.isoformat(),
+            "warnings": warnings}
 
 
 def _network() -> dict:
@@ -151,7 +182,7 @@ def collect_system_info() -> dict:
         "operating_system": _operating_system(),
         "kernel": platform.release(),
         "uptime_seconds": _uptime_seconds(),
-        "temperature_celsius": _temperature_celsius(),
+        "temperature_celsius": temperature_celsius(),
         "load_average": list(load) if load else None,
         "memory": _memory(),
         "disk": {
@@ -160,4 +191,5 @@ def collect_system_info() -> dict:
             "free_bytes": disk.free,
         },
         "network": _network(),
+        "clock": clock_status(),
     }

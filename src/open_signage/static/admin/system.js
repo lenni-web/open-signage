@@ -36,7 +36,7 @@ async function loadBackups() {
 
 async function loadSecurityStatus() {
   const status = await api("/api/system/security-status");
-  const labels = { initial_password_changed: "Initialpasswort geändert", player_token_available: "Player-Schlüssel vorhanden", database_integrity_ok: "SQLite-Integrität", backup_available: "Backup vorhanden", storage_healthy: "Speicherreserve", https: "HTTPS-Verbindung" };
+  const labels = { initial_password_changed: "Initialpasswort geändert", player_token_available: "Player-Schlüssel vorhanden", database_integrity_ok: "SQLite-Integrität", backup_available: "Backup vorhanden", storage_healthy: "Speicherreserve", https: "HTTPS-Verbindung", clock_synchronized: "Systemuhr synchronisiert" };
   const target = document.querySelector("#security-status");
   target.replaceChildren(...Object.entries(status.checks).map(([key, ok]) => {
     const row = document.createElement("p"); row.className = ok ? "security-ok" : "security-warning";
@@ -133,6 +133,86 @@ async function loadSystemInfo() {
   }
 }
 
+function formatClock(clock) {
+  if (!clock) return "–";
+  const time = new Date(clock.local_time).toLocaleString("de-DE", { weekday: "short", hour: "2-digit", minute: "2-digit" });
+  const state = clock.synchronized === true ? "synchronisiert" : clock.synchronized === false ? "nicht synchronisiert" : "Status unbekannt";
+  return `${time} · ${state}${clock.timezone ? ` (${clock.timezone})` : ""}`;
+}
+
+function displayWarnings(display, controllerVersion) {
+  const status = display.status;
+  if (!status) return ["Hat sich noch nicht gemeldet (Display auf Version 0.19 oder neuer aktualisieren)."];
+  const warnings = [];
+  if (!display.online) warnings.push("Meldet sich nicht mehr.");
+  if (!status.player?.online) warnings.push("Player läuft nicht.");
+  if (status.player?.error) warnings.push(`Playerfehler: ${status.player.error}`);
+  if (status.version !== controllerVersion) warnings.push(`Version ${status.version} – Controller hat ${controllerVersion}.`);
+  if (status.clock?.synchronized === false) warnings.push("Systemuhr nicht synchronisiert.");
+  if (status.temperature_celsius != null && status.temperature_celsius >= 80) warnings.push(`Temperatur ${status.temperature_celsius} °C.`);
+  if (status.disk?.total_bytes && status.disk.free_bytes / status.disk.total_bytes < 0.1) warnings.push("Weniger als 10 % Speicher frei.");
+  if (status.sync?.last_warning) warnings.push(status.sync.last_warning);
+  if (status.sync?.last_error) warnings.push(`Synchronisierung: ${status.sync.last_error}`);
+  return warnings;
+}
+
+function renderDisplayTile(display, controllerVersion) {
+  const status = display.status || {};
+  const warnings = displayWarnings(display, controllerVersion);
+  const tile = document.createElement("article");
+  tile.className = `display-tile${!display.online ? " offline" : warnings.length ? " warning" : ""}`;
+  tile.innerHTML = `
+    <header><strong></strong><span class="live-signal"></span></header>
+    <dl>
+      <dt>Läuft gerade</dt><dd data-field="content"></dd>
+      <dt>Version</dt><dd data-field="version"></dd>
+      <dt>Temperatur</dt><dd data-field="temperature"></dd>
+      <dt>Speicher frei</dt><dd data-field="disk"></dd>
+      <dt>Uhrzeit</dt><dd data-field="clock"></dd>
+      <dt>Letzte Meldung</dt><dd data-field="reported"></dd>
+    </dl>
+    <ul hidden></ul>
+  `;
+  tile.querySelector("strong").textContent = display.name;
+  const pill = tile.querySelector(".live-signal");
+  pill.textContent = display.online ? (warnings.length ? "Online · Hinweis" : "Online") : "Offline";
+  pill.classList.add(display.online ? (warnings.length ? "warn" : "on") : "off");
+  const set = (field, value) => { tile.querySelector(`[data-field="${field}"]`).textContent = value ?? "–"; };
+  const player = status.player || {};
+  set("content", player.online ? (player.content_name || "Platzhalter") : "Player offline");
+  set("version", status.version);
+  set("temperature", status.temperature_celsius == null ? "–" : `${status.temperature_celsius} °C`);
+  set("disk", status.disk ? formatBytes(status.disk.free_bytes) : "–");
+  set("clock", status.clock ? formatClock(status.clock) : "–");
+  set("reported", display.status_at ? new Date(display.status_at).toLocaleString("de-DE") : "noch nie");
+  const list = tile.querySelector("ul");
+  list.hidden = !warnings.length;
+  list.replaceChildren(...warnings.map(text => {
+    const item = document.createElement("li");
+    item.textContent = text;
+    return item;
+  }));
+  return tile;
+}
+
+async function loadDisplayOverview() {
+  try {
+    const overview = await api("/api/system/displays");
+    const card = document.querySelector("#display-overview");
+    card.hidden = !overview.enabled;
+    if (!overview.enabled) return;
+    const version = overview.controller.version;
+    const tiles = overview.displays.map(display => renderDisplayTile(display, version));
+    const online = overview.displays.filter(display => display.online).length;
+    const withWarnings = overview.displays.filter(display => displayWarnings(display, version).length).length;
+    document.querySelector("#display-overview-summary").textContent = overview.displays.length
+      ? `${overview.displays.length} Displays · ${online} online · ${withWarnings} mit Hinweisen` +
+        (overview.live.takeover ? " · Live-Übertragung aktiv" : "")
+      : "Noch keine Displays registriert. Displays werden unter Einstellungen → Controller-/Display-Synchronisierung gekoppelt.";
+    document.querySelector("#display-overview-list").replaceChildren(...tiles);
+  } catch (error) { notify(error.message, true); }
+}
+
 async function loadMonitoring() {
   try {
     const status = await api("/api/system/monitoring");
@@ -144,6 +224,7 @@ async function loadMonitoring() {
     const free = status.disk.total_bytes - status.disk.used_bytes;
     set("disk", `${formatBytes(free)} frei`);
     set("temperature", status.temperature_celsius == null ? "–" : `${status.temperature_celsius} °C`);
+    set("clock", formatClock(status.clock));
     set("application_update", status.application_update.status);
     set("system_update", status.system_update.status);
     const warnings = document.querySelector("#monitoring-warnings");
@@ -278,6 +359,7 @@ document.querySelector("#system-refresh").addEventListener("click", () => {
   loadMonitoring();
 });
 document.querySelector("#monitoring-refresh").addEventListener("click", loadMonitoring);
+document.querySelector("#display-overview-refresh").addEventListener("click", loadDisplayOverview);
 
 document.querySelector("#application-update").addEventListener("click", async () => {
   const confirmed = window.confirm(
@@ -314,6 +396,7 @@ window.setInterval(() => {
     loadUpdateStatus();
     loadApplicationUpdateStatus();
     loadMonitoring();
+    if (currentDeviceMode === "controller") loadDisplayOverview();
   }
   if (!document.querySelector("#settings-page").hidden) {
     loadDisplayControl();

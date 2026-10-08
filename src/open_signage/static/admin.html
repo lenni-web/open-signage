@@ -431,12 +431,21 @@
           <div><span>Letzter Kontakt</span><strong data-monitoring="last_seen">–</strong></div>
           <div><span>Freier Speicher</span><strong data-monitoring="disk">–</strong></div>
           <div><span>Temperatur</span><strong data-monitoring="temperature">–</strong></div>
+          <div><span>Uhrzeit</span><strong data-monitoring="clock">–</strong></div>
           <div><span>Anwendungsupdate</span><strong data-monitoring="application_update">–</strong></div>
           <div><span>Systemupdate</span><strong data-monitoring="system_update">–</strong></div>
         </div>
         <div id="monitoring-warnings" class="monitoring-warnings" hidden></div>
         <div id="player-error" class="monitoring-warnings" hidden></div>
         <details id="player-events" hidden><summary>Player-Fehlerprotokoll</summary><div></div></details>
+      </section>
+      <section id="display-overview" class="card system-overview" hidden>
+        <div class="section-heading">
+          <div><span class="eyebrow">Controller</span><h2>Display-Übersicht</h2></div>
+          <button id="display-overview-refresh" class="secondary">Aktualisieren</button>
+        </div>
+        <p id="display-overview-summary" class="display-overview-summary"></p>
+        <div id="display-overview-list" class="display-overview-list"></div>
       </section>
       <details class="card system-overview collapsible-card">
         <summary class="collapsible-summary">

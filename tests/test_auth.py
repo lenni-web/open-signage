@@ -1,8 +1,8 @@
 """Anmeldung, Sitzungen, Player-Freischaltung und Zugriff auf Medien."""
 
-import pytest
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 

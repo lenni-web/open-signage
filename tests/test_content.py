@@ -1,10 +1,10 @@
 """Inhalte: Webseiten, Livestreams, Uploads, PDFs, Videos und Freitext."""
 
-import pytest
 import shutil
 from pathlib import Path
 
 from fastapi import HTTPException
+import pytest
 from fastapi.testclient import TestClient
 
 from open_signage.main import app

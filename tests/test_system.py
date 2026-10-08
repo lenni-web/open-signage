@@ -1,13 +1,14 @@
 """Systeminformationen, Updates, Gerätemodus und Systemaktionen."""
 
-import pytest
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from open_signage.application_update import request_update as request_application_update, update_status as application_update_status
 from open_signage.auth import get_setting, set_setting
 from open_signage.database import initialize
+from open_signage import system_info
 from open_signage.main import app
 from open_signage.system_update import request_update, update_status
 
@@ -128,3 +129,38 @@ def test_display_mode_blocks_central_writes_but_allows_mode_change(tmp_path: Pat
         assert client.post("/api/content/website", json={
             "name": "Lokal erlaubt", "url": "https://example.org",
         }).status_code == 201
+
+
+def test_temperature_is_read_from_thermal_zone(monkeypatch):
+    monkeypatch.setattr("open_signage.system_info._read_text",
+                        lambda path: "48123" if path.endswith("thermal_zone0/temp") else None)
+    assert system_info.temperature_celsius() == 48.1
+
+
+def test_clock_status_warns_about_missing_sync_and_utc(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr("open_signage.system_info.TIMESYNC_FLAG", tmp_path / "synchronized")
+    answers = {"--property=NTPSynchronized": "no", "--property=Timezone": "Etc/UTC"}
+    monkeypatch.setattr("open_signage.system_info._run_text", lambda command: answers.get(command[2]))
+    clock = system_info.clock_status()
+    assert clock["synchronized"] is False and clock["timezone"] == "Etc/UTC"
+    assert len(clock["warnings"]) == 2
+
+    (tmp_path / "synchronized").write_text("")
+    answers["--property=Timezone"] = "Europe/Berlin"
+    clock = system_info.clock_status()
+    assert clock["synchronized"] is True and clock["warnings"] == []
+
+
+def test_monitoring_and_security_status_report_unsynchronized_clock(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr("open_signage.system_info.TIMESYNC_FLAG", tmp_path / "synchronized")
+    monkeypatch.setattr("open_signage.system_info._run_text",
+                        lambda command: "no" if command[:2] == ["timedatectl", "show"] and "NTP" in command[2] else None)
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        monitoring = client.get("/api/system/monitoring").json()
+        assert monitoring["clock"]["synchronized"] is False
+        assert any("Zeitserver" in warning for warning in monitoring["warnings"])
+        security = client.get("/api/system/security-status").json()
+        assert security["checks"]["clock_synchronized"] is False
+        assert "clock_synchronized" in security["warnings"]
