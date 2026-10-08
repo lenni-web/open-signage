@@ -4,13 +4,7 @@ set -euo pipefail
 readonly APP_USER="open-signage"
 readonly APP_DIR="/opt/open-signage"
 readonly DATA_DIR="/var/lib/open-signage"
-readonly SERVICE_FILE="/etc/systemd/system/open-signage.service"
-readonly KIOSK_COMMAND="/usr/local/bin/open-signage-kiosk"
-readonly UPDATE_COMMAND="/usr/local/sbin/open-signage-system-update"
-readonly APPLICATION_UPDATE_COMMAND="/usr/local/sbin/open-signage-application-update"
 readonly APPLICATION_UPDATE_CONFIG="/etc/default/open-signage-application-update"
-readonly SYSTEM_ACTION_COMMAND="/usr/local/sbin/open-signage-system-action"
-readonly DISPLAY_CONTROL_COMMAND="/usr/local/sbin/open-signage-display-control"
 readonly APP_ENV_FILE="/etc/open-signage.env"
 
 PORT=8080
@@ -109,10 +103,6 @@ apt-get install --no-install-recommends -y \
 
 command -v labwc >/dev/null 2>&1 || fail "labwc wurde nicht installiert."
 command -v raspi-config >/dev/null 2>&1 || fail "raspi-config wurde nicht gefunden."
-if ! locale -a | grep -qi '^de_DE\.utf8$'; then
-  sed -i 's/^# *\(de_DE.UTF-8 UTF-8\)/\1/' /etc/locale.gen
-  locale-gen de_DE.UTF-8
-fi
 
 if ! id "${KIOSK_USER}" >/dev/null 2>&1; then
   useradd --create-home --shell /bin/bash "${KIOSK_USER}"
@@ -122,9 +112,6 @@ for group in audio video render input; do
     usermod --append --groups "${group}" "${KIOSK_USER}"
   fi
 done
-
-readonly KIOSK_HOME="$(getent passwd "${KIOSK_USER}" | cut -d: -f6)"
-[[ -n "${KIOSK_HOME}" ]] || fail "Home-Verzeichnis von ${KIOSK_USER} konnte nicht ermittelt werden."
 
 if ! id "${APP_USER}" >/dev/null 2>&1; then
   useradd --system --home-dir "${DATA_DIR}" --create-home --shell /usr/sbin/nologin "${APP_USER}"
@@ -152,72 +139,14 @@ printf 'OPEN_SIGNAGE_MODE=%s\nOPEN_SIGNAGE_CONTROLLER_URL=%s\n' \
   "${MODE}" "${CONTROLLER_URL}" >>"${APP_ENV_FILE}"
 chmod 0600 "${APP_ENV_FILE}"
 
-sed "s/@@PORT@@/${PORT}/g" \
-  "${PROJECT_DIR}/deploy/open-signage.service" >"${SERVICE_FILE}"
-chmod 0644 "${SERVICE_FILE}"
-
-sed \
-  -e "s|@@PLAYER_URL@@|http://127.0.0.1:${PORT}/player|g" \
-  -e "s|@@HEALTH_URL@@|http://127.0.0.1:${PORT}/api/health|g" \
-  "${PROJECT_DIR}/deploy/open-signage-kiosk" >"${KIOSK_COMMAND}"
-chmod 0755 "${KIOSK_COMMAND}"
-install -o root -g root -m 0755 \
-  "${PROJECT_DIR}/deploy/open-signage-cursor-guard" \
-  /usr/local/bin/open-signage-cursor-guard
-install -d -o root -g root -m 0755 /etc/chromium/policies/managed
-install -o root -g root -m 0644 \
-  "${PROJECT_DIR}/deploy/open-signage-chromium-policy.json" \
-  /etc/chromium/policies/managed/open-signage.json
-
-install -o root -g root -m 0755 \
-  "${PROJECT_DIR}/deploy/open-signage-system-update" "${UPDATE_COMMAND}"
-install -o root -g root -m 0644 \
-  "${PROJECT_DIR}/deploy/open-signage-update.service" \
-  "/etc/systemd/system/open-signage-update.service"
-install -o root -g root -m 0644 \
-  "${PROJECT_DIR}/deploy/open-signage-update.path" \
-  "/etc/systemd/system/open-signage-update.path"
-install -o root -g root -m 0755 \
-  "${PROJECT_DIR}/deploy/open-signage-application-update" "${APPLICATION_UPDATE_COMMAND}"
-install -o root -g root -m 0644 \
-  "${PROJECT_DIR}/deploy/open-signage-application-update.service" \
-  "/etc/systemd/system/open-signage-application-update.service"
-install -o root -g root -m 0644 \
-  "${PROJECT_DIR}/deploy/open-signage-application-update.path" \
-  "/etc/systemd/system/open-signage-application-update.path"
 install -d -o root -g root -m 0755 /etc/default
 printf 'SOURCE_REPOSITORY=%q\nSOURCE_USER=%q\nPORT=%q\nKIOSK_USER=%q\n' \
   "${PROJECT_DIR}" "${SOURCE_USER}" "${PORT}" "${KIOSK_USER}" >"${APPLICATION_UPDATE_CONFIG}"
 chmod 0600 "${APPLICATION_UPDATE_CONFIG}"
-install -o root -g root -m 0755 \
-  "${PROJECT_DIR}/deploy/open-signage-system-action" "${SYSTEM_ACTION_COMMAND}"
-install -o root -g root -m 0644 \
-  "${PROJECT_DIR}/deploy/open-signage-system-action.service" "/etc/systemd/system/open-signage-system-action.service"
-install -o root -g root -m 0644 \
-  "${PROJECT_DIR}/deploy/open-signage-system-action.path" "/etc/systemd/system/open-signage-system-action.path"
-sed "s|@@KIOSK_USER@@|${KIOSK_USER}|g" \
-  "${PROJECT_DIR}/deploy/open-signage-display-control" >"${DISPLAY_CONTROL_COMMAND}"
-chmod 0755 "${DISPLAY_CONTROL_COMMAND}"
-for unit in open-signage-display-control.service open-signage-display-control.path \
-  open-signage-display-schedule.service open-signage-display-schedule.timer; do
-  install -o root -g root -m 0644 "${PROJECT_DIR}/deploy/${unit}" "/etc/systemd/system/${unit}"
-done
 
-readonly AUTOSTART_DIR="${KIOSK_HOME}/.config/labwc"
-readonly AUTOSTART_FILE="${AUTOSTART_DIR}/autostart"
-install -d -o "${KIOSK_USER}" -g "${KIOSK_USER}" -m 0755 "${AUTOSTART_DIR}"
-install -o "${KIOSK_USER}" -g "${KIOSK_USER}" -m 0644 \
-  "${PROJECT_DIR}/deploy/open-signage-labwc-rc.xml" "${AUTOSTART_DIR}/rc.xml"
-install -d -o "${KIOSK_USER}" -g "${KIOSK_USER}" -m 0755 "${KIOSK_HOME}/.local/state/open-signage"
-touch "${AUTOSTART_FILE}"
-grep -q '^#!/bin/sh' "${AUTOSTART_FILE}" || sed -i '1i #!/bin/sh' "${AUTOSTART_FILE}"
-sed -i '\|^/usr/local/bin/open-signage-kiosk|d' "${AUTOSTART_FILE}"
-sed -i '\|^/usr/local/bin/open-signage-cursor-guard|d' "${AUTOSTART_FILE}"
-printf '/usr/local/bin/open-signage-cursor-guard &\n' >>"${AUTOSTART_FILE}"
-printf '%s >>%s 2>&1 &\n' "${KIOSK_COMMAND}" \
-  "${KIOSK_HOME}/.local/state/open-signage/kiosk.log" >>"${AUTOSTART_FILE}"
-chown "${KIOSK_USER}:${KIOSK_USER}" "${AUTOSTART_FILE}"
-chmod 0755 "${AUTOSTART_FILE}"
+printf 'Richte Systemdienste, Kiosk und Live-Server ein …\n'
+# Dasselbe Skript verwendet der Anwendungsupdater bei jedem Update.
+PORT="${PORT}" KIOSK_USER="${KIOSK_USER}" bash "${PROJECT_DIR}/deploy/open-signage-post-update" "${PROJECT_DIR}"
 
 printf 'Aktiviere Wayland, labwc und grafischen Autologin …\n'
 SUDO_USER="${KIOSK_USER}" raspi-config nonint do_wayland W2
@@ -225,22 +154,11 @@ SUDO_USER="${KIOSK_USER}" raspi-config nonint do_boot_behaviour B4
 systemctl set-default graphical.target
 systemctl enable lightdm.service
 
-systemctl daemon-reload
-systemctl enable --now open-signage-update.path
-systemctl enable --now open-signage-application-update.path
-systemctl enable --now open-signage-system-action.path
-systemctl enable --now open-signage-display-control.path
-systemctl enable --now open-signage-display-schedule.timer
-
 if [[ -n "${INITIAL_PASSWORD}" ]]; then
   printf '\nInitiales Verwaltungspasswort: %s\n' "${INITIAL_PASSWORD}"
   printf 'Bitte nach der ersten Anmeldung sofort auf der Systemseite ändern.\n'
 fi
 systemctl enable --now open-signage.service
-
-printf 'Richte Live-Server (MediaMTX) für OBS-Übertragungen ein …\n'
-"${SYSTEM_ACTION_COMMAND}" setup_live || \
-  printf 'Warnung: Live-Server konnte nicht eingerichtet werden. Später unter Inhalte → Live erneut versuchen.\n'
 
 "${PROJECT_DIR}/scripts/verify-installation.sh" --port "${PORT}"
 

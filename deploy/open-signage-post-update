@@ -1,14 +1,23 @@
 #!/usr/bin/env bash
-# Richtet die Systemintegration einer neuen Open-Signage-Version ein. Der
-# Anwendungsupdater führt dieses Skript als root aus der *neuen* Version aus,
-# bevor er auf sie umschaltet. So kann jede Version eigene Dienste, Pakete und
-# Kiosk-Einstellungen mitbringen, ohne dass der Updater sie kennen muss.
+# Richtet die Systemintegration einer Open-Signage-Version ein: Pakete,
+# Systemdienste, privilegierte Hilfsskripte, Kiosk und Live-Server.
+#
+# Aufrufer:
+# - der Installer bei der Erstinstallation (mit dem geklonten Repository),
+# - der Anwendungsupdater vor dem Umschalten (mit der *neuen* Version).
+# So bringt jede Version ihre eigene Systemintegration mit, und Installer und
+# Updater bleiben identisch.
 set -euo pipefail
 
 readonly RELEASE_DIR="${1:?Release-Verzeichnis fehlt}"
 readonly PORT="${PORT:?PORT fehlt}"
 readonly KIOSK_USER="${KIOSK_USER:-signage}"
 
+KIOSK_HOME="$(getent passwd "${KIOSK_USER}" | cut -d: -f6)"
+[[ -n "${KIOSK_HOME}" ]] || { printf 'Kiosk-Benutzer %s existiert nicht.\n' "${KIOSK_USER}"; exit 24; }
+readonly KIOSK_HOME
+
+# --- Pakete, die spätere Versionen zusätzlich benötigen -----------------------
 if ! command -v cec-client >/dev/null 2>&1 || ! command -v wlopm >/dev/null 2>&1 || \
    ! command -v wlr-randr >/dev/null 2>&1 || \
    ! command -v wtype >/dev/null 2>&1 || \
@@ -21,45 +30,43 @@ if ! locale -a | grep -qi '^de_DE\.utf8$'; then
   locale-gen de_DE.UTF-8
 fi
 
-# Keep the privileged updater and its units in sync with the installed release.
+# --- Open-Signage-Server ------------------------------------------------------
+sed "s/@@PORT@@/${PORT}/g" \
+  "${RELEASE_DIR}/deploy/open-signage.service" >/etc/systemd/system/open-signage.service
+chmod 0644 /etc/systemd/system/open-signage.service
+
+# --- Privilegierte Hilfsskripte und ihre Auslöser -----------------------------
 install -o root -g root -m 0755 \
-  "${RELEASE_DIR}/deploy/open-signage-application-update" \
-  /usr/local/sbin/open-signage-application-update
-install -o root -g root -m 0644 \
-  "${RELEASE_DIR}/deploy/open-signage-application-update.service" \
-  /etc/systemd/system/open-signage-application-update.service
-install -o root -g root -m 0644 \
-  "${RELEASE_DIR}/deploy/open-signage-application-update.path" \
-  /etc/systemd/system/open-signage-application-update.path
+  "${RELEASE_DIR}/deploy/open-signage-system-update" /usr/local/sbin/open-signage-system-update
 install -o root -g root -m 0755 \
-  "${RELEASE_DIR}/deploy/open-signage-system-action" \
-  /usr/local/sbin/open-signage-system-action
-install -o root -g root -m 0644 \
-  "${RELEASE_DIR}/deploy/open-signage-system-action.service" \
-  /etc/systemd/system/open-signage-system-action.service
-install -o root -g root -m 0644 \
-  "${RELEASE_DIR}/deploy/open-signage-system-action.path" \
-  /etc/systemd/system/open-signage-system-action.path
-/usr/local/sbin/open-signage-system-action setup_live || \
-  printf 'Warnung: Live-Server konnte nicht eingerichtet werden.\n'
+  "${RELEASE_DIR}/deploy/open-signage-application-update" /usr/local/sbin/open-signage-application-update
+install -o root -g root -m 0755 \
+  "${RELEASE_DIR}/deploy/open-signage-system-action" /usr/local/sbin/open-signage-system-action
 sed "s|@@KIOSK_USER@@|${KIOSK_USER}|g" \
-  "${RELEASE_DIR}/deploy/open-signage-display-control" \
-  >/usr/local/sbin/open-signage-display-control
+  "${RELEASE_DIR}/deploy/open-signage-display-control" >/usr/local/sbin/open-signage-display-control
 chmod 0755 /usr/local/sbin/open-signage-display-control
-KIOSK_HOME="$(getent passwd "${KIOSK_USER}" | cut -d: -f6)"
-[[ -n "${KIOSK_HOME}" ]] || { printf 'Kiosk-Benutzer %s existiert nicht.\n' "${KIOSK_USER}"; exit 24; }
+for unit in \
+  open-signage-update.service open-signage-update.path \
+  open-signage-application-update.service open-signage-application-update.path \
+  open-signage-system-action.service open-signage-system-action.path \
+  open-signage-display-control.service open-signage-display-control.path \
+  open-signage-display-schedule.service open-signage-display-schedule.timer; do
+  install -o root -g root -m 0644 "${RELEASE_DIR}/deploy/${unit}" "/etc/systemd/system/${unit}"
+done
+
+# --- Kiosk --------------------------------------------------------------------
 sed \
   -e "s|@@PLAYER_URL@@|http://127.0.0.1:${PORT}/player|g" \
   -e "s|@@HEALTH_URL@@|http://127.0.0.1:${PORT}/api/health|g" \
   "${RELEASE_DIR}/deploy/open-signage-kiosk" >/usr/local/bin/open-signage-kiosk
 chmod 0755 /usr/local/bin/open-signage-kiosk
 install -o root -g root -m 0755 \
-  "${RELEASE_DIR}/deploy/open-signage-cursor-guard" \
-  /usr/local/bin/open-signage-cursor-guard
+  "${RELEASE_DIR}/deploy/open-signage-cursor-guard" /usr/local/bin/open-signage-cursor-guard
 install -d -o root -g root -m 0755 /etc/chromium/policies/managed
 install -o root -g root -m 0644 \
   "${RELEASE_DIR}/deploy/open-signage-chromium-policy.json" \
   /etc/chromium/policies/managed/open-signage.json
+
 AUTOSTART_DIR="${KIOSK_HOME}/.config/labwc"
 AUTOSTART_FILE="${AUTOSTART_DIR}/autostart"
 install -d -o "${KIOSK_USER}" -g "${KIOSK_USER}" -m 0755 "${AUTOSTART_DIR}"
@@ -75,12 +82,15 @@ printf '/usr/local/bin/open-signage-kiosk >>%s 2>&1 &\n' \
   "${KIOSK_HOME}/.local/state/open-signage/kiosk.log" >>"${AUTOSTART_FILE}"
 chown "${KIOSK_USER}:${KIOSK_USER}" "${AUTOSTART_FILE}"
 chmod 0755 "${AUTOSTART_FILE}"
-for unit in open-signage-display-control.service open-signage-display-control.path \
-  open-signage-display-schedule.service open-signage-display-schedule.timer; do
-  install -o root -g root -m 0644 "${RELEASE_DIR}/deploy/${unit}" "/etc/systemd/system/${unit}"
-done
-systemctl daemon-reload
-systemctl enable --now open-signage-system-action.path
-systemctl enable --now open-signage-display-control.path
-systemctl enable --now open-signage-display-schedule.timer
 
+# --- Dienste aktivieren -------------------------------------------------------
+systemctl daemon-reload
+for unit in open-signage-update.path open-signage-application-update.path \
+  open-signage-system-action.path open-signage-display-control.path \
+  open-signage-display-schedule.timer; do
+  systemctl enable --now "${unit}"
+done
+
+# --- Live-Server (MediaMTX) ---------------------------------------------------
+/usr/local/sbin/open-signage-system-action setup_live || \
+  printf 'Warnung: Live-Server konnte nicht eingerichtet werden.\n'

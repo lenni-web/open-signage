@@ -41,14 +41,18 @@ def test_raspberry_pi_templates_have_expected_placeholders():
     assert "--mode MODUS" in installer
     assert "--controller-url URL" in installer
     assert "OPEN_SIGNAGE_MODE" in installer
-    assert 'chmod 0755 "${AUTOSTART_FILE}"' in installer
-    assert "kiosk.log" in installer
-    assert 's|@@KIOSK_USER@@|${KIOSK_USER}|g' in installer
-    assert "locale-gen de_DE.UTF-8" in installer
-    assert "open-signage-chromium-policy.json" in installer
-    assert "open-signage-cursor-guard" in installer
-    assert "open-signage-labwc-rc.xml" in installer
     assert "  wtype" in installer
+    # Systemintegration teilen sich Installer und Anwendungsupdater.
+    post_update = (PROJECT_ROOT / "deploy/open-signage-post-update").read_text(encoding="utf-8")
+    assert 'bash "${PROJECT_DIR}/deploy/open-signage-post-update" "${PROJECT_DIR}"' in installer
+    assert 'chmod 0755 "${AUTOSTART_FILE}"' in post_update
+    assert "kiosk.log" in post_update
+    assert 's|@@KIOSK_USER@@|${KIOSK_USER}|g' in post_update
+    assert "locale-gen de_DE.UTF-8" in post_update
+    assert "open-signage-chromium-policy.json" in post_update
+    assert "open-signage-cursor-guard" in post_update
+    assert "open-signage-labwc-rc.xml" in post_update
+    assert 's/@@PORT@@/${PORT}/g' in post_update
 
     chromium_policy = json.loads(
         (PROJECT_ROOT / "deploy/open-signage-chromium-policy.json").read_text(
@@ -111,7 +115,9 @@ def test_update_service_is_installed_without_sudo_access():
         PROJECT_ROOT / "deploy/open-signage-system-update"
     ).read_text(encoding="utf-8")
 
-    assert "open-signage-update.path" in installer
+    post_update = (PROJECT_ROOT / "deploy/open-signage-post-update").read_text(encoding="utf-8")
+    assert "open-signage-update.path" in post_update
+    assert "open-signage-system-update" in post_update
     assert "  iw \\" in installer
     assert "ExecStart=/usr/local/sbin/open-signage-system-update" in update_service
     assert "PathExists=/var/lib/open-signage/update.request" in update_path
@@ -128,14 +134,13 @@ def test_update_service_is_installed_without_sudo_access():
     application_path = (
         PROJECT_ROOT / "deploy/open-signage-application-update.path"
     ).read_text(encoding="utf-8")
-    assert "open-signage-application-update.path" in installer
+    assert "open-signage-application-update.path" in post_update
     assert "git -C" in application_script
     assert "systemctl stop open-signage.service" in application_script
     assert "Healthcheck fehlgeschlagen" in application_script
     assert "ExecStart=/usr/local/sbin/open-signage-application-update" in application_service
     assert "ExecStartPre=/bin/sleep 2" in application_service
     assert "PathExists=/var/lib/open-signage/application-update.request" in application_path
-    post_update = (PROJECT_ROOT / "deploy/open-signage-post-update").read_text(encoding="utf-8")
     assert 'bash "${release_dir}/deploy/open-signage-post-update" "${release_dir}"' in application_script
     assert application_script.index("set -e") < application_script.index("open-signage-post-update")
     assert application_script.index("open-signage-post-update") < application_script.index("set +e")
@@ -146,9 +151,17 @@ def test_update_service_is_installed_without_sudo_access():
     assert "open-signage-system-action setup_live" in post_update
     assert "set -euo pipefail" in post_update
     assert "cec-utils" in installer
-    assert "open-signage-display-control.path" in installer
-    assert "open-signage-display-schedule.timer" in installer
+    assert "open-signage-display-control.path" in post_update
+    assert "open-signage-display-schedule.timer" in post_update
     assert "  wlopm" in installer
+    # Jede Unit, die das Skript installiert, muss im Repository existieren.
+    for unit in ("open-signage-update.service", "open-signage-update.path",
+                 "open-signage-application-update.service", "open-signage-application-update.path",
+                 "open-signage-system-action.service", "open-signage-system-action.path",
+                 "open-signage-display-control.service", "open-signage-display-control.path",
+                 "open-signage-display-schedule.service", "open-signage-display-schedule.timer"):
+        assert unit in post_update
+        assert (PROJECT_ROOT / "deploy" / unit).is_file()
     display_helper = (PROJECT_ROOT / "deploy/open-signage-display-control").read_text(encoding="utf-8")
     assert "cec-client" in display_helper
     assert "wlopm" in display_helper
