@@ -294,6 +294,11 @@ function show(item) {
     }
     return;
   }
+  if (!element) {
+    // Unbekannter Inhaltstyp, etwa von einem neueren Controller: überspringen.
+    timer = window.setTimeout(advance, 1000);
+    return;
+  }
   element.className = item.kind === "text"
     ? `content text-slide ${element.dataset.slideClasses}`
     : `content content-${item.kind}`;

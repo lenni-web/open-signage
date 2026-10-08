@@ -8,6 +8,24 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Geändert
+
+- Displays überspringen beim Abgleich Einträge, die ihre Version noch nicht
+  unterstützt – etwa einen neuen Inhaltstyp –, statt die gesamte
+  Synchronisierung abzubrechen. Der Synchronisationsstatus weist dann auf ein
+  nötiges Update hin. Der Player überspringt unbekannte Inhaltstypen ebenfalls.
+- Der Anwendungsupdater richtet Pakete, Systemdienste und Kiosk-Einstellungen
+  über das Skript `open-signage-post-update` der neuen Version ein. Künftige
+  Versionen können so eigene Dienste mitbringen, ohne dass zuvor der Updater
+  aktualisiert werden muss.
+
+### Behoben
+
+- Der Anwendungsupdater bricht ab, wenn ein Schritt vor der Umschaltung
+  fehlschlägt – etwa die Installation der Python-Abhängigkeiten –, und
+  verwirft die unvollständig vorbereitete Version. Bisher lief er weiter und
+  verließ sich allein auf den Healthcheck.
+
 ## [0.17.0] – 2026-10-02
 
 ### Hinzugefügt

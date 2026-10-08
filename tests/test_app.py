@@ -540,9 +540,16 @@ def test_update_service_is_installed_without_sudo_access():
     assert "ExecStart=/usr/local/sbin/open-signage-application-update" in application_service
     assert "ExecStartPre=/bin/sleep 2" in application_service
     assert "PathExists=/var/lib/open-signage/application-update.request" in application_path
-    assert "systemctl daemon-reload" in application_script
-    assert "cec-utils locales wlr-randr wlopm wtype" in application_script
-    assert '@@KIOSK_USER@@|${KIOSK_USER}' in application_script
+    post_update = (PROJECT_ROOT / "deploy/open-signage-post-update").read_text(encoding="utf-8")
+    assert 'bash "${release_dir}/deploy/open-signage-post-update" "${release_dir}"' in application_script
+    assert application_script.index("set -e") < application_script.index("open-signage-post-update")
+    assert application_script.index("open-signage-post-update") < application_script.index("set +e")
+    assert application_script.index("set +e") < application_script.index("systemctl stop open-signage.service")
+    assert "systemctl daemon-reload" in post_update
+    assert "cec-utils locales wlr-randr wlopm wtype" in post_update
+    assert '@@KIOSK_USER@@|${KIOSK_USER}' in post_update
+    assert "open-signage-system-action setup_live" in post_update
+    assert "set -euo pipefail" in post_update
     assert "cec-utils" in installer
     assert "open-signage-display-control.path" in installer
     assert "open-signage-display-schedule.timer" in installer
@@ -1861,3 +1868,38 @@ def test_whep_proxy_reports_unavailable_live_server(tmp_path: Path, monkeypatch)
     monkeypatch.setattr("open_signage.live.urllib.request.urlopen", refused)
     with TestClient(app) as client:
         assert client.post("/api/player/live/whep", content=b"v=0 offer").status_code == 503
+
+
+
+def test_display_skips_entries_its_version_does_not_support(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    initialize()
+    set_setting("device_role", "display")
+    set_setting("controller_url", "http://controller.local:8080")
+    set_setting("sync_device_token", "device-token")
+    controller_data = sync_snapshot()
+    controller_data["content"] = [
+        {"id": 1, "name": "Bekannt", "kind": "website", "source": "https://example.org", "playlist_id": 1},
+        {"id": 2, "name": "Zukunft", "kind": "hologram", "source": "x", "playlist_id": 1},
+        {"id": 3, "name": "Ohne Playlist", "kind": "website", "source": "https://example.org", "playlist_id": 99},
+    ]
+    monkeypatch.setattr("open_signage.sync._request_json", lambda *args, **kwargs: controller_data)
+    result = safe_sync_from_controller()
+    assert result["status"] == "synchronized"
+    assert result["skipped"] == 2
+    with connect() as connection:
+        assert [row[0] for row in connection.execute("SELECT name FROM content")] == ["Bekannt"]
+    assert "2 Einträge" in get_setting("sync_last_warning")
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        device = client.get("/api/system/device").json()
+        assert "bitte dieses Display aktualisieren" in device["sync_status"]
+
+    controller_data["content"] = controller_data["content"][:1]
+    assert safe_sync_from_controller()["skipped"] == 0
+    assert get_setting("sync_last_warning") in (None, "")
+
+
+def test_player_skips_unknown_content_kinds():
+    player = (PROJECT_ROOT / "src/open_signage/static/player.js").read_text(encoding="utf-8")
+    assert "Unbekannter Inhaltstyp" in player

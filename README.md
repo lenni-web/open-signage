@@ -46,8 +46,6 @@ Chromium-Kioskfenster an.
 - Sicherheitsstatus und Mediathek-Audit für fehlende, verwaiste und doppelte Medien
 - Controller-/Display-Synchronisierung mit Geräte-Pairing und lokalem Offline-Stand
 
-Weitere SRT-Quellen können später über den bereits enthaltenen MediaMTX-Server ergänzt werden.
-
 ### Systemverwaltung
 
 Die passwortgeschützte Seite **System** zeigt Geräte-, Speicher- und
@@ -131,6 +129,12 @@ Moduswechsel. Inhalts-, Playlist-, Mediathek- und zentrale Einstellungsänderung
 werden zusätzlich serverseitig blockiert. Bestehende Rollen werden automatisch
 von `master` auf `controller` und von `slave` auf `display` migriert.
 
+Controller und Displays dürfen kurzzeitig unterschiedliche Versionen haben.
+Einträge, die ein älteres Display noch nicht kennt – etwa ein neuer
+Inhaltstyp –, überspringt es beim Abgleich und weist im
+Synchronisationsstatus darauf hin; alle übrigen Inhalte werden weiter
+übernommen. Displays sollten trotzdem zeitnah aktualisiert werden.
+
 ### Open Signage aktualisieren
 
 Die Systemseite kann den neuesten veröffentlichten Open-Signage-Release
@@ -139,6 +143,12 @@ Git-Repository und dessen Benutzer. Der Updater lädt neue Git-Tags über den
 dort eingerichteten SSH-Zugang, installiert den höchsten Versions-Tag zunächst
 getrennt und prüft nach dem Neustart `/api/health`. Bei einem fehlgeschlagenen
 Healthcheck stellt er automatisch die vorherige Version wieder her.
+
+Pakete, Systemdienste und Kiosk-Einstellungen richtet das Skript
+`deploy/open-signage-post-update` der *neuen* Version ein, bevor umgeschaltet
+wird. Dadurch kann jede Version eigene Systemdienste mitbringen. Schlägt ein
+Schritt vor der Umschaltung fehl, bricht der Updater ab und die laufende
+Version bleibt unverändert.
 
 Nur getaggte Releases werden installiert. Änderungen auf `main`, die noch
 keinen Versionstag besitzen, werden nicht automatisch ausgerollt.
@@ -162,8 +172,7 @@ PDF-Dateien können wie Bilder oder Videos hochgeladen, sortiert und mit einer
 Anzeigedauer versehen werden. Der Player öffnet das Dokument im integrierten
 Chromium-PDF-Viewer ohne Werkzeugleisten und passt es an die Bildschirmbreite
 an. Mehrseitige Dokumente werden als zusammenhängende Dokumentansicht
-dargestellt; ein automatischer Wechsel der einzelnen PDF-Seiten ist noch nicht
-enthalten.
+dargestellt; die einzelnen Seiten werden nicht automatisch weitergeblättert.
 
 ## Lokal starten
 
@@ -260,14 +269,6 @@ fehlendem HDMI-Signal automatisch in den Standby wechseln.
 sudo reboot
 ```
 
-## Roadmap
-
-- Controller-/Display-Betrieb für mehrere Raspberry Pis: Ein Controller verwaltet
-  Inhalte und Einstellungen, während verbundene Displays den Stand automatisch
-  und identisch übernehmen.
-- `open-signage.local` als leicht erreichbarer lokaler Hostname.
-- Zusätzliche direkte SRT-Quellen über MediaMTX.
-
 ## Live-Übertragung aus OBS
 
 Für Live-Bilder mit möglichst geringer Verzögerung sendet OBS Studio (ab
@@ -314,9 +315,10 @@ Unter **Owncast-Livestream hinzufügen** genügt die Basisadresse der Instanz,
 beispielsweise `https://stream.mg-stade.de`. Open Signage verwendet daraus
 automatisch den HLS-Endpunkt `/hls/stream.m3u8`.
 
-Stummes Autoplay funktioniert in normalen Browsern am zuverlässigsten. Für
-automatischen Ton wird Chromium auf dem Raspberry Pi später mit
-`--autoplay-policy=no-user-gesture-required` im Kioskmodus gestartet.
+Stummes Autoplay funktioniert in normalen Browsern am zuverlässigsten. Der
+Kiosk auf dem Raspberry Pi startet Chromium mit
+`--autoplay-policy=no-user-gesture-required`, sodass dort auch Ton automatisch
+abgespielt wird.
 
 HLS-Wiedergabe in Chromium erfolgt mit der lokal mitgelieferten Bibliothek
 HLS.js 1.6.16. Deren Lizenz liegt unter

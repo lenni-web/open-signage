@@ -116,16 +116,22 @@ def sync_from_controller() -> dict:
         connection.execute("DELETE FROM content")
         connection.execute("DELETE FROM media_library")
         connection.execute("DELETE FROM playlists")
+        skipped = 0
         for table in SYNCED_TABLES:
             # Controller und Display können unterschiedliche Versionen haben:
-            # Spalten, die das Display noch nicht kennt, werden ignoriert.
+            # Spalten, die das Display noch nicht kennt, werden ignoriert, und
+            # Einträge, die seine Datenbankregeln verletzen (etwa ein neuer
+            # Inhaltstyp), werden übersprungen statt den ganzen Abgleich abzubrechen.
             local_columns = {row["name"] for row in connection.execute(f"PRAGMA table_info({table})")}
             for row in data["media" if table == "media_library" else table]:
                 columns = [column for column in row if column in local_columns]
-                connection.execute(
-                    f"INSERT INTO {table} ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})",
-                    tuple(row[column] for column in columns),
-                )
+                try:
+                    connection.execute(
+                        f"INSERT INTO {table} ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})",
+                        tuple(row[column] for column in columns),
+                    )
+                except sqlite3.IntegrityError:
+                    skipped += 1
     removed_files = remove_unreferenced_media()
     set_setting("screen_name", data.get("settings", {}).get("screen_name", "Open Signage"))
     save_display_config(data.get("display_control") or display_config())
@@ -134,7 +140,11 @@ def sync_from_controller() -> dict:
     live.write_config()
     set_setting("sync_last_success", datetime.now(UTC).isoformat())
     set_setting("sync_last_error", "")
-    return {"status": "synchronized", "at": get_setting("sync_last_success"), "removed_files": removed_files}
+    set_setting("sync_last_warning", (
+        f"{skipped} Einträge werden von dieser Version nicht unterstützt – bitte dieses Display aktualisieren."
+        if skipped else ""))
+    return {"status": "synchronized", "at": get_setting("sync_last_success"),
+            "removed_files": removed_files, "skipped": skipped}
 
 
 def remove_unreferenced_media() -> int:

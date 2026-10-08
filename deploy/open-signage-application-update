@@ -43,6 +43,11 @@ fi
 KIOSK_USER="${KIOSK_USER:-signage}"
 
 (
+  # Bis zur Umschaltung bricht jeder Fehler ab, und die vorbereitete Version wird
+  # verworfen. Die laufende Installation bleibt dabei unverändert.
+  set -e
+  work_dir=""
+  trap '[[ -n "${work_dir}" ]] && rm -rf "${work_dir}"' EXIT
   printf '\n===== Anwendungsupdate %s =====\n' "$(date --iso-8601=seconds)"
   printf 'Lade Release-Tags aus %s …\n' "${SOURCE_REPOSITORY}"
   runuser -u "${SOURCE_USER}" -- git -C "${SOURCE_REPOSITORY}" fetch --tags --prune origin
@@ -64,81 +69,12 @@ KIOSK_USER="${KIOSK_USER:-signage}"
   "${release_dir}/.venv/bin/python" -m pip install --upgrade pip
   "${release_dir}/.venv/bin/python" -m pip install "${release_dir}"
 
-if ! command -v cec-client >/dev/null 2>&1 || ! command -v wlopm >/dev/null 2>&1 || \
-     ! command -v wlr-randr >/dev/null 2>&1 || \
-     ! command -v wtype >/dev/null 2>&1 || \
-     ! dpkg-query -W -f='${Status}' locales 2>/dev/null | grep -q 'install ok installed'; then
-    apt-get update
-    apt-get install --no-install-recommends -y cec-utils locales wlr-randr wlopm wtype
-  fi
-  if ! locale -a | grep -qi '^de_DE\.utf8$'; then
-    sed -i 's/^# *\(de_DE.UTF-8 UTF-8\)/\1/' /etc/locale.gen
-    locale-gen de_DE.UTF-8
-  fi
+  # Systemintegration aus der neuen Version einrichten (Pakete, Dienste, Kiosk).
+  PORT="${PORT}" KIOSK_USER="${KIOSK_USER}" bash "${release_dir}/deploy/open-signage-post-update" "${release_dir}"
 
-  # Keep the privileged updater and its units in sync with the installed release.
-  install -o root -g root -m 0755 \
-    "${release_dir}/deploy/open-signage-application-update" \
-    /usr/local/sbin/open-signage-application-update
-  install -o root -g root -m 0644 \
-    "${release_dir}/deploy/open-signage-application-update.service" \
-    /etc/systemd/system/open-signage-application-update.service
-  install -o root -g root -m 0644 \
-    "${release_dir}/deploy/open-signage-application-update.path" \
-    /etc/systemd/system/open-signage-application-update.path
-  install -o root -g root -m 0755 \
-    "${release_dir}/deploy/open-signage-system-action" \
-    /usr/local/sbin/open-signage-system-action
-  install -o root -g root -m 0644 \
-    "${release_dir}/deploy/open-signage-system-action.service" \
-    /etc/systemd/system/open-signage-system-action.service
-  install -o root -g root -m 0644 \
-    "${release_dir}/deploy/open-signage-system-action.path" \
-    /etc/systemd/system/open-signage-system-action.path
-  /usr/local/sbin/open-signage-system-action setup_live || \
-    printf 'Warnung: Live-Server konnte nicht eingerichtet werden.\n'
-  sed "s|@@KIOSK_USER@@|${KIOSK_USER}|g" \
-    "${release_dir}/deploy/open-signage-display-control" \
-    >/usr/local/sbin/open-signage-display-control
-  chmod 0755 /usr/local/sbin/open-signage-display-control
-  kiosk_home="$(getent passwd "${KIOSK_USER}" | cut -d: -f6)"
-  [[ -n "${kiosk_home}" ]] || { printf 'Kiosk-Benutzer %s existiert nicht.\n' "${KIOSK_USER}"; exit 24; }
-  sed \
-    -e "s|@@PLAYER_URL@@|http://127.0.0.1:${PORT}/player|g" \
-    -e "s|@@HEALTH_URL@@|http://127.0.0.1:${PORT}/api/health|g" \
-    "${release_dir}/deploy/open-signage-kiosk" >/usr/local/bin/open-signage-kiosk
-  chmod 0755 /usr/local/bin/open-signage-kiosk
-  install -o root -g root -m 0755 \
-    "${release_dir}/deploy/open-signage-cursor-guard" \
-    /usr/local/bin/open-signage-cursor-guard
-  install -d -o root -g root -m 0755 /etc/chromium/policies/managed
-  install -o root -g root -m 0644 \
-    "${release_dir}/deploy/open-signage-chromium-policy.json" \
-    /etc/chromium/policies/managed/open-signage.json
-  autostart_dir="${kiosk_home}/.config/labwc"
-  autostart_file="${autostart_dir}/autostart"
-  install -d -o "${KIOSK_USER}" -g "${KIOSK_USER}" -m 0755 "${autostart_dir}"
-  install -o "${KIOSK_USER}" -g "${KIOSK_USER}" -m 0644 \
-    "${release_dir}/deploy/open-signage-labwc-rc.xml" "${autostart_dir}/rc.xml"
-  install -d -o "${KIOSK_USER}" -g "${KIOSK_USER}" -m 0755 "${kiosk_home}/.local/state/open-signage"
-  touch "${autostart_file}"
-  grep -q '^#!/bin/sh' "${autostart_file}" || sed -i '1i #!/bin/sh' "${autostart_file}"
-  sed -i '\|^/usr/local/bin/open-signage-kiosk|d' "${autostart_file}"
-  sed -i '\|^/usr/local/bin/open-signage-cursor-guard|d' "${autostart_file}"
-  printf '/usr/local/bin/open-signage-cursor-guard &\n' >>"${autostart_file}"
-  printf '/usr/local/bin/open-signage-kiosk >>%s 2>&1 &\n' \
-    "${kiosk_home}/.local/state/open-signage/kiosk.log" >>"${autostart_file}"
-  chown "${KIOSK_USER}:${KIOSK_USER}" "${autostart_file}"
-  chmod 0755 "${autostart_file}"
-  for unit in open-signage-display-control.service open-signage-display-control.path \
-    open-signage-display-schedule.service open-signage-display-schedule.timer; do
-    install -o root -g root -m 0644 "${release_dir}/deploy/${unit}" "/etc/systemd/system/${unit}"
-  done
-  systemctl daemon-reload
-  systemctl enable --now open-signage-system-action.path
-  systemctl enable --now open-signage-display-control.path
-  systemctl enable --now open-signage-display-schedule.timer
-
+  # Ab hier sichern Healthcheck und Rollback den Wechsel ab.
+  set +e
+  trap - EXIT
   systemctl stop open-signage.service
   mv "${APP_DIR}" "${backup_dir}"
   mv "${release_dir}" "${APP_DIR}"

@@ -167,11 +167,14 @@ def get_device_settings(_: None = Depends(require_system_login)):
         )] if role == "controller" else []
     last_success = get_setting("sync_last_success", "")
     last_error = get_setting("sync_last_error", "")
+    last_warning = get_setting("sync_last_warning", "") if role == "display" else ""
+    status = "bereit" if role != "display" else (
+        f"zuletzt {last_success}" if last_success else f"offline: {last_error}" if last_error else "noch nicht verbunden")
+    if last_warning: status += f" · {last_warning}"
     return {"device_id": device_id, "role": role, "controller_url": controller_url,
             "pairing_code": pairing_token() if role == "controller" else "",
             "registered_devices": devices, "last_success": last_success, "last_error": last_error,
-            "sync_status": "bereit" if role != "display" else
-                (f"zuletzt {last_success}" if last_success else f"offline: {last_error}" if last_error else "noch nicht verbunden")}
+            "last_warning": last_warning, "sync_status": status}
 
 
 @router.patch("/api/system/device")
