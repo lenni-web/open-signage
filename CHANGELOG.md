@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.17.1] – 2026-10-08
+
 ### Geändert
 
 - Displays überspringen beim Abgleich Einträge, die ihre Version noch nicht
