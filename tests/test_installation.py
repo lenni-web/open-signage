@@ -169,3 +169,15 @@ def test_update_service_is_installed_without_sudo_access():
     assert "vcgencmd" not in display_helper
     assert "@@KIOSK_USER@@" in display_helper
     assert "sudo" not in display_helper
+
+
+def test_release_tooling_checks_version_changelog_and_tests():
+    release = (PROJECT_ROOT / "scripts/release.sh").read_text(encoding="utf-8")
+    assert "set -euo pipefail" in release
+    assert '"${PYTHON}" -m pytest -q' in release
+    assert "git tag -a" in release and "git push --atomic origin main" in release
+    assert release.index("pytest") < release.index("git commit")
+    ci = (PROJECT_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "python -m pytest" in ci and "shellcheck" in ci and "ffmpeg" in ci
+    release_workflow = (PROJECT_ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    assert "gh release create" in release_workflow and "CHANGELOG.md" in release_workflow

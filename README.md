@@ -214,6 +214,26 @@ Die Versionshistorie steht im [CHANGELOG.md](CHANGELOG.md).
 pytest
 ```
 
+Bei jedem Push und Pull Request führt GitHub Actions die Tests unter Python
+3.11 und 3.12 aus, prüft alle Shell-Skripte mit `bash -n` und ShellCheck und
+stellt sicher, dass die Version im Changelog dokumentiert ist.
+
+## Release erstellen
+
+Neue Einträge stehen im `CHANGELOG.md` unter „Unreleased“. Ein Release erstellt
+das Release-Skript:
+
+```bash
+scripts/release.sh 0.19.0 --push
+```
+
+Es prüft, dass `main` ausgecheckt und sauber ist, die Version größer als die
+aktuelle ist und unter „Unreleased“ etwas steht. Dann setzt es Version und
+datierten Changelog-Abschnitt, führt die Tests aus und legt Release-Commit und
+Tag an. Schlagen die Tests fehl, wird alles zurückgesetzt. Mit `--push` werden
+Commit und Tag gemeinsam gepusht; GitHub erstellt daraus automatisch eine
+Release-Seite mit dem Changelog-Abschnitt.
+
 ## Raspberry-Pi-Installation
 
 Vorgesehene Basis ist **Raspberry Pi OS Lite 64 Bit**. Bei der Einrichtung im

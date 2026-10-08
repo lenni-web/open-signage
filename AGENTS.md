@@ -12,3 +12,5 @@
   - major for incompatible changes.
 - A release version bump and its dated changelog section must be committed
   together.
+- Create releases with `scripts/release.sh VERSION [--push]`; it bumps the
+  version, dates the changelog, runs the tests, commits and tags.
