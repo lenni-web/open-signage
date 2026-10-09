@@ -294,6 +294,11 @@ und warnt, wenn die Uhr nicht synchronisiert oder als Zeitzone UTC eingestellt
 ist. Die Zeitzone lässt sich mit `sudo raspi-config` unter *Localisation
 Options → Timezone* auf `Europe/Berlin` stellen.
 
+Ton gibt der Kiosk über HDMI aus. Installer und Updater schalten dazu die
+analoge Kopfhörerbuchse ab (`dtparam=audio=off`, wirksam nach dem nächsten
+Neustart), und der Kiosk wählt bei jedem Start den HDMI-Ausgang. Beim ersten
+Start stellt er die Lautstärke auf 100 %; geregelt wird am Bildschirm.
+
 Die Bildschirmsteuerung prüft alle vorhandenen CEC-Adapter. Ein Display gilt
 erst dann als CEC-fähig, wenn es selbst antwortet. Andernfalls schaltet Open
 Signage den aktuell verbundenen Wayland-Ausgang per DPMS aus und wieder ein.

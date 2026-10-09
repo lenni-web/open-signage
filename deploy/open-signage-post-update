@@ -83,6 +83,21 @@ printf '/usr/local/bin/open-signage-kiosk >>%s 2>&1 &\n' \
 chown "${KIOSK_USER}:${KIOSK_USER}" "${AUTOSTART_FILE}"
 chmod 0755 "${AUTOSTART_FILE}"
 
+# --- Ton ausschließlich über HDMI --------------------------------------------
+# Mit dem KMS-Grafiktreiber stellt vc4 den HDMI-Ton bereit; die analoge
+# Kopfhörerbuchse wird abgeschaltet, damit Ton nicht unbemerkt dort landet.
+BOOT_CONFIG=/boot/firmware/config.txt
+[[ -f "${BOOT_CONFIG}" ]] || BOOT_CONFIG=/boot/config.txt
+if [[ -f "${BOOT_CONFIG}" ]] && grep -q '^dtoverlay=vc4-kms-v3d' "${BOOT_CONFIG}"; then
+  if grep -q '^dtparam=audio=on' "${BOOT_CONFIG}"; then
+    sed -i 's/^dtparam=audio=on/dtparam=audio=off/' "${BOOT_CONFIG}"
+    printf 'Analoge Tonausgabe abgeschaltet; wirksam nach dem nächsten Neustart.\n'
+  elif ! grep -q '^dtparam=audio=off' "${BOOT_CONFIG}"; then
+    printf '\n[all]\n# Open Signage: Ton ausschließlich über HDMI\ndtparam=audio=off\n' >>"${BOOT_CONFIG}"
+    printf 'Analoge Tonausgabe abgeschaltet; wirksam nach dem nächsten Neustart.\n'
+  fi
+fi
+
 # --- Dienste aktivieren -------------------------------------------------------
 systemctl daemon-reload
 for unit in open-signage-update.path open-signage-application-update.path \

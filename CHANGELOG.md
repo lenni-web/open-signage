@@ -8,6 +8,15 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Behoben
+
+- Der Kiosk gab Ton je nach Voreinstellung des Raspberry Pi über die
+  Kopfhörerbuchse statt über HDMI aus, sodass Videos und Live-Übertragungen am
+  Bildschirm stumm blieben. Der Kiosk wählt nun bei jedem Start den
+  HDMI-Ausgang und stellt beim ersten Start die Lautstärke auf 100 %. Installer
+  und Updater schalten die analoge Tonausgabe zusätzlich ab (wirksam nach dem
+  nächsten Neustart).
+
 ## [0.20.0] – 2026-10-09
 
 ### Hinzugefügt

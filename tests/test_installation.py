@@ -1,6 +1,10 @@
 """Version, Changelog, Installer, Updater und Systemvorlagen."""
 
 import json
+import subprocess
+from pathlib import Path
+
+import pytest
 
 from open_signage.version import __version__
 
@@ -193,3 +197,66 @@ def test_updated_release_starts_and_rollback_restores_database():
     assert updater.index('cp -a "${DATA_DIR}"/open-signage.sqlite3*') < updater.index('mv "${APP_DIR}" "${backup_dir}"')
     assert 'cp -a "${database_backup}"/open-signage.sqlite3* "${DATA_DIR}/"' in updater
     assert "journalctl -u open-signage.service" in updater
+
+
+WPCTL_STATUS = """Audio
+ ├─ Sinks:
+ │      35. Built-in Audio Digital Stereo (HDMI) [vol: 0.40]
+ │  *   57. Built-in Audio Stereo               [vol: 0.40]
+ │
+ ├─ Sources:
+ │
+Video
+ ├─ Sinks:
+ ├─ Sources:
+ │  *   76. bcm2835-isp (V4L2)
+"""
+
+
+GNU_SED = subprocess.run(["sed", "--version"], capture_output=True).returncode == 0
+
+
+def script_section(path: str, start: str, end: str) -> str:
+    text = (PROJECT_ROOT / path).read_text(encoding="utf-8")
+    return text[text.index(start):text.index(end)]
+
+
+@pytest.mark.parametrize(("config", "expected"), [
+    ("dtoverlay=vc4-kms-v3d\ndtparam=audio=on\n", "dtoverlay=vc4-kms-v3d\ndtparam=audio=off\n"),
+    ("dtoverlay=vc4-kms-v3d\n[cm5]\nfoo=1\n",
+     "dtoverlay=vc4-kms-v3d\n[cm5]\nfoo=1\n\n[all]\n# Open Signage: Ton ausschließlich über HDMI\ndtparam=audio=off\n"),
+    ("dtoverlay=vc4-kms-v3d\ndtparam=audio=off\n", "dtoverlay=vc4-kms-v3d\ndtparam=audio=off\n"),
+    ("dtparam=audio=on\n", "dtparam=audio=on\n"),
+])
+def test_post_update_disables_analog_audio_only_with_kms(tmp_path: Path, config: str, expected: str):
+    if "audio=on" in config and expected != config and not GNU_SED:
+        pytest.skip("sed -i im Skript erfordert GNU sed wie auf dem Raspberry Pi")
+    boot_config = tmp_path / "config.txt"
+    boot_config.write_text(config, encoding="utf-8")
+    section = script_section("deploy/open-signage-post-update", "BOOT_CONFIG=", "# --- Dienste aktivieren")
+    section = section.replace("/boot/firmware/config.txt", str(boot_config)).replace("/boot/config.txt", str(boot_config))
+    subprocess.run(["bash", "-euo", "pipefail", "-c", section], check=True, capture_output=True)
+    assert boot_config.read_text(encoding="utf-8") == expected
+
+
+def test_kiosk_switches_to_hdmi_and_sets_volume_once(tmp_path: Path):
+    calls = tmp_path / "calls.log"
+    fake = tmp_path / "bin" / "wpctl"
+    fake.parent.mkdir()
+    (tmp_path / "status.txt").write_text(WPCTL_STATUS, encoding="utf-8")
+    fake.write_text(f"""#!/usr/bin/env bash
+printf '%s\\n' "$*" >>"{calls}"
+case "$1" in
+  status) cat "{tmp_path / 'status.txt'}" ;;
+  inspect) printf 'node.name = "alsa_output.platform-bcm2835_audio.stereo-fallback"\\n' ;;
+esac
+""", encoding="utf-8")
+    fake.chmod(0o755)
+    (tmp_path / "state" / "open-signage").mkdir(parents=True)
+    function = script_section("deploy/open-signage-kiosk", "prepare_audio() {", "prepare_audio >/dev/null")
+    script = f'XDG_STATE_HOME="{tmp_path / "state"}"\n{function}\nprepare_audio\nprepare_audio\n'
+    subprocess.run(["bash", "-uo", "pipefail", "-c", script], check=True,
+                   env={"PATH": f"{fake.parent}:/usr/bin:/bin"})
+    lines = calls.read_text(encoding="utf-8").splitlines()
+    assert lines.count("set-default 35") == 2
+    assert lines.count("set-volume 35 1.0") == 1 and lines.count("set-mute 35 0") == 1
