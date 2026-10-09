@@ -80,6 +80,12 @@
       <button id="live-takeover-start" type="button">Live jetzt übernehmen</button>
       <button id="live-takeover-stop" class="danger" type="button" hidden>Live beenden</button>
       <button id="live-setup" class="secondary" type="button" hidden>Live-Server einrichten</button>
+      <button id="live-preview-toggle" class="secondary" type="button" disabled
+        title="Verfügbar, sobald OBS sendet">Vorschau</button>
+    </div>
+    <div id="live-preview" class="live-preview" hidden>
+      <video id="live-preview-video" muted autoplay playsinline controls></video>
+      <span id="live-preview-status" class="live-preview-status">Verbindung wird hergestellt …</span>
     </div>
     <details class="live-schedule">
       <summary>Zeitplan für automatische Live-Übertragungen</summary>
@@ -757,6 +763,7 @@
   <script src="/static/admin/content.js?v=@@VERSION@@"></script>
   <script src="/static/admin/library.js?v=@@VERSION@@"></script>
   <script src="/static/admin/playlists.js?v=@@VERSION@@"></script>
+  <script src="/static/whep.js?v=@@VERSION@@"></script>
   <script src="/static/admin/live.js?v=@@VERSION@@"></script>
   <script src="/static/admin/display.js?v=@@VERSION@@"></script>
   <script src="/static/admin/system.js?v=@@VERSION@@"></script>

@@ -283,3 +283,16 @@ def test_live_schedule_api_validates_and_reaches_players_and_displays(tmp_path: 
 
         stopped = client.post("/api/live/takeover", json={"active": False}).json()
         assert stopped["takeover"] is False
+
+
+def test_admin_session_can_open_live_preview_from_outside_the_lan(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr("open_signage.live.whep_request",
+                        lambda method, path, body=None: (201, {"Location": "/live/whep/abc"}, b"v=0 answer"))
+    with TestClient(app, client=("203.0.113.10", 50000)) as external:
+        assert external.post("/api/player/live/whep", content=b"v=0 offer").status_code == 401
+        external.post("/api/system/login", json={"password": "open-signage"})
+        preview = external.post("/api/player/live/whep", content=b"v=0 offer",
+                                headers={"Content-Type": "application/sdp"})
+        assert preview.status_code == 201
+        assert external.delete(preview.headers["location"]).status_code == 204

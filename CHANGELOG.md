@@ -8,6 +8,14 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- Sendet OBS, lässt sich das Live-Bild unter Inhalte → Live-Übertragung per
+  „Vorschau“ direkt in der Verwaltung ansehen – zunächst stumm, mit
+  Lautstärkeregler. Die Displays bleiben dabei unverändert, sodass Bild und Ton
+  vor „Live jetzt übernehmen“ geprüft werden können. Die Vorschau endet beim
+  Verlassen der Inhalte-Seite automatisch.
+
 ## [0.19.1] – 2026-10-09
 
 ### Behoben

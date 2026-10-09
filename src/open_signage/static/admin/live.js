@@ -1,6 +1,34 @@
 // Live-Übertragung aus OBS: Signalstatus, Übernahme der Wiedergabe und OBS-Zugangsdaten.
 
 let liveStatus = null;
+let livePreviewSession = null;
+
+// Vorschau in der Verwaltung: dieselbe WebRTC-Verbindung wie im Player, aber nur
+// in diesem Browser – an den Displays ändert sich nichts.
+function stopLivePreview() {
+  livePreviewSession?.close();
+  livePreviewSession = null;
+  const video = document.querySelector("#live-preview-video");
+  video.srcObject = null;
+  document.querySelector("#live-preview").hidden = true;
+  const toggle = document.querySelector("#live-preview-toggle");
+  toggle.textContent = "Vorschau";
+  toggle.disabled = !liveStatus?.available;
+}
+
+function startLivePreview() {
+  const status = document.querySelector("#live-preview-status");
+  status.textContent = "Verbindung wird hergestellt …";
+  status.hidden = false;
+  document.querySelector("#live-preview").hidden = false;
+  document.querySelector("#live-preview-toggle").textContent = "Vorschau schließen";
+  livePreviewSession = connectLive(document.querySelector("#live-preview-video"), {
+    onStatus: text => {
+      status.textContent = text;
+      status.hidden = false;
+    },
+  });
+}
 let liveScheduleDirty = false;
 
 function formatLiveTime(value) {
@@ -75,6 +103,7 @@ function renderLive(status) {
   document.querySelector("#live-takeover-start").hidden = status.takeover;
   document.querySelector("#live-takeover-stop").hidden = !status.takeover;
   document.querySelector("#live-setup").hidden = status.server_installed && status.server_running;
+  if (!livePreviewSession) document.querySelector("#live-preview-toggle").disabled = !status.available;
   let takeoverText = "Die Playlist läuft normal.";
   if (status.manual_takeover) {
     const started = status.takeover_started_at ? formatLiveTime(status.takeover_started_at) : "";
@@ -116,6 +145,15 @@ async function setLiveTakeover(active) {
     notify(active ? "Live hat die Wiedergabe übernommen" : "Zurück zur Playlist");
   } catch (error) { notify(error.message, true); }
 }
+
+document.querySelector("#live-preview-video").addEventListener("playing", () => {
+  document.querySelector("#live-preview-status").hidden = true;
+});
+
+document.querySelector("#live-preview-toggle").addEventListener("click", () => {
+  if (livePreviewSession) stopLivePreview();
+  else startLivePreview();
+});
 
 document.querySelector("#live-takeover-start").addEventListener("click", () => setLiveTakeover(true));
 document.querySelector("#live-takeover-stop").addEventListener("click", () => setLiveTakeover(false));
@@ -183,8 +221,11 @@ document.querySelector("#live-form").addEventListener("submit", async (event) =>
 });
 
 window.setInterval(() => {
-  if (!document.querySelector("#content-page").hidden && currentDeviceMode !== "display" &&
-      !document.querySelector("#admin-app").hidden) {
-    loadLive();
-  }
+  const visible = !document.querySelector("#content-page").hidden && currentDeviceMode !== "display" &&
+    !document.querySelector("#admin-app").hidden;
+  if (visible) loadLive();
+  // Vorschau beim Verlassen der Inhalte-Seite beenden, damit keine Verbindung offen bleibt.
+  else if (livePreviewSession) stopLivePreview();
 }, 5000);
+
+window.addEventListener("pagehide", () => livePreviewSession?.close());

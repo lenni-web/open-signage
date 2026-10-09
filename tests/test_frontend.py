@@ -87,3 +87,15 @@ def test_admin_contains_system_navigation_and_update_controls():
 def test_player_skips_unknown_content_kinds():
     player = (PROJECT_ROOT / "src/open_signage/static/player.js").read_text(encoding="utf-8")
     assert "Unbekannter Inhaltstyp" in player
+
+
+def test_player_and_admin_share_the_whep_client():
+    whep = (PROJECT_ROOT / "src/open_signage/static/whep.js").read_text(encoding="utf-8")
+    assert "function connectLive(" in whep and "playerToken" not in whep
+    player_html = (PROJECT_ROOT / "src/open_signage/static/player.html").read_text(encoding="utf-8")
+    admin_html = (PROJECT_ROOT / "src/open_signage/static/admin.html").read_text(encoding="utf-8")
+    for html, script in ((player_html, "/static/player.js"), (admin_html, "/static/admin/live.js")):
+        assert html.index("/static/whep.js") < html.index(script)
+    assert "function connectLive(" not in (PROJECT_ROOT / "src/open_signage/static/player.js").read_text(encoding="utf-8")
+    assert 'id="live-preview-toggle"' in admin_html and 'id="live-preview-video"' in admin_html
+    assert "connectLive(" in admin_scripts()

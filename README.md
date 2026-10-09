@@ -322,6 +322,10 @@ In OBS unter *Einstellungen → Stream*:
 Empfohlen unter *Ausgabe*: 1080p30, Keyframe-Intervall 1 s und keine B-Frames
 (bei x264 das Profil „baseline“).
 
+Sobald OBS sendet, zeigt **Vorschau** das Live-Bild direkt in der Verwaltung,
+ohne die Displays zu verändern – praktisch, um Bild und Ton vor der Übernahme
+zu prüfen.
+
 Die Wiedergabe lässt sich auf zwei Arten nutzen:
 
 - **Live jetzt übernehmen** unterbricht die Playlist sofort auf allen Playern.
