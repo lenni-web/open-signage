@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.20.1] – 2026-10-09
+
 ### Behoben
 
 - Der Kiosk gab Ton je nach Voreinstellung des Raspberry Pi über die
