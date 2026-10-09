@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.20.0] – 2026-10-09
+
 ### Hinzugefügt
 
 - Sendet OBS, lässt sich das Live-Bild unter Inhalte → Live-Übertragung per
