@@ -16,8 +16,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 3.11 entspricht Raspberry Pi OS Bookworm.
-        python-version: ["3.11", "3.12"]
+        # 3.11: Raspberry Pi OS Bookworm, 3.13: Raspberry Pi OS Trixie.
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

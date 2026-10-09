@@ -181,3 +181,15 @@ def test_release_tooling_checks_version_changelog_and_tests():
     assert "python -m pytest" in ci and "shellcheck" in ci and "ffmpeg" in ci
     release_workflow = (PROJECT_ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
     assert "gh release create" in release_workflow and "CHANGELOG.md" in release_workflow
+
+
+
+def test_updated_release_starts_and_rollback_restores_database():
+    service = (PROJECT_ROOT / "deploy/open-signage.service").read_text(encoding="utf-8")
+    exec_start = next(line for line in service.splitlines() if line.startswith("ExecStart="))
+    # Konsolenskripte enthalten den Baupfad und funktionieren nach dem Verschieben nicht.
+    assert exec_start.startswith("ExecStart=/opt/open-signage/.venv/bin/python -m uvicorn ")
+    updater = (PROJECT_ROOT / "deploy/open-signage-application-update").read_text(encoding="utf-8")
+    assert updater.index('cp -a "${DATA_DIR}"/open-signage.sqlite3*') < updater.index('mv "${APP_DIR}" "${backup_dir}"')
+    assert 'cp -a "${database_backup}"/open-signage.sqlite3* "${DATA_DIR}/"' in updater
+    assert "journalctl -u open-signage.service" in updater

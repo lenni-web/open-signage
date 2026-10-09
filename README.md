@@ -215,7 +215,7 @@ pytest
 ```
 
 Bei jedem Push und Pull Request führt GitHub Actions die Tests unter Python
-3.11 und 3.12 aus, prüft alle Shell-Skripte mit `bash -n` und ShellCheck und
+3.11, 3.12 und 3.13 aus, prüft alle Shell-Skripte mit `bash -n` und ShellCheck und
 stellt sicher, dass die Version im Changelog dokumentiert ist.
 
 ## Release erstellen

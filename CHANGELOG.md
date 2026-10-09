@@ -8,6 +8,16 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Behoben
+
+- Anwendungsupdates schlugen fehl, weil der Server nach dem Verschieben der
+  neuen Version nicht starten konnte („Permission denied“ für `uvicorn`); der
+  Updater stellte daraufhin stets die vorige Version wieder her. Der Dienst
+  startet den Server nun über den Python-Interpreter der Umgebung.
+- Schlägt ein Update fehl, setzt der Updater neben dem Programm nun auch die
+  Datenbank auf den Stand vor dem Update zurück und schreibt die letzten
+  Meldungen des Dienstes ins Update-Protokoll.
+
 ## [0.19.0] – 2026-10-08
 
 ### Hinzugefügt

@@ -10,7 +10,10 @@ Group=open-signage
 WorkingDirectory=/opt/open-signage
 Environment=OPEN_SIGNAGE_DATA_DIR=/var/lib/open-signage
 EnvironmentFile=-/etc/open-signage.env
-ExecStart=/opt/open-signage/.venv/bin/uvicorn --app-dir /opt/open-signage/src open_signage.main:app --host 0.0.0.0 --port @@PORT@@
+# python -m statt bin/uvicorn: Konsolenskripte einer Python-Umgebung enthalten
+# den absoluten Pfad, an dem sie gebaut wurden. Der Updater baut neue Versionen
+# in einem temporären Ordner und verschiebt sie danach.
+ExecStart=/opt/open-signage/.venv/bin/python -m uvicorn --app-dir /opt/open-signage/src open_signage.main:app --host 0.0.0.0 --port @@PORT@@
 Restart=on-failure
 RestartSec=3
 TimeoutStopSec=15

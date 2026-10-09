@@ -76,6 +76,11 @@ KIOSK_USER="${KIOSK_USER:-signage}"
   set +e
   trap - EXIT
   systemctl stop open-signage.service
+  # Datenbank sichern: Migriert die neue Version beim Start und fällt danach
+  # aus, erhält die wiederhergestellte Version ihren ursprünglichen Stand zurück.
+  database_backup="${work_dir}/database"
+  mkdir -p "${database_backup}"
+  cp -a "${DATA_DIR}"/open-signage.sqlite3* "${database_backup}/" 2>/dev/null
   mv "${APP_DIR}" "${backup_dir}"
   mv "${release_dir}" "${APP_DIR}"
   systemctl start open-signage.service
@@ -90,9 +95,16 @@ KIOSK_USER="${KIOSK_USER:-signage}"
   done
   if ((healthy == 0)); then
     printf 'Healthcheck fehlgeschlagen, stelle vorige Version wieder her.\n'
+    printf 'Letzte Meldungen des Dienstes:\n'
+    journalctl -u open-signage.service -n 30 --no-pager --output=cat || true
     systemctl stop open-signage.service
     mv "${APP_DIR}" "${work_dir}/failed"
     mv "${backup_dir}" "${APP_DIR}"
+    if compgen -G "${database_backup}/open-signage.sqlite3*" >/dev/null; then
+      rm -f "${DATA_DIR}"/open-signage.sqlite3*
+      cp -a "${database_backup}"/open-signage.sqlite3* "${DATA_DIR}/"
+      printf 'Datenbank auf den Stand vor dem Update zurückgesetzt.\n'
+    fi
     systemctl start open-signage.service
     exit 30
   fi
