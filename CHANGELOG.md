@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.19.1] – 2026-10-09
+
 ### Behoben
 
 - Anwendungsupdates schlugen fehl, weil der Server nach dem Verschieben der
