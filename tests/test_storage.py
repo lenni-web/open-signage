@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from open_signage import backup
 from open_signage.database import connect, initialize, integrity_check_if_due
 from open_signage.main import app
 from open_signage.media_files import file_sha256
@@ -125,3 +126,28 @@ def test_cached_file_hash_is_invalidated_when_file_changes(tmp_path: Path):
     os.utime(path, ns=(path.stat().st_atime_ns, path.stat().st_mtime_ns + 1_000_000))
     assert file_sha256(path) != first
     assert file_sha256(path) == hashlib.sha256(b"zweit").hexdigest()
+
+
+def test_restore_extracts_inside_data_directory_with_media(tmp_path: Path, monkeypatch):
+    # /tmp kann ein anderes Dateisystem sein (tmpfs); Dateien werden danach verschoben.
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path / "data"))
+    used = []
+    original = backup.tempfile.TemporaryDirectory
+
+    def recording(*args, **kwargs):
+        used.append(kwargs.get("dir"))
+        return original(*args, **kwargs)
+
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        uploaded = client.post("/api/content/upload", files={"file": ("bild.png", VALID_PNG, "image/png")}).json()
+        archive = client.get(f"/api/system/backups/{client.post('/api/system/backups', json={'include_media': True}).json()['name']}")
+        media_file = tmp_path / "data" / "media" / Path(uploaded["source"]).name
+        media_file.unlink()
+        monkeypatch.setattr(backup.tempfile, "TemporaryDirectory", recording)
+        restored = client.post("/api/system/backups/restore",
+                               files={"file": ("backup.zip", archive.content, "application/zip")})
+        assert restored.status_code == 200
+    assert media_file.is_file()
+    assert Path(used[-1]) == (tmp_path / "data").resolve()
+    assert not list((tmp_path / "data").glob(".restore-*"))

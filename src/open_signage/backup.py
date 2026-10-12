@@ -96,7 +96,11 @@ def validate_backup(path: Path) -> dict:
 def restore_backup(path: Path) -> None:
     validate_backup(path)
     safety = create_backup(include_media=True)
-    with zipfile.ZipFile(path) as archive, tempfile.TemporaryDirectory(prefix="open-signage-restore-") as temporary:
+    # Im Datenverzeichnis entpacken: Die Dateien werden anschließend verschoben, und
+    # /tmp liegt (etwa ab Debian 13) im Arbeitsspeicher auf einem anderen Dateisystem.
+    with zipfile.ZipFile(path) as archive, tempfile.TemporaryDirectory(
+        prefix=".restore-", dir=data_dir()
+    ) as temporary:
         temp = Path(temporary)
         archive.extractall(temp)
         replacement = temp / "database/open-signage.sqlite3"
