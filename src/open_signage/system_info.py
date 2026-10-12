@@ -112,6 +112,18 @@ def _operating_system() -> str:
     return platform.platform()
 
 
+def _model() -> str:
+    """Raspberry Pi über den Device Tree, PCs über die DMI-Angaben des Herstellers."""
+    model = _read_text("/proc/device-tree/model")
+    if model:
+        return model
+    vendor = _read_text("/sys/class/dmi/id/sys_vendor") or ""
+    product = _read_text("/sys/class/dmi/id/product_name") or ""
+    generic = {"", "To Be Filled By O.E.M.", "Default string", "System Product Name"}
+    parts = [part for part in (vendor, product) if part not in generic]
+    return " ".join(parts) if parts else platform.machine()
+
+
 def clock_status() -> dict:
     """Uhrzeit, Zeitzone und ob die Uhr mit einem Zeitserver synchronisiert ist.
 
@@ -178,7 +190,7 @@ def collect_system_info() -> dict:
     load = os.getloadavg() if hasattr(os, "getloadavg") else None
     return {
         "hostname": socket.gethostname(),
-        "model": _read_text("/proc/device-tree/model") or platform.machine(),
+        "model": _model(),
         "operating_system": _operating_system(),
         "kernel": platform.release(),
         "uptime_seconds": _uptime_seconds(),

@@ -115,6 +115,8 @@ erreichbar, spielt das Display seinen zuletzt vollständig synchronisierten loka
 Stand weiter. Verwaltungspasswörter, Geräterollen und Geräte-Tokens bleiben
 absichtlich gerätespezifisch.
 
+Als Controller eignet sich ein Raspberry Pi oder – bei mehreren Displays
+empfohlen – ein Mini-PC ohne Bildschirm (siehe „Mini-PC als Controller“).
 Der Raspberry-Pi-Installer akzeptiert den Betriebsmodus direkt:
 
 ```bash
@@ -246,6 +248,9 @@ Im geklonten Projekt:
 sudo ./scripts/install-raspberry-pi.sh --port 8080
 ```
 
+`install-raspberry-pi.sh` ist die Kurzform für
+`scripts/install.sh --profile kiosk`.
+
 Das Skript:
 
 - installiert nur den Raspberry-Pi-Wayland-Kern mit labwc, Chromium, `wlopm`
@@ -308,6 +313,55 @@ fehlendem HDMI-Signal automatisch in den Standby wechseln.
 ```bash
 sudo reboot
 ```
+
+## Mini-PC als Controller (Debian 13)
+
+Bei mehreren Displays kann ein Mini-PC ohne Bildschirm die zentrale Verwaltung
+übernehmen. Er verwaltet Inhalte, Medien und Zeitpläne, nimmt OBS-Übertragungen
+entgegen und verteilt alles an die Displays. Die Displays bleiben Raspberry Pis
+mit eigener Kopie aller Inhalte und spielen bei einem Ausfall des Servers oder
+des Netzwerks ihren letzten Stand weiter.
+
+Voraussetzung ist ein minimal installiertes **Debian 13** (amd64 oder arm64,
+ohne Desktop) mit SSH-Zugang. Das Repository wird wie auf den Pis per SSH
+geklont, denn der Anwendungsupdater lädt neue Versionen über diesen Zugang:
+
+```bash
+sudo apt-get install -y git
+git clone git@github.com:lenni-web/open-signage.git
+cd open-signage
+sudo ./scripts/install.sh --profile server
+```
+
+Das Profil `server` installiert Open Signage als Controller ohne Kiosk,
+Bildschirmsteuerung und Tonausgabe, richtet Updates, Backups und den
+Live-Server (MediaMTX für die jeweilige Architektur) ein und macht den Rechner
+über Avahi als `<hostname>.local` im Netzwerk erreichbar. Die Verwaltung
+blendet Funktionen für einen lokalen Bildschirm aus; die Einstellungen der
+Bildschirmsteuerung bleiben und gelten für alle gekoppelten Displays.
+
+Displays koppeln: Auf dem Server unter **Einstellungen →
+Controller-/Display-Synchronisierung** den Pairing-Code ablesen und auf jedem
+Display als Controller-Adresse `http://<hostname>.local:8080` mit diesem Code
+eintragen. OBS sendet anschließend an `http://<hostname>.local:8889/live/whip`.
+
+### Umzug von einem bestehenden Controller
+
+1. Auf dem bisherigen Controller unter **Einstellungen → Backup** ein Backup
+   **mit Medien** erstellen und herunterladen.
+2. Den Mini-PC wie oben installieren und das Backup dort unter **Einstellungen →
+   Backup wiederherstellen** einspielen. Danach unter **Einstellungen →
+   Systemaktionen** Open Signage neu starten.
+3. Das Backup enthält Inhalte, Medien, Einstellungen, Verwaltungspasswort,
+   OBS-Token und die gekoppelten Displays samt Geräte-Tokens. Auf jedem Display
+   genügt es daher, die Controller-Adresse auf den Mini-PC zu ändern; ein
+   erneutes Koppeln ist nicht nötig.
+4. In OBS die Server-Adresse auf den Mini-PC ändern; das Token bleibt gleich.
+5. Der bisherige Controller kann anschließend als Display gekoppelt werden.
+
+War der bisherige Pi ein Einzelgerät statt eines Controllers, nach dem
+Wiederherstellen auf dem Mini-PC den Modus `Controller` wählen und die Displays
+mit dem Pairing-Code koppeln.
 
 ## Live-Übertragung aus OBS
 

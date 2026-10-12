@@ -3,7 +3,11 @@ set -euo pipefail
 
 readonly REQUEST="/var/lib/open-signage/system-action-request"
 readonly MEDIAMTX_VERSION="v1.21.1"
-readonly MEDIAMTX_SHA256="6a3aa635fb60ea9b8d566ec306f0a42ff1b6b52a3942bc2baffbe55880d4c3dd"
+# SHA-256 aus checksums.sha256 des MediaMTX-Releases, je Architektur.
+declare -A MEDIAMTX_SHA256=(
+  [arm64]="6a3aa635fb60ea9b8d566ec306f0a42ff1b6b52a3942bc2baffbe55880d4c3dd"
+  [amd64]="653abc672a3e693f8d3b2717752492fdcfb8072291ec108d03d3dd857411b0ee"
+)
 readonly MEDIAMTX_DIR="/usr/local/lib/open-signage"
 readonly MEDIAMTX_UNIT="/etc/systemd/system/open-signage-mediamtx.service"
 
@@ -11,13 +15,16 @@ readonly MEDIAMTX_UNIT="/etc/systemd/system/open-signage-mediamtx.service"
 # Version und richtet seinen Dienst ein. Die Konfiguration erzeugt Open Signage.
 setup_live() {
   if [[ "$(cat "${MEDIAMTX_DIR}/mediamtx.version" 2>/dev/null || true)" != "${MEDIAMTX_VERSION}" ]]; then
-    local work
+    local work arch checksum
+    arch="$(dpkg --print-architecture)"
+    checksum="${MEDIAMTX_SHA256[${arch}]:-}"
+    [[ -n "${checksum}" ]] || { printf 'Keine MediaMTX-Version für %s hinterlegt.\n' "${arch}" >&2; return 1; }
     work="$(mktemp -d)"
     trap 'rm -rf "${work}"' RETURN
     curl --fail --location --silent --show-error --max-time 300 \
       --output "${work}/mediamtx.tar.gz" \
-      "https://github.com/bluenviron/mediamtx/releases/download/${MEDIAMTX_VERSION}/mediamtx_${MEDIAMTX_VERSION}_linux_arm64.tar.gz"
-    printf '%s  %s\n' "${MEDIAMTX_SHA256}" "${work}/mediamtx.tar.gz" | sha256sum --check --status || {
+      "https://github.com/bluenviron/mediamtx/releases/download/${MEDIAMTX_VERSION}/mediamtx_${MEDIAMTX_VERSION}_linux_${arch}.tar.gz"
+    printf '%s  %s\n' "${checksum}" "${work}/mediamtx.tar.gz" | sha256sum --check --status || {
       printf 'Prüfsumme von MediaMTX stimmt nicht.\n' >&2
       return 1
     }

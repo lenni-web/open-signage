@@ -10,6 +10,8 @@ function showApplication(settings) {
   document.querySelector("#admin-app").hidden = false;
   document.querySelector('#screen-settings-form [name="screen_name"]').value = settings.screen_name;
   document.querySelector("#content-heading").textContent = `Inhalte – ${settings.screen_name}`;
+  document.body.dataset.profile = settings.headless ? "server" : "kiosk";
+  document.querySelector("#monitoring-title").textContent = settings.headless ? "Server-Monitoring" : "Player-Monitoring";
   applyDeviceMode(settings.device_mode || "standalone");
   if (settings.password_change_required) {
     notify("Bitte ändere jetzt das Initialpasswort unter Einstellungen.", true, 10000);

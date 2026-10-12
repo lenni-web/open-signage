@@ -428,13 +428,13 @@
       </section>
       <section class="card system-overview monitoring-card">
         <div class="section-heading">
-          <div><span class="eyebrow">Betriebszustand</span><h2>Player-Monitoring</h2></div>
+          <div><span class="eyebrow">Betriebszustand</span><h2 id="monitoring-title">Player-Monitoring</h2></div>
           <button id="monitoring-refresh" class="secondary">Aktualisieren</button>
         </div>
         <div id="monitoring-summary" class="monitoring-summary">
-          <div><span>Player</span><strong data-monitoring="player">–</strong></div>
-          <div><span>Aktueller Inhalt</span><strong data-monitoring="content">–</strong></div>
-          <div><span>Letzter Kontakt</span><strong data-monitoring="last_seen">–</strong></div>
+          <div class="kiosk-only"><span>Player</span><strong data-monitoring="player">–</strong></div>
+          <div class="kiosk-only"><span>Aktueller Inhalt</span><strong data-monitoring="content">–</strong></div>
+          <div class="kiosk-only"><span>Letzter Kontakt</span><strong data-monitoring="last_seen">–</strong></div>
           <div><span>Freier Speicher</span><strong data-monitoring="disk">–</strong></div>
           <div><span>Temperatur</span><strong data-monitoring="temperature">–</strong></div>
           <div><span>Uhrzeit</span><strong data-monitoring="clock">–</strong></div>
@@ -442,8 +442,8 @@
           <div><span>Systemupdate</span><strong data-monitoring="system_update">–</strong></div>
         </div>
         <div id="monitoring-warnings" class="monitoring-warnings" hidden></div>
-        <div id="player-error" class="monitoring-warnings" hidden></div>
-        <details id="player-events" hidden><summary>Player-Fehlerprotokoll</summary><div></div></details>
+        <div id="player-error" class="monitoring-warnings kiosk-only" hidden></div>
+        <details id="player-events" class="kiosk-only" hidden><summary>Player-Fehlerprotokoll</summary><div></div></details>
       </section>
       <section id="display-overview" class="card system-overview" hidden>
         <div class="section-heading">
@@ -568,7 +568,9 @@
       <details class="card system-overview collapsible-card">
         <summary class="collapsible-summary"><span><span class="eyebrow">HDMI-CEC</span><strong>Bildschirmsteuerung</strong></span></summary>
         <div class="collapsible-body">
-          <div class="monitoring-summary display-control-status">
+          <p class="schedule-note server-only">Dieser Server hat keinen eigenen Bildschirm. Die Einstellungen gelten für
+            alle gekoppelten Displays und werden mit ihnen synchronisiert.</p>
+          <div class="monitoring-summary display-control-status kiosk-only">
             <div><span>CEC</span><strong id="display-cec-status">–</strong></div>
             <div><span>Bildschirm</span><strong id="display-power-status">–</strong></div>
             <div><span>Wayland-Fallback</span><strong id="display-fallback-status">–</strong></div>
@@ -576,8 +578,8 @@
             <div><span>Adapter/Ausgang</span><strong id="display-output-name">–</strong></div>
             <div><span>Letzte Aktualisierung</span><strong id="display-updated-at">–</strong></div>
           </div>
-          <p id="display-status-message" class="schedule-note"></p>
-          <div class="form-actions system-actions display-action-buttons">
+          <p id="display-status-message" class="schedule-note kiosk-only"></p>
+          <div class="form-actions system-actions display-action-buttons kiosk-only">
             <button type="button" data-display-action="on">Bildschirm einschalten</button>
             <button type="button" class="secondary" data-display-action="status">Status abfragen</button>
             <button type="button" class="danger" data-display-action="off">Bildschirm ausschalten</button>
@@ -598,7 +600,7 @@
               </select>
               <small>Der HDMI-Ausgang wird automatisch erkannt. Ist der gewählte Modus nicht verfügbar, wird der bevorzugte Bildschirmmodus verwendet.</small>
             </label>
-            <p id="display-resolution-status" class="schedule-note">Auflösung: noch nicht geprüft</p>
+            <p id="display-resolution-status" class="schedule-note kiosk-only">Auflösung: noch nicht geprüft</p>
             <label class="transition-setting">Überblendzeit
               <span class="compact-range"><input name="transition_ms" type="range" min="1000" max="6000" step="100" value="4000"><output id="transition-ms-output">4000 ms</output></span>
               <small>Zwischen 1.000 und 6.000 Millisekunden. Der Player übernimmt Änderungen automatisch.</small>
@@ -631,8 +633,8 @@
           <p>Diese Aktionen können die Anzeige kurzzeitig oder bis zum nächsten Einschalten unterbrechen.</p>
           <div class="form-actions system-actions">
             <button class="secondary" data-system-action="restart_service">Open Signage neu starten</button>
-            <button class="secondary" data-system-action="reboot">Raspberry Pi neu starten</button>
-            <button class="danger" data-system-action="poweroff">Raspberry Pi herunterfahren</button>
+            <button class="secondary" data-system-action="reboot">Gerät neu starten</button>
+            <button class="danger" data-system-action="poweroff">Gerät herunterfahren</button>
           </div>
         </div>
       </details>

@@ -69,6 +69,15 @@ def device_mode() -> str:
     return migrated
 
 
+def device_profile() -> str:
+    """kiosk: Gerät mit Bildschirm und Player; server: Controller ohne Bildschirm."""
+    return "server" if os.environ.get("OPEN_SIGNAGE_PROFILE", "").strip() == "server" else "kiosk"
+
+
+def headless() -> bool:
+    return device_profile() == "server"
+
+
 def verify_password(password: str) -> bool:
     encoded = _setting("admin_password")
     if encoded is None:

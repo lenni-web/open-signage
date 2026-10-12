@@ -164,3 +164,34 @@ def test_monitoring_and_security_status_report_unsynchronized_clock(tmp_path: Pa
         security = client.get("/api/system/security-status").json()
         assert security["checks"]["clock_synchronized"] is False
         assert "clock_synchronized" in security["warnings"]
+
+
+def test_server_profile_is_headless_and_blocks_local_display_actions(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        login = client.post("/api/system/login", json={"password": "open-signage"}).json()
+        assert login["headless"] is False
+        monkeypatch.setenv("OPEN_SIGNAGE_PROFILE", "server")
+        assert client.get("/api/system/session").json()["headless"] is True
+        assert client.post("/api/system/display-control/action", json={"action": "on"}).status_code == 409
+        assert not (tmp_path / "display-control-request").exists()
+        # Bildschirmeinstellungen bleiben änderbar, sie gelten für alle Displays.
+        settings = client.get("/api/system/display-control").json()["config"]
+        assert client.patch("/api/system/display-control", json=settings).status_code == 200
+        display = client.patch("/api/system/device", json={
+            "role": "display", "controller_url": "http://x.local:8080", "current_password": "open-signage"})
+        assert display.status_code == 422
+        controller = client.patch("/api/system/device", json={
+            "role": "controller", "controller_url": "", "current_password": "open-signage"})
+        assert controller.status_code == 200
+
+
+def test_model_uses_dmi_names_on_pcs(monkeypatch):
+    values = {"/sys/class/dmi/id/sys_vendor": "Intel(R) Client Systems", "/sys/class/dmi/id/product_name": "NUC11TNHi5"}
+    monkeypatch.setattr("open_signage.system_info._read_text", lambda path: values.get(path))
+    assert system_info._model() == "Intel(R) Client Systems NUC11TNHi5"
+    values["/sys/class/dmi/id/product_name"] = "To Be Filled By O.E.M."
+    values["/sys/class/dmi/id/sys_vendor"] = "Default string"
+    assert system_info._model() == system_info.platform.machine()
+    values["/proc/device-tree/model"] = "Raspberry Pi 4 Model B Rev 1.5"
+    assert system_info._model() == "Raspberry Pi 4 Model B Rev 1.5"

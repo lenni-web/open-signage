@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from .. import live
 from ..application_update import (request_update as request_application_update, update_status as
                                   application_update_status)
-from ..auth import (device_mode, get_setting, lan_player_access_enabled, password_change_required,
+from ..auth import (device_mode, get_setting, headless, lan_player_access_enabled, password_change_required,
                     require_system_login, set_setting, verify_password)
 from ..backup import list_backups
 from ..database import connect, data_dir
@@ -208,6 +208,8 @@ def get_device_settings(_: None = Depends(require_system_login)):
 def update_device_settings(payload: DeviceSettings, _: None = Depends(require_system_login)):
     if payload.role != device_mode() and not verify_password(payload.current_password):
         raise HTTPException(status_code=400, detail="Für den Moduswechsel ist das aktuelle Administratorpasswort erforderlich")
+    if payload.role == "display" and headless():
+        raise HTTPException(status_code=422, detail="Ein Server ohne Bildschirm kann kein Display sein")
     if payload.role == "display" and not payload.controller_url.strip():
         raise HTTPException(status_code=422, detail="Für ein Display ist die Controller-Adresse erforderlich")
     set_setting("device_role", payload.role)
@@ -256,6 +258,8 @@ def update_display_control(payload: DisplayControlSettings, _: None = Depends(re
 
 @router.post("/api/system/display-control/action", status_code=202)
 def start_display_action(payload: DisplayAction, _: None = Depends(require_system_login)):
+    if headless():
+        raise HTTPException(status_code=409, detail="Dieser Server hat keinen eigenen Bildschirm")
     request_display_action(payload.action)
     return {"queued": True, "action": payload.action}
 

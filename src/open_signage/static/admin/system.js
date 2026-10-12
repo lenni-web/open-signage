@@ -468,7 +468,7 @@ document.querySelector("#sync-now").addEventListener("click", async () => {
 
 document.querySelectorAll("[data-system-action]").forEach(button => button.addEventListener("click", async () => {
   const action = button.dataset.systemAction;
-  const labels = { restart_service: "Open Signage neu starten", reboot: "den Raspberry Pi neu starten", poweroff: "den Raspberry Pi herunterfahren" };
+  const labels = { restart_service: "Open Signage neu starten", reboot: "das Gerät neu starten", poweroff: "das Gerät herunterfahren" };
   if (!window.confirm(`${labels[action]}?`)) return;
   try {
     await api("/api/system/action", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });

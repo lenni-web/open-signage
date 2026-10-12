@@ -8,6 +8,32 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- Ein Mini-PC ohne Bildschirm (Debian 13, amd64 oder arm64) lässt sich mit
+  `scripts/install.sh --profile server` als zentraler Controller einrichten.
+  Er erhält Updates, Backups, den Live-Server in der passenden Architektur und
+  ist über Avahi als `<hostname>.local` erreichbar. Die Verwaltung blendet auf
+  ihm Funktionen für einen lokalen Bildschirm aus; die Bildschirmsteuerung
+  bleibt als Einstellung für alle Displays erhalten.
+- Die Systeminformationen zeigen auf PCs Hersteller und Modell aus den
+  DMI-Angaben.
+
+### Geändert
+
+- Der Installer heißt nun `scripts/install.sh` und kennt die Profile `kiosk` und
+  `server`; `scripts/install-raspberry-pi.sh` bleibt als Kurzform erhalten.
+  Eine erneute Installation ersetzt Modus- und Controller-Angaben, statt sie
+  anzuhängen.
+- Die Systemaktionen heißen „Gerät neu starten“ und „Gerät herunterfahren“.
+
+### Behoben
+
+- Die Wiederherstellung eines Backups schlug fehl, wenn `/tmp` auf einem
+  eigenen Dateisystem liegt, wie ab Debian 13 üblich. Backups werden nun im
+  Datenverzeichnis entpackt; große Backups mit Medien belegen dabei keinen
+  Arbeitsspeicher mehr.
+
 ## [0.20.1] – 2026-10-09
 
 ### Behoben

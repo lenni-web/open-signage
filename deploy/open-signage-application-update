@@ -40,7 +40,12 @@ source "${CONFIG_FILE}"
 if [[ -z "${SOURCE_REPOSITORY:-}" || -z "${SOURCE_USER:-}" || -z "${PORT:-}" ]]; then
   finish_failure "Updatekonfiguration ist unvollständig."
 fi
-KIOSK_USER="${KIOSK_USER:-signage}"
+PROFILE="${PROFILE:-kiosk}"
+if [[ "${PROFILE}" == "kiosk" ]]; then
+  KIOSK_USER="${KIOSK_USER:-signage}"
+else
+  KIOSK_USER=""
+fi
 
 (
   # Bis zur Umschaltung bricht jeder Fehler ab, und die vorbereitete Version wird
@@ -70,7 +75,8 @@ KIOSK_USER="${KIOSK_USER:-signage}"
   "${release_dir}/.venv/bin/python" -m pip install "${release_dir}"
 
   # Systemintegration aus der neuen Version einrichten (Pakete, Dienste, Kiosk).
-  PORT="${PORT}" KIOSK_USER="${KIOSK_USER}" bash "${release_dir}/deploy/open-signage-post-update" "${release_dir}"
+  PROFILE="${PROFILE}" PORT="${PORT}" KIOSK_USER="${KIOSK_USER}" \
+    bash "${release_dir}/deploy/open-signage-post-update" "${release_dir}"
 
   # Ab hier sichern Healthcheck und Rollback den Wechsel ab.
   set +e

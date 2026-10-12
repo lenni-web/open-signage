@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from ..auth import (change_password, clear_login_failures, create_session, destroy_session,
-                    device_mode, ensure_login_allowed, password_change_required,
+                    device_mode, ensure_login_allowed, headless, password_change_required,
                     record_login_failure, require_system_login, screen_name,
                     session_is_authenticated, set_setting, verify_password)
 
@@ -36,7 +36,7 @@ def system_session(request: Request):
     if not session_is_authenticated(request):
         return {"authenticated": False}
     return {"authenticated": True, "screen_name": screen_name(), "device_mode": device_mode(),
-            "password_change_required": password_change_required()}
+            "headless": headless(), "password_change_required": password_change_required()}
 
 
 @router.post("/api/system/login")
@@ -47,8 +47,8 @@ def system_login(payload: LoginRequest, request: Request, response: Response):
         raise HTTPException(status_code=401, detail="Falsches Passwort")
     clear_login_failures(request)
     create_session(response)
-    return {"authenticated": True, "screen_name": screen_name(),
-            "password_change_required": password_change_required()}
+    return {"authenticated": True, "screen_name": screen_name(), "device_mode": device_mode(),
+            "headless": headless(), "password_change_required": password_change_required()}
 
 
 @router.post("/api/system/logout", status_code=204)

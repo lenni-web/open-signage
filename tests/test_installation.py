@@ -35,7 +35,7 @@ def test_raspberry_pi_templates_have_expected_placeholders():
     assert "--disable-translate" in kiosk
     assert "Chromium wurde mit Status" in kiosk
 
-    installer = (PROJECT_ROOT / "scripts/install-raspberry-pi.sh").read_text(
+    installer = (PROJECT_ROOT / "scripts/install.sh").read_text(
         encoding="utf-8"
     )
     assert "rpd-wayland-core" in installer
@@ -106,7 +106,7 @@ def test_raspberry_pi_templates_have_expected_placeholders():
 
 
 def test_update_service_is_installed_without_sudo_access():
-    installer = (PROJECT_ROOT / "scripts/install-raspberry-pi.sh").read_text(
+    installer = (PROJECT_ROOT / "scripts/install.sh").read_text(
         encoding="utf-8"
     )
     update_service = (
@@ -233,7 +233,10 @@ def test_post_update_disables_analog_audio_only_with_kms(tmp_path: Path, config:
         pytest.skip("sed -i im Skript erfordert GNU sed wie auf dem Raspberry Pi")
     boot_config = tmp_path / "config.txt"
     boot_config.write_text(config, encoding="utf-8")
-    section = script_section("deploy/open-signage-post-update", "BOOT_CONFIG=", "# --- Dienste aktivieren")
+    section = script_section("deploy/open-signage-post-update", "BOOT_CONFIG=", "# --- Dienste aktivieren").rstrip()
+    # Der Abschnitt liegt im Block für das Profil kiosk; dessen schließendes fi gehört nicht dazu.
+    assert section.endswith("fi")
+    section = section[:-2]
     section = section.replace("/boot/firmware/config.txt", str(boot_config)).replace("/boot/config.txt", str(boot_config))
     subprocess.run(["bash", "-euo", "pipefail", "-c", section], check=True, capture_output=True)
     assert boot_config.read_text(encoding="utf-8") == expected
@@ -260,3 +263,29 @@ esac
     lines = calls.read_text(encoding="utf-8").splitlines()
     assert lines.count("set-default 35") == 2
     assert lines.count("set-volume 35 1.0") == 1 and lines.count("set-mute 35 0") == 1
+
+
+def test_server_profile_installs_controller_without_kiosk():
+    installer = (PROJECT_ROOT / "scripts/install.sh").read_text(encoding="utf-8")
+    wrapper = (PROJECT_ROOT / "scripts/install-raspberry-pi.sh").read_text(encoding="utf-8")
+    assert 'install.sh" --profile kiosk "$@"' in wrapper
+    server = installer[installer.index("  server)"):installer.index("  *)\n    fail \"Profil")]
+    assert 'MODE="${MODE:-controller}"' in server and '"${ID:-}" == "debian"' in server
+    assert "amd64|arm64" in server
+    server_packages = installer[installer.index("printf 'Installiere Serverpakete"):installer.index("if ! id \"${APP_USER}\"")]
+    assert "avahi-daemon" in server_packages and "chromium" not in server_packages
+    assert "OPEN_SIGNAGE_PROFILE=%s" in installer and "PROFILE=%q" in installer
+    assert 'PROFILE="${PROFILE}" PORT="${PORT}"' in installer
+
+    post_update = (PROJECT_ROOT / "deploy/open-signage-post-update").read_text(encoding="utf-8")
+    kiosk_units = post_update[post_update.index('if [[ "${PROFILE}" == "kiosk" ]]; then\n  sed "s|@@KIOSK_USER@@'):]
+    assert "open-signage-display-control.path" in kiosk_units.split("fi\n")[0]
+    common = post_update[post_update.index("UNITS=("):post_update.index('if [[ "${PROFILE}" == "kiosk" ]]; then\n  sed "s|@@KIOSK_USER@@')]
+    assert "display" not in common
+    assert post_update.index("# --- Kiosk") > post_update.index('if [[ "${PROFILE}" == "kiosk" ]]; then\n  # --- Kiosk') - 1
+
+    updater = (PROJECT_ROOT / "deploy/open-signage-application-update").read_text(encoding="utf-8")
+    assert 'PROFILE="${PROFILE:-kiosk}"' in updater and 'PROFILE="${PROFILE}" PORT="${PORT}"' in updater
+    system_action = (PROJECT_ROOT / "deploy/open-signage-system-action").read_text(encoding="utf-8")
+    assert "[amd64]=" in system_action and "[arm64]=" in system_action
+    assert "mediamtx_${MEDIAMTX_VERSION}_linux_${arch}.tar.gz" in system_action
