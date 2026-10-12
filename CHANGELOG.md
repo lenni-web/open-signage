@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.21.0] – 2026-10-12
+
 ### Hinzugefügt
 
 - Neue Seite „Weiterleitung“: Der OBS-Stream, der am Controller oder
