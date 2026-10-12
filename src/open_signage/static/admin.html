@@ -38,6 +38,7 @@
   <nav class="admin-nav" aria-label="Verwaltung">
     <button class="nav-button active" data-page="content-page">Inhalte</button>
     <button class="nav-button" data-page="library-page">Mediathek</button>
+    <button class="nav-button" data-page="forwarding-page">Weiterleitung</button>
     <button class="nav-button" data-page="settings-page">Einstellungen</button>
     <button class="nav-button" data-page="system-page">System</button>
   </nav>
@@ -408,6 +409,28 @@
     </main>
   </section>
 
+  <section id="forwarding-page" class="page" hidden>
+    <h2 class="page-title">Stream-Weiterleitung</h2>
+    <section class="card forwarding-intro">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">OBS · RTMP</span>
+          <h2>Live-Stream weitersenden</h2>
+        </div>
+        <span id="forwarding-signal" class="live-signal">Prüfe Signal …</span>
+      </div>
+      <p>OBS sendet an dieses Gerät (Zugangsdaten unter <em>Inhalte → Live-Übertragung → OBS einrichten</em>).
+        Gekoppelte Displays erhalten das Bild automatisch. Hier lässt sich derselbe Stream zusätzlich an
+        RTMP-Ziele wie einen Owncast-Server weitersenden – das Video unverändert, der Ton bei Bedarf als AAC.
+        Weitergeleitet wird nur, solange OBS sendet.</p>
+      <div class="form-actions">
+        <button id="forwarding-add" type="button">Ziel hinzufügen</button>
+      </div>
+    </section>
+    <div id="forwarding-targets" class="forwarding-targets"></div>
+    <p id="forwarding-empty" class="schedule-note" hidden>Noch keine Ziele. Füge z. B. deinen Owncast-Server hinzu.</p>
+  </section>
+
   <section id="settings-page" class="page" hidden>
     <h2 class="page-title">Einstellungen</h2>
     <main id="settings-content" class="system-grid"></main>
@@ -682,6 +705,44 @@
     <div id="text-preview-error" class="compat-warning" role="alert" hidden></div>
     <button id="text-preview-close" class="secondary" type="button">Vorschau schließen</button>
   </dialog>
+  <dialog id="forwarding-dialog" class="form-dialog">
+    <form id="forwarding-form">
+      <h2 id="forwarding-dialog-title">Ziel hinzufügen</h2>
+      <label>Name
+        <input name="name" maxlength="60" placeholder="Owncast" required>
+      </label>
+      <label>RTMP-Adresse
+        <input name="url" placeholder="rtmp://owncast.example.org/live" required>
+      </label>
+      <label>Stream-Key
+        <input name="secret" type="password" autocomplete="off">
+      </label>
+      <label class="inline-check">
+        <input name="audio_aac" type="checkbox" checked>
+        <span>Ton nach AAC umwandeln (für Owncast und die meisten Plattformen nötig)</span>
+      </label>
+      <label>Ton-Verarbeitung
+        <select name="audio_mode">
+          <option value="standard">Standard</option>
+          <option value="gaps">Lücken mit Stille füllen</option>
+          <option value="regular">Gleichmäßige Zeitstempel</option>
+          <option value="hq">Höhere AAC-Bitrate (256 kbit/s)</option>
+        </select>
+        <small id="forwarding-audio-hint"></small>
+      </label>
+      <label class="inline-check">
+        <input name="enabled" type="checkbox" checked>
+        <span>Aktiv</span>
+      </label>
+      <div id="forwarding-dialog-checks"></div>
+      <p id="forwarding-dialog-error" class="forwarding-error" hidden></p>
+      <div class="form-actions">
+        <button id="forwarding-dialog-test" class="secondary" type="button">Verbindung testen</button>
+        <button id="forwarding-dialog-cancel" class="secondary" type="button">Abbrechen</button>
+        <button>Speichern</button>
+      </div>
+    </form>
+  </dialog>
   <dialog id="schedule-dialog" class="form-dialog">
     <form id="schedule-form">
       <h2>Zeitplan</h2>
@@ -767,6 +828,7 @@
   <script src="/static/admin/playlists.js?v=@@VERSION@@"></script>
   <script src="/static/whep.js?v=@@VERSION@@"></script>
   <script src="/static/admin/live.js?v=@@VERSION@@"></script>
+  <script src="/static/admin/forwarding.js?v=@@VERSION@@"></script>
   <script src="/static/admin/display.js?v=@@VERSION@@"></script>
   <script src="/static/admin/system.js?v=@@VERSION@@"></script>
   <script src="/static/admin/session.js?v=@@VERSION@@"></script>

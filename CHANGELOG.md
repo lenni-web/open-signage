@@ -10,6 +10,13 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ### Hinzugefügt
 
+- Neue Seite „Weiterleitung“: Der OBS-Stream, der am Controller oder
+  Einzelgerät ankommt, lässt sich zusätzlich an RTMP-Ziele wie Owncast
+  weitersenden – das Video unverändert, der Ton bei Bedarf als AAC mit wählbarer
+  Ton-Verarbeitung. Je Ziel gibt es Status mit Bitrate, Verbindungstest,
+  Protokoll und Neustart; ffmpeg läuft nur, solange OBS sendet, und wird bei
+  Fehlern oder hängender Verbindung automatisch neu gestartet. Übernommen aus dem
+  Projekt „Stream-Verteiler“; OBS braucht damit nur noch einen Ausgang.
 - Ein Mini-PC ohne Bildschirm (Debian 13, amd64 oder arm64) lässt sich mit
   `scripts/install.sh --profile server` als zentraler Controller einrichten.
   Er erhält Updates, Backups, den Live-Server in der passenden Architektur und

@@ -413,6 +413,39 @@ Einrichtung nach dem Neustart selbst an; alternativ steht in der Verwaltung
 Signage unter `/var/lib/open-signage/mediamtx.yml`. Abspielen dürfen nur der
 lokale Server und berechtigte Player; Senden erfordert das OBS-Token.
 
+## Stream-Weiterleitung an RTMP-Ziele
+
+Die Seite **Weiterleitung** sendet den OBS-Stream, der an diesem Controller
+oder Einzelgerät ankommt, zusätzlich an RTMP-Ziele wie einen Owncast-Server
+oder eine Streaming-Plattform. OBS braucht dafür nur **einen** Ausgang: Es
+sendet per WHIP an Open Signage, die gekoppelten Displays holen sich das Bild
+wie gewohnt, und jedes aktive RTMP-Ziel bekommt eine eigene Kopie.
+
+```
+OBS ──WHIP──▶ Live-Server (Controller) ──▶ Displays (RTSP, geringe Verzögerung)
+                                      └──▶ ffmpeg je Ziel ──▶ Owncast/RTMP (Video kopiert, Ton → AAC)
+```
+
+- Je Ziel läuft ein `ffmpeg`, aber nur, solange OBS sendet. Fehlt das Signal
+  länger als 5 Sekunden, wird es beendet; meldet `ffmpeg` 15 Sekunden keinen
+  Fortschritt, wird die Verbindung neu aufgebaut. Fehlversuche werden mit 1, 2,
+  5 und dann 10 Sekunden Pause wiederholt.
+- Das Video wird nie neu codiert. Der Ton wird von Opus nach AAC umgewandelt
+  (abschaltbar). Bei Aussetzern helfen die Ton-Verarbeitungen „Lücken mit
+  Stille füllen“ oder „Gleichmäßige Zeitstempel“; „Höhere AAC-Bitrate“ nutzt
+  256 statt 160 kbit/s.
+- **Testen** prüft Erreichbarkeit und RTMP-Handshake, ohne Video zu senden; der
+  Stream-Key lässt sich erst beim echten Senden prüfen. **Protokoll** zeigt
+  Ereignisse und `ffmpeg`-Meldungen mit maskiertem Stream-Key.
+- Die Ziele werden in der Datenbank gespeichert und sind damit Teil der
+  Backups – einschließlich der Stream-Keys. Backups daher sicher aufbewahren.
+- Auf Displays gibt es keine Weiterleitung; sie erhalten das Bild vom
+  Controller.
+
+Die Weiterleitung stammt aus dem eigenständigen Projekt „Stream-Verteiler“.
+Dessen Zieltyp „Open-Signage-Display“ entfällt hier, weil gekoppelte Displays
+das Bild direkt vom Controller beziehen.
+
 ## Owncast-Livestream
 
 Unter **Owncast-Livestream hinzufügen** genügt die Basisadresse der Instanz,

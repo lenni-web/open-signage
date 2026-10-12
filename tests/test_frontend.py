@@ -8,7 +8,7 @@ from open_signage.version import __version__
 from helpers import PROJECT_ROOT
 
 
-ADMIN_SCRIPTS = ("core", "content", "library", "playlists", "live", "display", "system", "session")
+ADMIN_SCRIPTS = ("core", "content", "library", "playlists", "live", "forwarding", "display", "system", "session")
 
 
 def admin_scripts() -> str:
@@ -99,3 +99,13 @@ def test_player_and_admin_share_the_whep_client():
     assert "function connectLive(" not in (PROJECT_ROOT / "src/open_signage/static/player.js").read_text(encoding="utf-8")
     assert 'id="live-preview-toggle"' in admin_html and 'id="live-preview-video"' in admin_html
     assert "connectLive(" in admin_scripts()
+
+
+
+def test_forwarding_page_is_wired_into_admin():
+    admin_html = (PROJECT_ROOT / "src/open_signage/static/admin.html").read_text(encoding="utf-8")
+    assert 'data-page="forwarding-page"' in admin_html and 'id="forwarding-page"' in admin_html
+    assert 'id="forwarding-dialog"' in admin_html and 'name="audio_mode"' in admin_html
+    scripts = admin_scripts()
+    assert "async function loadForwarding()" in scripts
+    assert 'data-page="forwarding-page"' in scripts and "/api/forwarding/test" in scripts

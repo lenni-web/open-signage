@@ -24,7 +24,7 @@ function applyDeviceMode(mode) {
   currentDeviceMode = mode;
   document.body.dataset.mode = mode;
   const displayMode = mode === "display";
-  document.querySelectorAll('.nav-button[data-page="content-page"], .nav-button[data-page="library-page"]').forEach(item => { item.hidden = displayMode; });
+  document.querySelectorAll('.nav-button[data-page="content-page"], .nav-button[data-page="library-page"], .nav-button[data-page="forwarding-page"]').forEach(item => { item.hidden = displayMode; });
   ["#screen-settings-form", "#storage-cleanup", "#storage-orphan-cleanup", "#backup-create", "#backup-restore-form", "#display-control-form"]
     .forEach(selector => { const item = document.querySelector(selector); if (item) item.hidden = displayMode; });
   if (displayMode && !wasDisplay) {
@@ -100,6 +100,8 @@ document.querySelectorAll(".nav-button").forEach((button) => {
       await openSystemPage();
     } else if (button.dataset.page === "settings-page") {
       await openSettingsPage();
+    } else if (button.dataset.page === "forwarding-page") {
+      await loadForwarding().catch(error => notify(error.message, true));
     } else if (button.dataset.page === "library-page") {
       await loadLibrary();
     } else if (button.dataset.page === "content-page") {

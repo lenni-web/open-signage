@@ -236,6 +236,24 @@ button:disabled { cursor: default; opacity: .35; }
 .live-preview { position: relative; width: min(640px, 100%); aspect-ratio: 16 / 9; overflow: hidden; border-radius: 12px; background: #000; }
 .live-preview video { width: 100%; height: 100%; object-fit: contain; }
 .live-preview-status { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; color: #c9d1d9; text-align: center; pointer-events: none; }
+.forwarding-intro { width: min(1100px, 100%); margin: 0 auto 18px; }
+.forwarding-intro p { color: var(--muted); }
+.forwarding-targets { width: min(1100px, 100%); margin: 0 auto; display: grid; gap: 12px; }
+.forwarding-target { display: grid; gap: 10px; }
+.forwarding-target header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; width: auto; margin: 0; }
+.forwarding-target small { display: block; color: var(--muted); overflow-wrap: anywhere; }
+.forwarding-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.forwarding-error { margin: 0; color: var(--danger); overflow-wrap: anywhere; }
+.forwarding-checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.forwarding-checks li { display: flex; gap: 8px; }
+.forwarding-checks .ok { color: var(--accent); }
+.forwarding-checks .fail { color: var(--danger); }
+.forwarding-checks .info, .forwarding-checks .detail { color: var(--muted); }
+.forwarding-log { max-height: 260px; overflow: auto; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--bg); font: 12px/1.5 ui-monospace, Menlo, monospace; }
+.forwarding-log div { white-space: pre-wrap; overflow-wrap: anywhere; }
+.forwarding-log .time { color: var(--muted); margin-right: 8px; }
+.forwarding-log .error { color: var(--danger); }
 .display-overview-summary { margin: 0 0 12px; color: var(--muted); }
 .display-overview-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
 .display-tile { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; }
