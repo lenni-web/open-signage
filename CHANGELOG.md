@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.22.0] – 2026-10-13
+
 ### Hinzugefügt
 
 - Displays lassen sich in der Display-Übersicht des Controllers aktualisieren,
