@@ -17,6 +17,9 @@ let transitionGeneration = 0;
 const CACHE_KEY = "open-signage-playlist-v1";
 const CURRENT_KEY = "open-signage-current-content";
 const PLAYER_TOKEN_KEY = "open-signage-player-token";
+const PLAYER_VERSION = document.querySelector('meta[name="open-signage-version"]')?.content || "";
+const RELOAD_KEY = "open-signage-reloaded-for";
+let reloadPending = false;
 let transitionMs = 4000;
 const WEBSITE_SETTLE_MS = 4000;
 const PDF_SETTLE_MS = 1200;
@@ -491,6 +494,21 @@ async function refreshPlaylist() {
   }
 }
 
+// Nach einem Anwendungsupdate läuft im Browser noch der alte Player. Sobald der
+// Server eine andere Version meldet, lädt sich der Player neu – nicht während
+// einer Live-Übernahme und je Zielversion nur einmal, damit keine Schleife entsteht.
+function reloadForNewVersion(serverVersion) {
+  if (!serverVersion || !PLAYER_VERSION || serverVersion === PLAYER_VERSION || reloadPending) return;
+  if (liveTakeoverActive) return;
+  try {
+    if (sessionStorage.getItem(RELOAD_KEY) === serverVersion) return;
+    sessionStorage.setItem(RELOAD_KEY, serverVersion);
+  } catch (_) {}
+  reloadPending = true;
+  sendHeartbeat("idle", null);
+  window.location.reload();
+}
+
 async function refreshPlayerConfig() {
   try {
     const response = await fetch("/api/player/config", {
@@ -502,6 +520,7 @@ async function refreshPlayerConfig() {
       transitionMs = config.transition_ms;
     }
     if (config.live) applyLiveState(config.live);
+    reloadForNewVersion(config.version);
   } catch (_) {}
 }
 

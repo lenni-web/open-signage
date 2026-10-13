@@ -12,6 +12,7 @@ from ..auth import (automatic_player_client, clear_login_failures, ensure_login_
                     record_login_failure, require_player, set_player_cookie, verify_password)
 from ..database import connect
 from ..display_control import display_config
+from ..version import __version__
 from .common import content_rows
 
 router = APIRouter()
@@ -73,4 +74,5 @@ def player_content(_: None = Depends(require_player)):
 
 @router.get("/api/player/config")
 def player_config(_: None = Depends(require_player)):
-    return {"transition_ms": display_config().get("transition_ms", 4000), "live": live.player_state()}
+    return {"transition_ms": display_config().get("transition_ms", 4000), "live": live.player_state(),
+            "version": __version__}

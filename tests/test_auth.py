@@ -8,6 +8,7 @@ from starlette.requests import Request
 
 from open_signage.auth import local_player_client
 from open_signage.main import app
+from open_signage.version import __version__
 
 from helpers import VALID_PNG
 
@@ -49,7 +50,8 @@ def test_player_endpoints_require_device_token(tmp_path: Path, monkeypatch):
         headers = {"Authorization": f"Bearer {token}"}
         assert client.get("/api/player/content", headers=headers).status_code == 200
         assert client.get("/api/player/config", headers=headers).json() == {
-            "transition_ms": 4000, "live": {"available": False, "takeover": False, "sound": True}}
+            "transition_ms": 4000, "live": {"available": False, "takeover": False, "sound": True},
+            "version": __version__}
         assert client.post(
             "/api/player/heartbeat", json={"state": "idle"}, headers=headers
         ).status_code == 204

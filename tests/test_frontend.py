@@ -109,3 +109,14 @@ def test_forwarding_page_is_wired_into_admin():
     scripts = admin_scripts()
     assert "async function loadForwarding()" in scripts
     assert 'data-page="forwarding-page"' in scripts and "/api/forwarding/test" in scripts
+
+
+
+def test_player_reloads_once_when_server_version_changes():
+    player_html = (PROJECT_ROOT / "src/open_signage/static/player.html").read_text(encoding="utf-8")
+    assert '<meta name="open-signage-version" content="@@VERSION@@">' in player_html
+    player = (PROJECT_ROOT / "src/open_signage/static/player.js").read_text(encoding="utf-8")
+    reload_function = player[player.index("function reloadForNewVersion("):player.index("async function refreshPlayerConfig()")]
+    assert "liveTakeoverActive" in reload_function and "sessionStorage" in reload_function
+    assert "window.location.reload()" in reload_function
+    assert "reloadForNewVersion(config.version)" in player
