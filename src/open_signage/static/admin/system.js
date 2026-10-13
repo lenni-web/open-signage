@@ -140,6 +140,27 @@ function formatClock(clock) {
   return `${time} · ${state}${clock.timezone ? ` (${clock.timezone})` : ""}`;
 }
 
+const DISPLAY_COMMANDS = {
+  application_update: "Aktualisieren", reboot: "Neu starten", display_on: "Bildschirm an", display_off: "Bildschirm aus",
+};
+const DISPLAY_UPDATE_STATES = {
+  idle: "–", queued: "angefordert", running: "läuft", success: "erfolgreich", failed: "fehlgeschlagen",
+};
+
+async function sendDisplayCommand(action, deviceIds = null, name = "") {
+  const target = deviceIds ? `„${name}“` : "alle Displays";
+  const question = { application_update: `Open Signage auf ${target} aktualisieren?`, reboot: `${target} neu starten?` }[action];
+  if (question && !window.confirm(question.charAt(0).toUpperCase() + question.slice(1))) return;
+  try {
+    const result = await api("/api/system/displays/command", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, device_ids: deviceIds }),
+    });
+    notify(`Befehl an ${result.queued} Display${result.queued === 1 ? "" : "s"} gesendet. Die Displays holen ihn innerhalb von 10 Sekunden ab.`);
+    await loadDisplayOverview();
+  } catch (error) { notify(error.message, true); }
+}
+
 function displayWarnings(display, controllerVersion) {
   const status = display.status;
   if (!status) return ["Hat sich noch nicht gemeldet (Display auf Version 0.19 oder neuer aktualisieren)."];
@@ -153,6 +174,7 @@ function displayWarnings(display, controllerVersion) {
   if (status.disk?.total_bytes && status.disk.free_bytes / status.disk.total_bytes < 0.1) warnings.push("Weniger als 10 % Speicher frei.");
   if (status.sync?.last_warning) warnings.push(status.sync.last_warning);
   if (status.sync?.last_error) warnings.push(`Synchronisierung: ${status.sync.last_error}`);
+  if (status.application_update?.status === "failed") warnings.push(`Letztes Update fehlgeschlagen: ${status.application_update.message}`);
   return warnings;
 }
 
@@ -169,9 +191,17 @@ function renderDisplayTile(display, controllerVersion) {
       <dt>Temperatur</dt><dd data-field="temperature"></dd>
       <dt>Speicher frei</dt><dd data-field="disk"></dd>
       <dt>Uhrzeit</dt><dd data-field="clock"></dd>
+      <dt>Update</dt><dd data-field="update"></dd>
       <dt>Letzte Meldung</dt><dd data-field="reported"></dd>
     </dl>
+    <p class="pending" hidden></p>
     <ul hidden></ul>
+    <div class="display-tile-actions">
+      <button type="button" class="secondary" data-command="application_update">Aktualisieren</button>
+      <button type="button" class="secondary" data-command="reboot">Neu starten</button>
+      <button type="button" class="secondary" data-command="display_on">Bildschirm an</button>
+      <button type="button" class="secondary" data-command="display_off">Bildschirm aus</button>
+    </div>
   `;
   tile.querySelector("strong").textContent = display.name;
   const pill = tile.querySelector(".live-signal");
@@ -185,6 +215,20 @@ function renderDisplayTile(display, controllerVersion) {
   set("disk", status.disk ? formatBytes(status.disk.free_bytes) : "–");
   set("clock", status.clock ? formatClock(status.clock) : "–");
   set("reported", display.status_at ? new Date(display.status_at).toLocaleString("de-DE") : "noch nie");
+  const update = status.application_update;
+  set("update", update ? `${DISPLAY_UPDATE_STATES[update.status] || update.status}${update.message && update.status !== "idle" ? ` – ${update.message}` : ""}` : "–");
+  const pending = tile.querySelector(".pending");
+  const last = status.remote_command;
+  if (display.pending_command) {
+    pending.textContent = `„${DISPLAY_COMMANDS[display.pending_command]}“ wartet auf Abholung durch das Display …`;
+  } else if (last) {
+    pending.textContent = `Zuletzt: ${DISPLAY_COMMANDS[last.action] || last.action} (${new Date(last.received_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}) – ${last.result}`;
+  }
+  pending.hidden = !display.pending_command && !last;
+  tile.querySelectorAll("[data-command]").forEach(button => {
+    button.disabled = Boolean(display.pending_command);
+    button.addEventListener("click", () => sendDisplayCommand(button.dataset.command, [display.device_id], display.name));
+  });
   const list = tile.querySelector("ul");
   list.hidden = !warnings.length;
   list.replaceChildren(...warnings.map(text => {
@@ -360,6 +404,9 @@ document.querySelector("#system-refresh").addEventListener("click", () => {
 });
 document.querySelector("#monitoring-refresh").addEventListener("click", loadMonitoring);
 document.querySelector("#display-overview-refresh").addEventListener("click", loadDisplayOverview);
+document.querySelectorAll("[data-display-command]").forEach(button => {
+  button.addEventListener("click", () => sendDisplayCommand(button.dataset.displayCommand));
+});
 
 document.querySelector("#application-update").addEventListener("click", async () => {
   const confirmed = window.confirm(

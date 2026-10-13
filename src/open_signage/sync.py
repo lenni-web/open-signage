@@ -11,10 +11,11 @@ from pathlib import Path
 from urllib.parse import urljoin
 
 from . import live
+from .application_update import request_update as request_application_update
 from .auth import get_setting, screen_name, set_setting
-from .database import connect, media_dir
+from .database import connect, data_dir, media_dir
 from .device_status import local_device_status
-from .display_control import display_config, save_display_config
+from .display_control import display_config, request_display_action, save_display_config
 from .media_files import file_sha256, referenced_media_files, remember_sha256
 
 SYNCED_TABLES = ("playlists", "media_library", "content")
@@ -66,6 +67,78 @@ def store_device_status(device_id: str, status: dict) -> None:
             "UPDATE registered_devices SET status_json = ?, status_at = ? WHERE device_id = ?",
             (json.dumps(status, ensure_ascii=False), datetime.now(UTC).isoformat(), device_id),
         )
+
+
+# Befehle, die der Controller an Displays senden darf. Ausgeführt werden sie über
+# dieselben festen Systemaktionen wie die Knöpfe am Gerät selbst.
+REMOTE_COMMANDS = {
+    "application_update": "Anwendungsupdate",
+    "reboot": "Neustart",
+    "display_on": "Bildschirm einschalten",
+    "display_off": "Bildschirm ausschalten",
+}
+
+
+def queue_device_command(device_id: str, action: str) -> bool:
+    if action not in REMOTE_COMMANDS:
+        raise ValueError(action)
+    with connect() as connection:
+        changed = connection.execute(
+            "UPDATE registered_devices SET pending_command = ?, pending_command_at = ? WHERE device_id = ?",
+            (action, datetime.now(UTC).isoformat(), device_id),
+        ).rowcount
+    return bool(changed)
+
+
+def take_device_command(device_id: str) -> dict | None:
+    """Gibt den ausstehenden Befehl genau einmal aus."""
+    with connect() as connection:
+        row = connection.execute(
+            "SELECT pending_command, pending_command_at FROM registered_devices WHERE device_id = ?", (device_id,)
+        ).fetchone()
+        if not row or not row["pending_command"]:
+            return None
+        connection.execute(
+            "UPDATE registered_devices SET pending_command = NULL, pending_command_at = NULL WHERE device_id = ?",
+            (device_id,),
+        )
+    return {"action": row["pending_command"], "queued_at": row["pending_command_at"]}
+
+
+def execute_remote_command(action: str) -> str:
+    """Führt einen Controller-Befehl auf diesem Display aus und liefert eine Rückmeldung."""
+    try:
+        if action == "application_update":
+            request_application_update()
+            return "Anwendungsupdate angefordert."
+        if action == "reboot":
+            (data_dir() / "system-action-request").write_text("reboot", encoding="utf-8")
+            return "Neustart angefordert."
+        if action in {"display_on", "display_off"}:
+            request_display_action(action.removeprefix("display_"))
+            return "Bildschirm wird eingeschaltet." if action == "display_on" else "Bildschirm wird ausgeschaltet."
+    except (OSError, RuntimeError) as error:
+        return f"Fehler: {error}"
+    return f"Unbekannter Befehl: {action}"
+
+
+def poll_controller_command() -> dict | None:
+    """Holt einen ausstehenden Befehl vom Controller und führt ihn aus."""
+    controller = (get_setting("controller_url") or get_setting("master_url") or "").rstrip("/") + "/"
+    token = get_setting("sync_device_token") or ""
+    if not controller.startswith(("http://", "https://")) or not token:
+        return None
+    try:
+        command = _request_json(urljoin(controller, "api/sync/commands"), token=token).get("command")
+    except (OSError, ValueError, urllib.error.URLError):
+        return None
+    if not command or not isinstance(command, dict):
+        return None
+    action = str(command.get("action", ""))
+    result = {"action": action, "received_at": datetime.now(UTC).isoformat(),
+              "result": execute_remote_command(action)}
+    set_setting("remote_command_last", json.dumps(result, ensure_ascii=False))
+    return result
 
 
 def report_status_to_controller() -> bool:

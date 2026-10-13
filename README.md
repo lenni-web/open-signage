@@ -138,6 +138,19 @@ melden ihren Zustand minütlich; nach drei Minuten ohne Meldung gelten sie als
 offline. Hinweise wie eine veraltete Version oder eine nicht synchronisierte
 Uhr werden hervorgehoben.
 
+In der Display-Übersicht lassen sich Displays auch steuern: **Aktualisieren**,
+**Neu starten**, **Bildschirm an** und **Bildschirm aus** – einzeln oder mit
+„Alle Displays aktualisieren“ bzw. „Alle Displays neu starten“ für alle auf
+einmal. Die Displays fragen alle 10 Sekunden nach Befehlen und führen sie über
+dieselben festen Systemaktionen aus wie die Knöpfe am Gerät selbst; Ergebnis
+und Update-Fortschritt erscheinen anschließend in der Übersicht. Displays
+verstehen diese Befehle ab Version 0.22.0 und müssen dafür einmal von Hand
+aktualisiert werden.
+
+Nach einem Anwendungsupdate lädt sich der Player selbst neu, sobald der Server
+die neue Version meldet – während einer Live-Übernahme erst nach deren Ende.
+Ein Neustart des Geräts ist dafür nicht mehr nötig.
+
 Controller und Displays dürfen kurzzeitig unterschiedliche Versionen haben.
 Einträge, die ein älteres Display noch nicht kennt – etwa ein neuer
 Inhaltstyp –, überspringt es beim Abgleich und weist im

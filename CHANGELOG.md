@@ -8,6 +8,20 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- Displays lassen sich in der Display-Übersicht des Controllers aktualisieren,
+  neu starten und ein- oder ausschalten – einzeln oder alle auf einmal. Die
+  Displays holen Befehle innerhalb von 10 Sekunden ab, führen sie über die
+  festen Systemaktionen aus und melden Ergebnis und Update-Fortschritt zurück;
+  fehlgeschlagene Updates werden als Hinweis angezeigt.
+
+### Geändert
+
+- Der Player lädt sich nach einem Anwendungsupdate automatisch neu, sobald der
+  Server eine neue Version meldet (nicht während einer Live-Übernahme). Ein
+  Neustart des Geräts ist dafür nicht mehr nötig.
+
 ## [0.21.0] – 2026-10-12
 
 ### Hinzugefügt

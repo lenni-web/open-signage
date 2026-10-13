@@ -19,7 +19,7 @@ from ..database import connect, data_dir
 from ..device_status import local_device_status, player_status
 from ..display_control import (display_config, display_status, request_display_action,
                                save_display_config, schedule_analysis)
-from ..sync import pairing_token, safe_sync_from_controller
+from ..sync import pairing_token, queue_device_command, safe_sync_from_controller
 from ..system_info import collect_system_info
 from ..system_update import request_update, update_status
 from ..version import __version__
@@ -101,7 +101,8 @@ def display_overview(_: None = Depends(require_system_login)):
     now = datetime.now(UTC)
     with connect() as connection:
         rows = connection.execute(
-            "SELECT device_id, name, last_seen, status_json, status_at FROM registered_devices ORDER BY name"
+            "SELECT device_id, name, last_seen, status_json, status_at, pending_command, pending_command_at "
+            "FROM registered_devices ORDER BY name"
         ).fetchall()
     displays = []
     for row in rows:
@@ -114,9 +115,30 @@ def display_overview(_: None = Depends(require_system_login)):
             "device_id": row["device_id"], "name": row["name"], "last_seen": row["last_seen"],
             "status": status, "status_at": row["status_at"],
             "online": age is not None and age < DISPLAY_ONLINE_SECONDS,
+            "pending_command": row["pending_command"], "pending_command_at": row["pending_command_at"],
         })
     return {"enabled": True, "controller": local_device_status(), "live": live.player_state(),
             "displays": displays}
+
+
+class DisplayCommand(BaseModel):
+    action: str = Field(pattern=r"^(application_update|reboot|display_on|display_off)$")
+    device_ids: list[str] | None = Field(default=None, max_length=200)
+
+
+@router.post("/api/system/displays/command", status_code=202)
+def command_displays(payload: DisplayCommand, _: None = Depends(require_system_login)):
+    """Sendet einen Befehl an einzelne oder (ohne Auswahl) alle gekoppelten Displays."""
+    if device_mode() != "controller":
+        raise HTTPException(status_code=409, detail="Nur ein Controller kann Displays steuern")
+    with connect() as connection:
+        known = [row["device_id"] for row in connection.execute("SELECT device_id FROM registered_devices")]
+    targets = known if payload.device_ids is None else [item for item in payload.device_ids if item in known]
+    if payload.device_ids is not None and len(targets) != len(set(payload.device_ids)):
+        raise HTTPException(status_code=404, detail="Unbekanntes Display")
+    for device_id in targets:
+        queue_device_command(device_id, payload.action)
+    return {"queued": len(targets), "action": payload.action}
 
 
 @router.get("/api/system/info")

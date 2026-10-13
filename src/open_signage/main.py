@@ -14,7 +14,7 @@ from .database import initialize, integrity_check_if_due
 from .routes import (content, forwarding as forwarding_routes, live as live_routes, media_library, pages,
                      player, playlists, session, storage, sync, system)
 from .routes.common import STATIC_DIR
-from .sync import report_status_to_controller, safe_sync_from_controller
+from .sync import poll_controller_command, report_status_to_controller, safe_sync_from_controller
 from .version import __version__
 
 
@@ -43,7 +43,14 @@ async def lifespan(app: FastAPI):
                 ticks = 0
                 await asyncio.to_thread(integrity_check_if_due)
                 await asyncio.to_thread(automatic_backup_if_due)
+    async def controller_commands() -> None:
+        # Displays fragen alle 10 Sekunden nach Befehlen des Controllers (Update, Neustart, Bildschirm).
+        while True:
+            await asyncio.sleep(10)
+            if device_mode() == "display":
+                await asyncio.to_thread(poll_controller_command)
     maintenance_task = asyncio.create_task(database_maintenance())
+    command_task = asyncio.create_task(controller_commands())
     # Weiterleitung des OBS-Streams an RTMP-Ziele (z. B. Owncast).
     app.state.forwarding = forwarding.Manager(forwarding.TargetStore())
     app.state.forwarding.start()
@@ -51,6 +58,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         maintenance_task.cancel()
+        command_task.cancel()
         await app.state.forwarding.stop()
 
 

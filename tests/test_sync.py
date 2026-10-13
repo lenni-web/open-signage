@@ -9,7 +9,8 @@ from open_signage.auth import get_setting, set_setting
 from open_signage.database import connect, initialize, media_dir
 from open_signage.device_status import local_device_status
 from open_signage.main import app
-from open_signage.sync import report_status_to_controller, safe_sync_from_controller, snapshot as sync_snapshot
+from open_signage.sync import (execute_remote_command, poll_controller_command, report_status_to_controller,
+                               safe_sync_from_controller, snapshot as sync_snapshot)
 from open_signage.version import __version__
 
 from helpers import VALID_PNG
@@ -208,3 +209,66 @@ def test_display_sends_its_status_with_device_token(tmp_path: Path, monkeypatch)
     url, method, data, token = sent[0]
     assert (url, method, token) == ("http://controller.local:8080/api/sync/status", "POST", "device-token")
     assert data["version"] == __version__ and "player" in data and "clock" in data
+
+
+def pair_display(client) -> str:
+    client.post("/api/system/login", json={"password": "open-signage"})
+    client.patch("/api/system/device", json={"role": "controller", "controller_url": "", "current_password": "open-signage"})
+    pairing = client.get("/api/system/device").json()["pairing_code"]
+    return client.post("/api/sync/register", json={
+        "device_id": "display-1", "name": "Foyer", "pairing_token": pairing}).json()["device_token"]
+
+
+def test_controller_queues_commands_that_displays_fetch_once(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        assert client.post("/api/system/displays/command", json={"action": "reboot"}).status_code == 401
+        client.post("/api/system/login", json={"password": "open-signage"})
+        assert client.post("/api/system/displays/command", json={"action": "reboot"}).status_code == 409
+        token = pair_display(client)
+        headers = {"Authorization": f"Bearer {token}"}
+        assert client.post("/api/system/displays/command", json={"action": "rm -rf"}).status_code == 422
+        assert client.post("/api/system/displays/command", json={"action": "reboot", "device_ids": ["nope"]}).status_code == 404
+        queued = client.post("/api/system/displays/command", json={"action": "application_update"})
+        assert queued.json() == {"queued": 1, "action": "application_update"}
+        assert client.get("/api/system/displays").json()["displays"][0]["pending_command"] == "application_update"
+        assert client.get("/api/sync/commands").status_code == 401
+        command = client.get("/api/sync/commands", headers=headers).json()["command"]
+        assert command["action"] == "application_update" and command["queued_at"]
+        assert client.get("/api/sync/commands", headers=headers).json()["command"] is None
+        assert client.get("/api/system/displays").json()["displays"][0]["pending_command"] is None
+        client.post("/api/system/displays/command", json={"action": "reboot", "device_ids": ["display-1"]})
+        client.post("/api/system/displays/command", json={"action": "display_off", "device_ids": ["display-1"]})
+        assert client.get("/api/sync/commands", headers=headers).json()["command"]["action"] == "display_off"
+
+
+def test_display_executes_controller_commands_and_reports_result(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("OPEN_SIGNAGE_ENABLE_APPLICATION_UPDATE", "1")
+    initialize()
+    set_setting("device_role", "display")
+    set_setting("controller_url", "http://controller.local:8080")
+    set_setting("sync_device_token", "device-token")
+    replies = iter([{"command": {"action": "application_update"}}, {"command": {"action": "reboot"}},
+                    {"command": {"action": "display_off"}}, {"command": None}])
+    requested = []
+
+    def fake_request(url, method="GET", data=None, token=""):
+        requested.append((url, token))
+        return next(replies)
+
+    actions = []
+    monkeypatch.setattr("open_signage.sync._request_json", fake_request)
+    monkeypatch.setattr("open_signage.sync.request_display_action", actions.append)
+
+    assert poll_controller_command()["result"] == "Anwendungsupdate angefordert."
+    assert (tmp_path / "application-update.request").exists()
+    assert requested[0] == ("http://controller.local:8080/api/sync/commands", "device-token")
+    assert poll_controller_command()["result"] == "Neustart angefordert."
+    assert (tmp_path / "system-action-request").read_text() == "reboot"
+    assert poll_controller_command()["action"] == "display_off" and actions == ["off"]
+    assert poll_controller_command() is None
+    report = local_device_status()
+    assert report["remote_command"]["action"] == "display_off"
+    assert report["application_update"]["status"] == "queued"
+    assert execute_remote_command("format_disk").startswith("Unbekannter Befehl")

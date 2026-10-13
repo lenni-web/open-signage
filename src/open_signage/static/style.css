@@ -264,6 +264,10 @@ button:disabled { cursor: default; opacity: .35; }
 .display-tile dt { color: var(--muted); }
 .display-tile dd { margin: 0; overflow-wrap: anywhere; }
 .display-tile ul { margin: 0; padding-left: 18px; color: #d29922; }
+.display-overview-actions { margin-bottom: 12px; }
+.display-tile-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.display-tile-actions button { padding: 6px 10px; font-size: .9rem; }
+.display-tile .pending { margin: 0; color: var(--muted); font-size: .9rem; }
 .live-obs summary, .live-schedule summary { cursor: pointer; color: var(--muted); }
 .live-schedule form { display: grid; gap: 12px; margin-top: 12px; }
 .live-schedule-hint { color: var(--muted); }
