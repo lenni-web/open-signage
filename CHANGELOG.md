@@ -8,6 +8,13 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- Medien lassen sich in der Mediathek herunterladen – standardmäßig als
+  ursprünglich hochgeladene Datei, bei Bildern und konvertierten Videos
+  wahlweise auch in der angezeigten, optimierten Fassung. Der Dateiname
+  entspricht dem Namen in der Mediathek.
+
 ## [0.22.0] – 2026-10-13
 
 ### Hinzugefügt

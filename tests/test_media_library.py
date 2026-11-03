@@ -197,3 +197,28 @@ def test_library_video_gets_thumbnail_and_can_be_transcoded(tmp_path: Path, monk
         assert second_job["status"] == "completed", second_job
         assert second_job["media"]["source"] != converted_media["source"]
         assert not first_converted.exists()
+
+
+def test_library_media_can_be_downloaded(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        assert client.get("/api/media-library/1/download").status_code == 401
+        client.post("/api/system/login", json={"password": "open-signage"})
+        media = client.post(
+            "/api/media-library", files={"file": ("Gemeindefest.png", VALID_PNG, "image/png")}
+        ).json()
+        client.patch(f"/api/media-library/{media['id']}", json={"name": 'Fest "2026"/Plakat'})
+
+        original = client.get(f"/api/media-library/{media['id']}/download")
+        display = client.get(f"/api/media-library/{media['id']}/download?variant=display")
+        invalid = client.get(f"/api/media-library/{media['id']}/download?variant=thumbnail")
+        (tmp_path / "media" / Path(media["original_source"]).name).unlink()
+        missing = client.get(f"/api/media-library/{media['id']}/download")
+
+    assert original.status_code == 200
+    assert original.content == VALID_PNG
+    assert original.headers["content-disposition"] == "attachment; filename*=utf-8''Fest%20_2026_Plakat.png"
+    assert display.status_code == 200
+    assert display.headers["content-disposition"].endswith(Path(media["source"]).suffix)
+    assert invalid.status_code == 422
+    assert missing.status_code == 404

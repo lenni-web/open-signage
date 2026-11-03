@@ -57,6 +57,8 @@ function renderLibrary(items) {
         ${item.kind === "image" ? '<button class="secondary edit-library-image">Bearbeiten</button>' : ""}
         ${item.kind === "video" ? '<button class="secondary transcode-library-video">Optimal konvertieren</button><span class="transcode-status" hidden></span>' : ""}
         ${item.file_exists === false ? '<button class="secondary repair-library-file">Datei ersetzen</button>' : ""}
+        ${item.file_exists !== false ? `<a class="button secondary" href="/api/media-library/${item.id}/download" download>Herunterladen</a>` : ""}
+        ${item.file_exists !== false && item.original_source && item.original_source !== item.source ? `<a class="button secondary" href="/api/media-library/${item.id}/download?variant=display" download title="Die für die Anzeige optimierte bzw. bearbeitete Fassung">Angezeigte Fassung</a>` : ""}
         <button class="secondary save-library-meta">Speichern</button>
         <button class="danger delete-library">Löschen</button>
       </div>`;

@@ -30,6 +30,7 @@ Chromium-Kioskfenster an.
   automatisch erzeugten Full-HD- und Thumbnail-Dateien
 - Mediathek-Suche, Kategorien, Nutzungsfilter, Mehrfachauswahl, Video-
   Thumbnails, direkte Vorschau und optimale Konvertierung nach MP4/H.264/AAC
+  sowie Download von Original und angezeigter Fassung
 - Owncast-Livestreams direkt per HLS wiedergeben
 - Live-Übertragungen aus OBS mit geringer Verzögerung per WebRTC (WHIP/WHEP)
   wiedergeben, als Playlist-Inhalt oder per „Live jetzt übernehmen“

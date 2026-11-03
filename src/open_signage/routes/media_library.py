@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from ..auth import require_system_login
@@ -20,6 +22,8 @@ from .common import (active_playlist_id, get_content_or_404, get_library_media_o
                      serialize_library_media)
 
 router = APIRouter()
+
+MEDIA_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".webm", ".mov", ".m4v"}
 
 
 class LibraryPlaylistCreate(BaseModel):
@@ -113,6 +117,28 @@ def upload_library_media(
     if compatibility is not None:
         response["compatibility"] = compatibility
     return response
+
+
+def download_name(name: str, path: Path) -> str:
+    """Anzeigename als Dateiname mit der Endung der tatsächlich gelieferten Datei."""
+    stem = name[: -len(Path(name).suffix)] if Path(name).suffix.lower() in MEDIA_SUFFIXES else name
+    stem = re.sub(r'[\x00-\x1f"\\/:*?<>|]+', "_", stem).strip(" .") or "medium"
+    return stem + path.suffix.lower()
+
+
+@router.get("/api/media-library/{media_id}/download")
+def download_library_media(
+    media_id: int,
+    variant: str = Query(default="original", pattern="^(original|display)$"),
+    _: None = Depends(require_system_login),
+):
+    media = get_library_media_or_404(media_id)
+    source = media["source"] if variant == "display" else media["original_source"] or media["source"]
+    path = media_dir() / Path(source).name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Mediendatei fehlt im Medienspeicher")
+    return FileResponse(path, filename=download_name(media["name"], path),
+                        headers={"Cache-Control": "private, no-store"})
 
 
 @router.patch("/api/media-library/{media_id}")
