@@ -8,6 +8,12 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- `scripts/uninstall.sh` entfernt Open Signage vollständig für eine
+  Neuinstallation – mit Sicherheitsabfrage und optional ohne die Daten
+  (`--keep-data`).
+
 ## [0.23.1] – 2026-11-03
 
 ### Geändert

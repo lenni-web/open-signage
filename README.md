@@ -179,8 +179,8 @@ Synchronisationsstatus darauf hin; alle übrigen Inhalte werden weiter
 
 Die Systemseite kann den neuesten veröffentlichten Open-Signage-Release
 installieren. Das Installationsskript merkt sich dazu das ursprünglich geklonte
-Git-Repository und dessen Benutzer. Der Updater lädt neue Git-Tags über den
-dort eingerichteten SSH-Zugang, installiert den höchsten Versions-Tag zunächst
+Git-Repository und dessen Benutzer. Der Updater lädt neue Git-Tags aus diesem
+Klon (per HTTPS oder dem dort eingerichteten SSH-Zugang), installiert den höchsten Versions-Tag zunächst
 getrennt und prüft nach dem Neustart `/api/health`. Bei einem fehlgeschlagenen
 Healthcheck stellt er automatisch die vorherige Version wieder her.
 
@@ -193,6 +193,23 @@ Version bleibt unverändert.
 
 Nur getaggte Releases werden installiert. Änderungen auf `main`, die noch
 keinen Versionstag besitzen, werden nicht automatisch ausgerollt.
+
+### Open Signage entfernen
+
+Für eine saubere Neuinstallation entfernt `scripts/uninstall.sh` Dienste,
+Programmdateien, Live-Server, Hilfsskripte, Kiosk-Autostart sowie alle Daten
+unter `/var/lib/open-signage` – nach Eingabe von `ENTFERNEN` zur Bestätigung:
+
+```bash
+sudo ./scripts/uninstall.sh
+```
+
+Mit `--keep-data` bleiben Inhalte, Medien, Backups und Zugangsdaten erhalten
+und werden von einer späteren Installation übernommen; `--yes` überspringt die
+Abfrage. Systempakete, der Kioskbenutzer mit Autologin und die
+HDMI-Toneinstellung bleiben bestehen. Ohne `--keep-data` vorher unter
+**Einstellungen → Backup** ein Backup mit Medien herunterladen. Ein neu
+installiertes Display muss erneut mit dem Controller gekoppelt werden.
 
 ### Unterstützte Videoformate
 

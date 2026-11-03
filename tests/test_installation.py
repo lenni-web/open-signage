@@ -289,3 +289,77 @@ def test_server_profile_installs_controller_without_kiosk():
     system_action = (PROJECT_ROOT / "deploy/open-signage-system-action").read_text(encoding="utf-8")
     assert "[amd64]=" in system_action and "[arm64]=" in system_action
     assert "mediamtx_${MEDIAMTX_VERSION}_linux_${arch}.tar.gz" in system_action
+
+
+def _fake_system(tmp_path: Path) -> tuple[Path, Path, dict]:
+    root = tmp_path / "root"
+    calls = tmp_path / "calls.log"
+    files = [
+        "opt/open-signage/src/app.py", "var/lib/open-signage/open-signage.sqlite3",
+        "var/lib/open-signage/media/bild.jpg", "usr/local/lib/open-signage/mediamtx",
+        "usr/local/sbin/open-signage-system-action", "usr/local/bin/open-signage-kiosk",
+        "etc/systemd/system/open-signage.service", "etc/systemd/system/open-signage-update.path",
+        "etc/systemd/system/open-signage-mediamtx.service", "etc/systemd/system/andere.service",
+        "etc/open-signage.env", "etc/chromium/policies/managed/open-signage.json",
+        "home/signage/.config/labwc/rc.xml", "home/signage/.local/state/open-signage/kiosk.log",
+        "usr/local/bin/anderes-programm",
+    ]
+    for name in files:
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text("x", encoding="utf-8")
+    (root / "etc/default").mkdir(parents=True)
+    (root / "etc/default/open-signage-application-update").write_text(
+        "SOURCE_REPOSITORY=/home/admin/open-signage\nSOURCE_USER=admin\nPORT=8080\nKIOSK_USER=signage\nPROFILE=kiosk\n",
+        encoding="utf-8")
+    (root / "home/signage/.config/labwc/autostart").write_text(
+        "#!/bin/sh\neigenes-programm &\n/usr/local/bin/open-signage-cursor-guard &\n"
+        "/usr/local/bin/open-signage-kiosk >>/home/signage/.local/state/open-signage/kiosk.log 2>&1 &\n",
+        encoding="utf-8")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for command, status in (("systemctl", 0), ("userdel", 0), ("id", 0), ("getent", 2)):
+        stub = bin_dir / command
+        stub.write_text(f'#!/bin/sh\necho "{command} $*" >> "{calls}"\nexit {status}\n', encoding="utf-8")
+        stub.chmod(0o755)
+    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "OPEN_SIGNAGE_UNINSTALL_ROOT": str(root)}
+    return root, calls, env
+
+
+def test_uninstall_removes_everything_and_keeps_foreign_files(tmp_path: Path):
+    root, calls, env = _fake_system(tmp_path)
+    aborted = subprocess.run(["bash", str(PROJECT_ROOT / "scripts/uninstall.sh")], env=env,
+                             stdin=subprocess.DEVNULL, capture_output=True, text=True)
+    assert aborted.returncode != 0 and (root / "opt/open-signage").exists()
+
+    result = subprocess.run(["bash", str(PROJECT_ROOT / "scripts/uninstall.sh"), "--yes"], env=env,
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    remaining = sorted(str(path.relative_to(root)) for path in root.rglob("*") if path.is_file())
+    assert remaining == ["etc/systemd/system/andere.service", "home/signage/.config/labwc/autostart",
+                         "usr/local/bin/anderes-programm"]
+    assert (root / "home/signage/.config/labwc/autostart").read_text(encoding="utf-8") == \
+        "#!/bin/sh\neigenes-programm &\n"
+    log = calls.read_text(encoding="utf-8")
+    assert "systemctl disable --now open-signage.service" in log
+    assert "systemctl disable --now open-signage-mediamtx.service" in log
+    assert "userdel open-signage" in log
+    assert "/home/admin/open-signage" in result.stdout
+
+
+def test_uninstall_can_keep_data(tmp_path: Path):
+    root, calls, env = _fake_system(tmp_path)
+    result = subprocess.run(["bash", str(PROJECT_ROOT / "scripts/uninstall.sh"), "--yes", "--keep-data"],
+                            env=env, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert (root / "var/lib/open-signage/media/bild.jpg").exists()
+    assert (root / "etc/open-signage.env").exists()
+    assert not (root / "opt/open-signage").exists()
+    assert "userdel" not in calls.read_text(encoding="utf-8")
+
+
+def test_uninstall_knows_every_installed_unit():
+    uninstall = (PROJECT_ROOT / "scripts/uninstall.sh").read_text(encoding="utf-8")
+    units = uninstall[uninstall.index("readonly UNITS=("):uninstall.index(")\n", uninstall.index("readonly UNITS=("))]
+    installed = {path.name for path in (PROJECT_ROOT / "deploy").iterdir()
+                 if path.suffix in {".service", ".path", ".timer"}} | {"open-signage-mediamtx.service"}
+    assert installed <= set(units.split())
