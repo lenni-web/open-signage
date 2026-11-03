@@ -337,12 +337,15 @@ mit eigener Kopie aller Inhalte und spielen bei einem Ausfall des Servers oder
 des Netzwerks ihren letzten Stand weiter.
 
 Voraussetzung ist ein minimal installiertes **Debian 13** (amd64 oder arm64,
-ohne Desktop) mit SSH-Zugang. Das Repository wird wie auf den Pis per SSH
-geklont, denn der Anwendungsupdater lädt neue Versionen über diesen Zugang:
+ohne Desktop) mit SSH-Zugang und `sudo`. Wurde bei der Debian-Installation ein
+Root-Passwort gesetzt, fehlt `sudo`; dann als root `apt-get install sudo` und
+`usermod -aG sudo <benutzer>` ausführen und neu anmelden. Das Repository ist
+öffentlich und wird per HTTPS geklont; der Anwendungsupdater lädt neue
+Versionen später aus diesem Klon, der deshalb erhalten bleiben muss:
 
 ```bash
 sudo apt-get install -y git
-git clone git@github.com:lenni-web/open-signage.git
+git clone https://github.com/lenni-web/open-signage.git
 cd open-signage
 sudo ./scripts/install.sh --profile server
 ```

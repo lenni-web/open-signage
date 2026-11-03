@@ -15,6 +15,11 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
   wahlweise auch in der angezeigten, optimierten Fassung. Der Dateiname
   entspricht dem Namen in der Mediathek.
 
+### Geändert
+
+- Die Installationsanleitung klont das nun öffentliche Repository per HTTPS
+  und erklärt, wie `sudo` auf Debian nachinstalliert wird.
+
 ## [0.22.0] – 2026-10-13
 
 ### Hinzugefügt
