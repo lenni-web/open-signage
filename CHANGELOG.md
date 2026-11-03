@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.23.1] – 2026-11-03
+
 ### Geändert
 
 - Direkt im Freitext-Formular hochgeladene Hintergrundbilder und -videos
