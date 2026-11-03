@@ -16,7 +16,8 @@ Chromium-Kioskfenster an.
   wiederverwendbaren Designvorlagen
 - Mediathek für dauerhaft gespeicherte Fotos und Videos, die mehrfach in die
   Playlist oder als Freitext-Hintergrund übernommen werden können; direkte
-  Bild- und Video-Uploads landen automatisch in der Mediathek
+  Bild- und Video-Uploads sowie Freitext-Hintergründe landen automatisch in
+  der Mediathek
 - Responsive Verwaltungsoberfläche für Desktop, Tablet und Smartphone
 - Ausfallsicherer Player mit lokalem Playlist-Cache und Wiederaufnahme
 - Speicherbereinigung, zeitgesteuerte Playlists und sichere Systemaktionen

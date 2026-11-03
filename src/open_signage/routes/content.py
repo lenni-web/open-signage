@@ -17,6 +17,7 @@ from ..image_processing import optimize_image
 from ..media_probe import validate_video
 from ..upload_security import save_upload
 from ..video_processing import video_metadata, video_thumbnail
+from .media_library import store_library_media
 from .common import (active_playlist_id, content_rows, get_content_or_404, get_library_media_or_404,
                      serialize)
 
@@ -158,15 +159,8 @@ def upload_content(
     return response
 
 
-def save_text_background(file: UploadFile, allow_video: bool = False) -> str:
-    allowed = {"image", "video"} if allow_video else {"image"}
-    try:
-        destination, kind, _ = save_upload(file, media_dir(), allowed)
-        if kind == "video":
-            validate_video(destination)
-    except ValueError as error:
-        destination.unlink(missing_ok=True)
-        raise HTTPException(status_code=415, detail="Video konnte nicht vollständig geprüft werden.") from error
+def save_text_logo(file: UploadFile) -> str:
+    destination, _kind, _size = save_upload(file, media_dir(), {"image"})
     return f"/media/{destination.name}"
 
 
@@ -257,7 +251,7 @@ def create_text_content(
         vertical_position, text_color, accent_color, font_size, font_family,
         background_dim, focus_x, focus_y, template_style, None,
     )
-    logo_source = save_text_background(logo) if logo and logo.filename else None
+    logo_source = save_text_logo(logo) if logo and logo.filename else None
     if logo_source:
         config_data = json.loads(config)
         config_data["logo_source"] = logo_source
@@ -266,10 +260,10 @@ def create_text_content(
     if library_media and library_media["kind"] not in {"image", "video"}:
         raise HTTPException(status_code=422, detail="Als Freitext-Hintergrund ist nur ein Bild oder Video möglich")
     if background and background.filename:
-        source = save_text_background(background, True)
-        background_kind = "video" if Path(source).suffix in {".mp4", ".webm"} else "image"
-        library_media_id = None
-    elif library_media:
+        # Direkt hochgeladene Hintergründe landen wie andere Uploads in der Mediathek.
+        library_media_id, _compatibility = store_library_media(background)
+        library_media = get_library_media_or_404(library_media_id)
+    if library_media:
         source = library_media["source"]
         background_kind = library_media["kind"]
     else:
@@ -338,7 +332,7 @@ def edit_text_content(
         vertical_position, text_color, accent_color, font_size, font_family,
         background_dim, focus_x, focus_y, template_style, logo_source,
     )
-    new_logo = save_text_background(logo) if logo and logo.filename else None
+    new_logo = save_text_logo(logo) if logo and logo.filename else None
     if new_logo:
         logo_source = new_logo
         config_data = json.loads(config)
@@ -348,15 +342,10 @@ def edit_text_content(
     selected_media = get_library_media_or_404(library_media_id) if library_media_id else None
     if selected_media and selected_media["kind"] not in {"image", "video"}:
         raise HTTPException(status_code=422, detail="Als Freitext-Hintergrund ist nur ein Bild oder Video möglich")
-    new_source = save_text_background(background, True) if background and background.filename else None
-    uploaded_kind = (
-        "video" if new_source and Path(new_source).suffix in {".mp4", ".webm"} else "image"
-    ) if new_source else None
-    if new_source:
-        source = new_source
-        background_kind = uploaded_kind
-        library_media_id = None
-    elif selected_media:
+    if background and background.filename:
+        library_media_id, _compatibility = store_library_media(background)
+        selected_media = get_library_media_or_404(library_media_id)
+    if selected_media:
         source = selected_media["source"]
         background_kind = selected_media["kind"]
     else:
@@ -376,8 +365,6 @@ def edit_text_content(
                 (name.strip(), source, duration_seconds, config, library_media_id, content_id),
             )
     except Exception:
-        if new_source:
-            (media_dir() / Path(new_source).name).unlink(missing_ok=True)
         if new_logo:
             (media_dir() / Path(new_logo).name).unlink(missing_ok=True)
         raise

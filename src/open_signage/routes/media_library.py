@@ -64,11 +64,8 @@ def list_media_library(_: None = Depends(require_system_login)):
     return [serialize_library_media(row) for row in rows]
 
 
-@router.post("/api/media-library", status_code=201)
-def upload_library_media(
-    file: Annotated[UploadFile, File()],
-    _: None = Depends(require_system_login),
-):
+def store_library_media(file: UploadFile) -> tuple[int, dict | None]:
+    """Save an uploaded image or video in the media library; returns its id and video compatibility."""
     try:
         destination, kind, size = save_upload(file, media_dir(), {"image", "video"})
     except HTTPException as error:
@@ -113,6 +110,15 @@ def upload_library_media(
             ),
         )
         media_id = cursor.lastrowid
+    return media_id, compatibility
+
+
+@router.post("/api/media-library", status_code=201)
+def upload_library_media(
+    file: Annotated[UploadFile, File()],
+    _: None = Depends(require_system_login),
+):
+    media_id, compatibility = store_library_media(file)
     response = serialize_library_media(get_library_media_or_404(media_id))
     if compatibility is not None:
         response["compatibility"] = compatibility

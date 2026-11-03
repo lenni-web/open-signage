@@ -379,9 +379,10 @@ textForm.addEventListener("submit", async (event) => {
       method: "POST",
       body: form,
     });
+    const uploadedBackground = form.has("background");
     resetTextForm();
     showAddContent("");
-    await load();
+    await Promise.all([load(), uploadedBackground ? loadLibrary() : null]);
     notify(id ? "Freitext aktualisiert" : "Freitext zur Playlist hinzugefügt");
   } catch (error) { notify(error.message, true); }
   finally { button.disabled = false; }

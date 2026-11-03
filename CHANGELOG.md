@@ -8,6 +8,14 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Geändert
+
+- Direkt im Freitext-Formular hochgeladene Hintergrundbilder und -videos
+  werden wie andere Uploads in die Mediathek übernommen. Sie sind dort
+  wiederverwendbar, werden für die Anzeige optimiert und sind beim Bearbeiten
+  des Freitexts als ausgewähltes Medium sichtbar. Beim Löschen des Freitexts
+  bleibt der Hintergrund in der Mediathek erhalten.
+
 ## [0.23.0] – 2026-11-03
 
 ### Hinzugefügt

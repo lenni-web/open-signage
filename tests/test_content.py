@@ -280,8 +280,11 @@ def test_text_content_can_be_previewed_by_player_edited_and_deleted(tmp_path: Pa
         assert edited.json()["source"] == item["source"]
         assert edited.json()["text_config"]["logo_source"] == item["text_config"]["logo_source"]
 
+        library = client.get("/api/media-library").json()
+        assert [(media["id"], media["name"]) for media in library] == [(item["media_id"], "foyer.png")]
         assert client.delete(f"/api/content/{item['id']}").status_code == 204
-        assert not old_background.exists()
+        # Der Hintergrund gehört zur Mediathek und bleibt erhalten; das Logo nicht.
+        assert old_background.exists()
         assert not logo.exists()
 
 
@@ -319,9 +322,11 @@ def test_text_content_requires_background_and_some_text(tmp_path: Path, monkeypa
 def test_text_content_supports_video_background(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
     monkeypatch.setattr(
-        "open_signage.routes.content.validate_video",
+        "open_signage.routes.media_library.validate_video",
         lambda _path: {"checked": True, "video_codecs": ["h264"]},
     )
+    monkeypatch.setattr("open_signage.routes.media_library.video_metadata", lambda _path: {"duration_seconds": 5})
+    monkeypatch.setattr("open_signage.routes.media_library.video_thumbnail", lambda _path, _directory: None)
     with TestClient(app) as client:
         client.post("/api/system/login", json={"password": "open-signage"})
         created = client.post(

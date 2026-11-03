@@ -158,12 +158,14 @@ def test_playlist_export_and_import_with_media(tmp_path: Path, monkeypatch):
     assert imported_playlist["active"] is False
     assert imported_playlist["schedule_weekdays"] == [6]
     assert imported_playlist["schedule_daily_start"] == "10:00"
-    assert [item["name"] for item in library] == ["Plakat.png"]
+    assert sorted(item["name"] for item in library) == ["Plakat.png", "foyer.png"]
     assert [item["name"] for item in contents] == ["Plakat.png", "Begrüßung", "Termine"]
-    assert contents[0]["media_id"] == library[0]["id"] and contents[0]["duration_seconds"] == 15
+    plakat = next(item for item in library if item["name"] == "Plakat.png")
+    assert contents[0]["media_id"] == plakat["id"] and contents[0]["duration_seconds"] == 15
     text = contents[1]
     assert text["text_config"]["headline"] == "Willkommen"
-    for source in (text["source"], text["text_config"]["logo_source"], library[0]["original_source"]):
+    assert text["media_id"] == next(item["id"] for item in library if item["name"] == "foyer.png")
+    for source in (text["source"], text["text_config"]["logo_source"], plakat["original_source"]):
         assert (target / "media" / Path(source).name).is_file()
 
 
