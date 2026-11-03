@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.22.1] – 2026-11-03
+
 ### Hinzugefügt
 
 - Medien lassen sich in der Mediathek herunterladen – standardmäßig als
