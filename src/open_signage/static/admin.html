@@ -56,6 +56,13 @@
     <details>
       <summary>Playlists verwalten</summary>
       <div id="playlist-list" class="playlist-list"></div>
+      <form id="playlist-import-form" class="playlist-import">
+        <label>Playlist importieren
+          <input name="file" type="file" accept=".zip,application/zip" required>
+        </label>
+        <button class="secondary">Importieren</button>
+        <small>Importiert einen Playlist-Export mit Inhalten, Zeitplänen und Medien als neue, nicht aktive Playlist.</small>
+      </form>
     </details>
   </section>
   <section id="live-card" class="card live-card">

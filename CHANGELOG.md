@@ -8,6 +8,13 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- Playlists lassen sich als ZIP-Datei exportieren und auf einem anderen System
+  importieren – mit allen Inhalten, Einstellungen, Zeitplänen, Mediathek-
+  Einträgen und Mediendateien. Importierte Playlists sind zunächst nicht aktiv;
+  identische Medien werden wiederverwendet.
+
 ## [0.22.1] – 2026-11-03
 
 ### Hinzugefügt

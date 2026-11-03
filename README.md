@@ -37,6 +37,8 @@ Chromium-Kioskfenster an.
 - Inhalte aktivieren, sortieren und mit einer Anzeigedauer versehen
 - Inhalte nach Datum, Uhrzeit und Wochentagen zeitgesteuert anzeigen
 - Mehrere getrennte Playlists anlegen und die aktive Wiedergabe umschalten
+- Einzelne Playlists samt Medien exportieren und auf einem anderen System
+  importieren
 - Vollbild-Player mit automatischem Wechsel
 - Livestream-Autoplay, Offline-Anzeige und automatische Wiederverbindung
 - lokale SQLite-Datenbank
@@ -90,6 +92,20 @@ automatisch durchgeführt.
 
 Die Systeminformationen, Einstellungen und das Auslösen von Systemupdates sind
 nur mit einer gültigen Anmeldung erreichbar.
+
+### Playlists exportieren und importieren
+
+Unter **Inhalte → Playlists verwalten** lässt sich jede Playlist mit
+„Exportieren“ als ZIP-Datei herunterladen. Sie enthält alle Inhalte mit
+Anzeigedauer, Ton, Zeitplänen und Freitext-Gestaltung, den Zeitplan der
+Playlist, die verwendeten Mediathek-Einträge und alle zugehörigen Mediendateien.
+
+Auf einem anderen System wird die Datei unter „Playlist importieren“
+eingespielt. Sie erscheint dort als neue, nicht aktive Playlist; bei gleichem
+Namen wird „(Import)“ angehängt. Bereits vorhandene identische Mediendateien
+werden wiederverwendet statt doppelt gespeichert. Ist im Export ein Zeitplan
+aktiv, gilt er sofort auch auf dem neuen System. Inhaltstypen, die das
+Zielsystem noch nicht kennt, werden übersprungen und gemeldet.
 
 ### Backup und Wiederherstellung
 

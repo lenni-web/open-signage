@@ -4,14 +4,20 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+from starlette.background import BackgroundTask
 
 from ..auth import require_system_login
-from ..database import connect, media_dir
+from ..database import connect, data_dir, media_dir
+from ..playlist_transfer import MAX_ARCHIVE_BYTES, TransferError, export_playlist, import_playlist
+from .media_library import download_name
 from .common import serialize_playlist
 
 router = APIRouter()
@@ -104,3 +110,36 @@ def delete_playlist(playlist_id: int, _: None = Depends(require_system_login)):
     for media in media_rows:
         if media["media_id"] is None and media["kind"] in {"image", "video", "pdf", "text"}:
             (media_dir() / Path(media["source"]).name).unlink(missing_ok=True)
+
+
+@router.get("/api/playlists/{playlist_id}/export")
+def export_playlist_archive(playlist_id: int, _: None = Depends(require_system_login)):
+    try:
+        path, name = export_playlist(playlist_id)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail="Playlist nicht gefunden") from error
+    return FileResponse(
+        path, media_type="application/zip",
+        filename=download_name(f"Playlist {name}", Path("export.zip")),
+        headers={"Cache-Control": "private, no-store"},
+        background=BackgroundTask(path.unlink, missing_ok=True),
+    )
+
+
+@router.post("/api/playlists/import", status_code=201)
+def import_playlist_archive(file: Annotated[UploadFile, File()], _: None = Depends(require_system_login)):
+    temporary = data_dir() / f".playlist-import-{uuid.uuid4().hex}.zip"
+    try:
+        size = 0
+        with temporary.open("wb") as output:
+            while chunk := file.file.read(1024 * 1024):
+                size += len(chunk)
+                if size > MAX_ARCHIVE_BYTES:
+                    raise HTTPException(status_code=413, detail="Der Export ist zu groß.")
+                output.write(chunk)
+        return import_playlist(temporary)
+    except TransferError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    finally:
+        file.file.close()
+        temporary.unlink(missing_ok=True)

@@ -287,6 +287,8 @@ button:disabled { cursor: default; opacity: .35; }
 .live-guide ol ul { margin: 6px 0 2px; }
 .live-guide p { margin: 10px 0 4px; }
 .playlist-list { display: grid; gap: 8px; margin-top: 12px; }
+.playlist-import { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 12px; margin-top: 14px; }
+.playlist-import small { flex-basis: 100%; }
 .playlist-list article { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px; border: 1px solid var(--line); border-radius: 9px; }
 .playlist-actions, .system-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .system-overview, .update-card { grid-column: 1 / -1; }

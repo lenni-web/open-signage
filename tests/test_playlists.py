@@ -1,5 +1,8 @@
 """Playlists und Zeitpläne für Inhalte und Playlists."""
 
+import io
+import json
+import zipfile
 from datetime import datetime
 from pathlib import Path
 
@@ -7,6 +10,8 @@ from fastapi.testclient import TestClient
 
 from open_signage.main import app
 from open_signage.routes.common import scheduled_now
+
+from helpers import VALID_PNG
 
 
 def test_content_schedule_controls_player_playlist(tmp_path: Path, monkeypatch):
@@ -90,3 +95,111 @@ def test_playlist_schedule_can_override_manual_playlist(tmp_path: Path, monkeypa
         assert response.status_code == 200
         shown = client.get("/api/player/content").json()
     assert [item["id"] for item in shown] == [special["id"]]
+
+
+def _create_exportable_playlist(client) -> int:
+    playlist = client.post("/api/playlists", json={"name": "Gottesdienst"}).json()
+    client.post(f"/api/playlists/{playlist['id']}/activate")
+    client.patch(f"/api/playlists/{playlist['id']}/schedule", json={
+        "schedule_enabled": True, "schedule_weekdays": [6],
+        "schedule_daily_start": "10:00", "schedule_daily_end": "12:00",
+    })
+    media = client.post("/api/media-library", files={"file": ("Plakat.png", VALID_PNG, "image/png")}).json()
+    client.post(f"/api/media-library/{media['id']}/playlist", json={"duration_seconds": 15})
+    text = client.post(
+        "/api/content/text",
+        data={"name": "Begrüßung", "headline": "Willkommen", "duration_seconds": "12"},
+        files={"background": ("foyer.png", VALID_PNG, "image/png"), "logo": ("logo.png", VALID_PNG, "image/png")},
+    )
+    assert text.status_code == 201
+    client.post("/api/content/website", json={"name": "Termine", "url": "https://example.org"})
+    return playlist["id"]
+
+
+def test_playlist_export_and_import_with_media(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path / "quelle"))
+    with TestClient(app) as client:
+        assert client.get("/api/playlists/1/export").status_code == 401
+        client.post("/api/system/login", json={"password": "open-signage"})
+        playlist_id = _create_exportable_playlist(client)
+        exported = client.get(f"/api/playlists/{playlist_id}/export")
+        assert client.get("/api/playlists/999/export").status_code == 404
+    assert exported.status_code == 200
+    assert exported.headers["content-disposition"] == "attachment; filename*=utf-8''Playlist%20Gottesdienst.zip"
+    with zipfile.ZipFile(io.BytesIO(exported.content)) as archive:
+        manifest = json.loads(archive.read("manifest.json"))
+        assert sorted(name for name in archive.namelist() if name.startswith("media/")) == \
+            sorted(f"media/{name}" for name in manifest["files"])
+    assert len(manifest["content"]) == 3
+    assert not list((tmp_path / "quelle").glob(".playlist-export-*"))
+
+    target = tmp_path / "ziel"
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(target))
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        imported = client.post("/api/playlists/import",
+                               files={"file": ("export.zip", exported.content, "application/zip")})
+        again = client.post("/api/playlists/import",
+                            files={"file": ("export.zip", exported.content, "application/zip")})
+        playlists = {item["name"]: item for item in client.get("/api/playlists").json()}
+        library = client.get("/api/media-library").json()
+        client.post(f"/api/playlists/{imported.json()['id']}/activate")
+        contents = client.get("/api/content").json()
+
+    assert imported.status_code == 201, imported.text
+    result = imported.json()
+    assert result["name"] == "Gottesdienst"
+    assert result["content_count"] == 3 and result["skipped"] == 0
+    assert result["schedule_enabled"] is True
+    assert result["new_media_files"] == len(manifest["files"])
+    assert again.json()["name"] == "Gottesdienst (Import)"
+    assert again.json()["new_media_files"] == 0
+    imported_playlist = playlists["Gottesdienst"]
+    assert imported_playlist["active"] is False
+    assert imported_playlist["schedule_weekdays"] == [6]
+    assert imported_playlist["schedule_daily_start"] == "10:00"
+    assert [item["name"] for item in library] == ["Plakat.png"]
+    assert [item["name"] for item in contents] == ["Plakat.png", "Begrüßung", "Termine"]
+    assert contents[0]["media_id"] == library[0]["id"] and contents[0]["duration_seconds"] == 15
+    text = contents[1]
+    assert text["text_config"]["headline"] == "Willkommen"
+    for source in (text["source"], text["text_config"]["logo_source"], library[0]["original_source"]):
+        assert (target / "media" / Path(source).name).is_file()
+
+
+def test_playlist_import_rejects_invalid_archives(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+
+    def archive(manifest: dict, files: dict[str, bytes]) -> bytes:
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as output:
+            output.writestr("manifest.json", json.dumps(manifest))
+            for name, data in files.items():
+                output.writestr(name, data)
+        return buffer.getvalue()
+
+    base = {"format": "open-signage-playlist", "format_version": 1, "playlist": {"name": "X"},
+            "media_library": [], "content": []}
+    cases = [
+        b"kein zip",
+        archive({"format": "etwas anderes"}, {}),
+        archive({**base, "files": ["../evil.png"]}, {"media/../evil.png": VALID_PNG}),
+        archive({**base, "files": ["seite.html"]}, {"media/seite.html": b"<html>"}),
+        archive({**base, "files": ["fake.png"]}, {"media/fake.png": b"<html>"}),
+        archive({**base, "files": ["fehlt.png"]}, {}),
+        archive({**base, "files": [], "content": [{"name": "Bild", "kind": "image", "source": "/media/x.png"}]}, {}),
+        archive({**base, "files": ["ok.png"], "content": [{"name": "Bild", "kind": "image", "source": "/media/ok.png",
+                                                            "duration_seconds": 0}]}, {"media/ok.png": VALID_PNG}),
+    ]
+    with TestClient(app) as client:
+        client.post("/api/system/login", json={"password": "open-signage"})
+        responses = [client.post("/api/playlists/import", files={"file": ("x.zip", data, "application/zip")})
+                     for data in cases]
+        playlists = client.get("/api/playlists").json()
+        future = client.post("/api/playlists/import", files={"file": ("x.zip", archive(
+            {**base, "files": [], "content": [{"name": "Neu", "kind": "kalender", "source": "x"}]}, {}), "application/zip")})
+
+    assert [response.status_code for response in responses] == [422] * len(cases)
+    assert [item["name"] for item in playlists] == ["Standard"]
+    assert not (tmp_path / "media" / "ok.png").exists()
+    assert future.status_code == 201 and future.json()["skipped"] == 1

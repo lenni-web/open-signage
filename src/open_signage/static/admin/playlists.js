@@ -18,6 +18,12 @@ function renderPlaylists() {
     schedule.className = "secondary";
     schedule.textContent = playlist.schedule_enabled ? "Zeitplan ✓" : "Zeitplan";
     schedule.addEventListener("click", () => openPlaylistSchedule(playlist));
+    const exportLink = document.createElement("a");
+    exportLink.className = "button secondary";
+    exportLink.href = `/api/playlists/${playlist.id}/export`;
+    exportLink.download = "";
+    exportLink.textContent = "Exportieren";
+    exportLink.title = "Playlist mit Inhalten, Zeitplänen und Medien als ZIP-Datei herunterladen";
     const button = document.createElement("button");
     button.className = "danger";
     button.textContent = "Löschen";
@@ -32,7 +38,7 @@ function renderPlaylists() {
     });
     const actions = document.createElement("div");
     actions.className = "playlist-actions";
-    actions.append(schedule, button);
+    actions.append(schedule, exportLink, button);
     row.append(label, actions);
     list.append(row);
   });
@@ -79,6 +85,26 @@ document.querySelector("#playlist-create").addEventListener("click", async () =>
     await Promise.all([loadPlaylists(), load()]);
     notify("Playlist erstellt und aktiviert");
   } catch (error) { notify(error.message, true); }
+});
+
+document.querySelector("#playlist-import-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = event.target.querySelector("button");
+  button.disabled = true;
+  try {
+    const progress = uploadProgress(event.target);
+    const result = await uploadWithProgress("/api/playlists/import", new FormData(event.target), progress.update);
+    progress.finish();
+    event.target.reset();
+    await Promise.all([loadPlaylists(), loadLibrary()]);
+    const notes = [];
+    if (result.skipped) notes.push(`${result.skipped} Inhalt(e) übersprungen, weil diese Version sie nicht kennt`);
+    if (result.missing_files.length) notes.push(`${result.missing_files.length} Mediendatei(en) fehlten schon im Export`);
+    if (result.schedule_enabled) notes.push("der Zeitplan der Playlist ist aktiv");
+    notify(`Playlist „${result.name}“ mit ${result.content_count} Inhalten importiert${notes.length ? ` – ${notes.join(", ")}` : ""}.`,
+      Boolean(result.skipped || result.missing_files.length), 10000);
+  } catch (error) { notify(error.message, true, 8000); }
+  finally { button.disabled = false; }
 });
 
 document.querySelector("#playlist-schedule-cancel").addEventListener("click", () => document.querySelector("#playlist-schedule-dialog").close());
