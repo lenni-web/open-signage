@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.23.0] – 2026-11-03
+
 ### Hinzugefügt
 
 - Playlists lassen sich als ZIP-Datei exportieren und auf einem anderen System
