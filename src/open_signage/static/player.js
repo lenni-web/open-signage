@@ -23,6 +23,10 @@ let reloadPending = false;
 let transitionMs = 4000;
 const WEBSITE_SETTLE_MS = 4000;
 const PDF_SETTLE_MS = 1200;
+const DECODE_TIMEOUT_MS = 5000;
+const READY_TIMEOUT_MS = 15000;
+const WATCHDOG_GRACE_MS = 30000;
+let lastAdvanceAt = Date.now();
 
 function sendHeartbeat(state = playerState, error = playerError) {
   playerState = state;
@@ -67,6 +71,19 @@ function waitForEvent(element, eventName, timeoutMs = 6000) {
       window.clearTimeout(timeout);
       resolve();
     }, { once: true });
+  });
+}
+
+// Der Browser meldet manche Ereignisse nie – etwa image.decode(), solange er keine
+// Bilder zeichnet (z. B. nach dem Aus- und Einschalten des Bildschirms). Ohne Zeitlimit
+// bliebe der Player dann dauerhaft auf der aktuellen Folie stehen.
+function withTimeout(promise, timeoutMs) {
+  return new Promise(resolve => {
+    const timeout = window.setTimeout(() => resolve("timeout"), timeoutMs);
+    Promise.resolve(promise).catch(() => {}).then(() => {
+      window.clearTimeout(timeout);
+      resolve("ready");
+    });
   });
 }
 
@@ -116,7 +133,8 @@ function transitionTo(elements, ready, options = {}) {
     element.classList.add("player-preparing");
     stage.append(element);
   });
-  Promise.resolve(ready).catch(() => {}).then(() => {
+  withTimeout(ready, READY_TIMEOUT_MS).then((result) => {
+    if (result === "timeout") sendHeartbeat("error", "Inhalt wurde nicht rechtzeitig bereit und wird ohne Vorbereitung gezeigt.");
     if (generation !== transitionGeneration) {
       nextElements.forEach(element => element.remove());
       previousElements.forEach(element => element.classList.remove("player-transition-source"));
@@ -149,7 +167,7 @@ function preloadImage(source, highPriority = false) {
     const image = new Image();
     image.decoding = "async";
     image.fetchPriority = highPriority ? "high" : "low";
-    image.onload = () => image.decode?.().catch(() => {}).finally(resolve);
+    image.onload = () => withTimeout(image.decode?.(), DECODE_TIMEOUT_MS).then(resolve);
     image.onerror = resolve;
     image.src = source;
   });
@@ -185,6 +203,7 @@ function showPlaceholder() {
 }
 
 function advance() {
+  lastAdvanceAt = Date.now();
   if (liveTakeoverActive) return;
   if (!items.length) return showPlaceholder();
   currentIndex = (currentIndex + 1) % items.length;
@@ -210,7 +229,7 @@ function show(item) {
       sendHeartbeat("error", "Bild konnte nicht geladen werden.");
       advance();
     }, { once: true });
-    ready = preloadImage(item.source, true).then(() => element.decode?.().catch(() => {}));
+    ready = preloadImage(item.source, true).then(() => withTimeout(element.decode?.(), DECODE_TIMEOUT_MS));
   } else if (item.kind === "video") {
     element = document.createElement("video");
     element.src = item.source;
@@ -459,6 +478,21 @@ function showLive(item) {
   } });
 }
 
+// Letzte Absicherung: Steht eine Folie viel länger als ihre Anzeigedauer, geht es weiter.
+// Videos mit „Bis Ende“ und Live-Übertragungen dürfen länger laufen.
+function checkStalledPlayback() {
+  if (liveTakeoverActive || !items.length || !currentItem) return;
+  if (currentItem.kind === "live" || (currentItem.kind === "video" && currentItem.play_to_end)) {
+    const video = stage.querySelector("video");
+    if (video && !video.paused && !video.ended) return;
+  }
+  const expectedMs = (currentItem.duration_seconds || 10) * 1000 + transitionMs + READY_TIMEOUT_MS;
+  if (Date.now() - lastAdvanceAt > expectedMs + WATCHDOG_GRACE_MS) {
+    sendHeartbeat("error", `Wiedergabe hing bei „${currentItem.name}“ und wurde fortgesetzt.`);
+    advance();
+  }
+}
+
 function applyLiveState(nextState) {
   liveState = nextState;
   if (liveState.takeover && !liveTakeoverActive) {
@@ -554,6 +588,7 @@ async function startPlayer() {
   window.setInterval(refreshPlaylist, 5000);
   window.setInterval(refreshPlayerConfig, 2000);
   window.setInterval(() => sendHeartbeat(), 10000);
+  window.setInterval(checkStalledPlayback, 5000);
 }
 document.querySelector("#player-pair-form").addEventListener("submit", async event => {
   event.preventDefault();

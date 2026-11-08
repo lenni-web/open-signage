@@ -120,3 +120,15 @@ def test_player_reloads_once_when_server_version_changes():
     assert "liveTakeoverActive" in reload_function and "sessionStorage" in reload_function
     assert "window.location.reload()" in reload_function
     assert "reloadForNewVersion(config.version)" in player
+
+
+def test_player_never_waits_forever_for_the_next_slide():
+    player = (PROJECT_ROOT / "src/open_signage/static/player.js").read_text(encoding="utf-8")
+    # image.decode() und andere Vorbereitungen sind zeitlich begrenzt …
+    assert "withTimeout(ready, READY_TIMEOUT_MS)" in player
+    assert "withTimeout(image.decode?.(), DECODE_TIMEOUT_MS)" in player
+    assert "withTimeout(element.decode?.(), DECODE_TIMEOUT_MS)" in player
+    assert ".decode?.().catch(" not in player
+    # … und ein Wächter schaltet weiter, falls eine Folie dennoch hängen bleibt.
+    assert "window.setInterval(checkStalledPlayback, 5000)" in player
+    assert "lastAdvanceAt = Date.now();\n  if (liveTakeoverActive) return;" in player

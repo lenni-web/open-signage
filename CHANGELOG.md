@@ -8,6 +8,15 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Behoben
+
+- Der Player konnte dauerhaft auf einer Folie stehen bleiben, wenn der Browser
+  das Dekodieren des nächsten Bildes nie meldete – etwa nachdem er eine Zeit
+  lang nichts gezeichnet hatte. Vorbereitung und Bilddekodierung sind jetzt
+  zeitlich begrenzt, und ein Wächter schaltet weiter, falls eine Folie deutlich
+  länger als geplant steht. Das gilt auch für Videos mit „Bis Ende“, die nicht
+  starten. Solche Fälle erscheinen als Hinweis im Player-Monitoring.
+
 ## [0.24.0] – 2026-11-03
 
 ### Hinzugefügt
