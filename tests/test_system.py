@@ -195,3 +195,16 @@ def test_model_uses_dmi_names_on_pcs(monkeypatch):
     assert system_info._model() == system_info.platform.machine()
     values["/proc/device-tree/model"] = "Raspberry Pi 4 Model B Rev 1.5"
     assert system_info._model() == "Raspberry Pi 4 Model B Rev 1.5"
+
+
+def test_local_ipv4_addresses_lists_connected_lan_and_wlan(monkeypatch):
+    interfaces = [
+        {"ifname": "lo", "operstate": "UNKNOWN", "addr_info": [{"family": "inet", "local": "127.0.0.1"}]},
+        {"ifname": "eth0", "operstate": "UP", "addr_info": [
+            {"family": "inet", "local": "192.168.1.20"}, {"family": "inet6", "local": "fe80::1"}]},
+        {"ifname": "wlan0", "operstate": "DOWN", "addr_info": [{"family": "inet", "local": "10.0.0.5"}]},
+        {"ifname": "docker0", "operstate": "UP", "addr_info": [{"family": "inet", "local": "172.17.0.1"}]},
+    ]
+    monkeypatch.setattr(system_info, "_run_json", lambda command: interfaces if "address" in command else [])
+    monkeypatch.setattr(system_info, "_wireless_ssid", lambda name: None)
+    assert system_info.local_ipv4_addresses() == ["192.168.1.20"]

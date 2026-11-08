@@ -20,7 +20,7 @@ from ..device_status import local_device_status, player_status
 from ..display_control import (display_config, display_status, request_display_action,
                                save_display_config, schedule_analysis)
 from ..sync import pairing_token, queue_device_command, safe_sync_from_controller
-from ..system_info import collect_system_info
+from ..system_info import collect_system_info, local_ipv4_addresses
 from ..system_update import request_update, update_status
 from ..version import __version__
 
@@ -117,8 +117,8 @@ def display_overview(_: None = Depends(require_system_login)):
             "online": age is not None and age < DISPLAY_ONLINE_SECONDS,
             "pending_command": row["pending_command"], "pending_command_at": row["pending_command_at"],
         })
-    return {"enabled": True, "controller": local_device_status(), "live": live.player_state(),
-            "displays": displays}
+    return {"enabled": True, "controller": local_device_status(), "controller_addresses": local_ipv4_addresses(),
+            "live": live.player_state(), "displays": displays}
 
 
 class DisplayCommand(BaseModel):

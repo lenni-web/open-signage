@@ -194,6 +194,9 @@ def test_displays_report_status_to_controller_overview(tmp_path: Path, monkeypat
         assert display["name"] == "Foyer" and display["online"] is True
         assert display["status"]["player"]["content_name"] == "Gottesdienst live"
         assert display["status"]["version"] == __version__
+        assert display["status"]["reported_address"] == "testclient"
+        overview = client.get("/api/system/displays").json()
+        assert isinstance(overview["controller_addresses"], list)
 
 
 def test_display_sends_its_status_with_device_token(tmp_path: Path, monkeypatch):

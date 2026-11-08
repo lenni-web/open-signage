@@ -74,6 +74,9 @@ def receive_device_status(payload: dict, request: Request):
     device_id = _device_id(request)
     if len(json.dumps(payload)) > MAX_STATUS_BYTES:
         raise HTTPException(status_code=413, detail="Statusmeldung ist zu groß")
+    # Die Adresse, unter der das Display den Controller erreicht – funktioniert auch mit älteren Displays.
+    host = request.client.host if request.client else None
+    payload["reported_address"] = host.removeprefix("::ffff:") if host else None
     store_device_status(device_id, payload)
 
 

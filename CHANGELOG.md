@@ -8,6 +8,13 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- Die Display-Übersicht zeigt die IP-Adresse und den Hostnamen jedes Displays
+  sowie die IP-Adressen des Controllers selbst. Die Display-Adresse ermittelt
+  der Controller aus der Statusmeldung, daher erscheint sie auch bei Displays
+  mit älterer Version.
+
 ### Geändert
 
 - Die Verwaltung merkt sich die geöffnete Seite in der Adresse (z. B. `#system`)

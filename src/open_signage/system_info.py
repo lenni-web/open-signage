@@ -185,6 +185,13 @@ def _network() -> dict:
     return result
 
 
+def local_ipv4_addresses() -> list[str]:
+    """IPv4-Adressen der verbundenen LAN- und WLAN-Schnittstellen."""
+    network = _network()
+    return [address for interface in network["ethernet"] + network["wlan"] if interface["connected"]
+            for address in interface["addresses"] if ":" not in address]
+
+
 def collect_system_info() -> dict:
     disk = shutil.disk_usage(data_dir())
     load = os.getloadavg() if hasattr(os, "getloadavg") else None

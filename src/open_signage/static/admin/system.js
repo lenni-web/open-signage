@@ -187,6 +187,7 @@ function renderDisplayTile(display, controllerVersion) {
     <header><strong></strong><span class="live-signal"></span></header>
     <dl>
       <dt>Läuft gerade</dt><dd data-field="content"></dd>
+      <dt>Adresse</dt><dd data-field="address"></dd>
       <dt>Version</dt><dd data-field="version"></dd>
       <dt>Temperatur</dt><dd data-field="temperature"></dd>
       <dt>Speicher frei</dt><dd data-field="disk"></dd>
@@ -210,6 +211,7 @@ function renderDisplayTile(display, controllerVersion) {
   const set = (field, value) => { tile.querySelector(`[data-field="${field}"]`).textContent = value ?? "–"; };
   const player = status.player || {};
   set("content", player.online ? (player.content_name || "Platzhalter") : "Player offline");
+  set("address", [status.reported_address, status.hostname].filter(Boolean).join(" · ") || "–");
   set("version", status.version);
   set("temperature", status.temperature_celsius == null ? "–" : `${status.temperature_celsius} °C`);
   set("disk", status.disk ? formatBytes(status.disk.free_bytes) : "–");
@@ -253,6 +255,9 @@ async function loadDisplayOverview() {
       ? `${overview.displays.length} Displays · ${online} online · ${withWarnings} mit Hinweisen` +
         (overview.live.takeover ? " · Live-Übertragung aktiv" : "")
       : "Noch keine Displays registriert. Displays werden unter Einstellungen → Controller-/Display-Synchronisierung gekoppelt.";
+    const controller = [overview.controller.hostname, ...(overview.controller_addresses || [])].filter(Boolean);
+    document.querySelector("#display-overview-controller").textContent = controller.length
+      ? `Dieser Controller: ${controller.join(" · ")}` : "";
     document.querySelector("#display-overview-list").replaceChildren(...tiles);
   } catch (error) { notify(error.message, true); }
 }
