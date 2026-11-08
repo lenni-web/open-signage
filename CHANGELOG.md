@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.25.0] – 2026-11-08
+
 ### Hinzugefügt
 
 - Jedem Display lässt sich in der Display-Übersicht eine feste Playlist
