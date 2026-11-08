@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.25.1] – 2026-11-08
+
 ### Geändert
 
 - Solange die Display-Übersicht geöffnet ist, melden Displays ihren Zustand
