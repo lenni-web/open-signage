@@ -14,8 +14,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
   zuweisen; ohne Zuweisung folgt es wie bisher dem Controller samt
   Playlist-Zeitplänen.
 - Sofortmeldung: Ein Hinweistext erscheint auf allen Playern über dem
-  laufenden Inhalt, als Laufband oder Vollbild, für eine gewählte Dauer oder
-  bis zum Zurücknehmen.
+  laufenden Inhalt, als Laufband oben (Standard) oder unten oder als Vollbild,
+  für 1 Minute bis 4 Stunden oder bis zum Zurücknehmen.
 - Die Display-Übersicht zeigt ein Bildschirmfoto jedes Displays. Displays
   senden Fotos nur, solange die Übersicht geöffnet ist (etwa alle 10–20
   Sekunden, 480 × 270 Pixel). Dafür installiert das Update auf Displays `grim`

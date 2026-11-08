@@ -59,6 +59,8 @@ def test_announcement_reaches_players_and_displays(tmp_path: Path, monkeypatch):
         headers = _controller_with_display(client)
         assert client.put("/api/announcement", json={"text": "   "}).status_code == 422
         assert client.put("/api/announcement", json={"text": "x", "style": "blinkend"}).status_code == 422
+        bottom = client.put("/api/announcement", json={"text": "Unten", "style": "bottom", "minutes": 1}).json()
+        assert bottom["announcement"]["style"] == "bottom"
         created = client.put("/api/announcement", json={
             "text": "Gottesdienst beginnt um 10:30 Uhr", "style": "fullscreen", "minutes": 15}).json()["announcement"]
         assert created["style"] == "fullscreen" and created["until"]
@@ -68,9 +70,9 @@ def test_announcement_reaches_players_and_displays(tmp_path: Path, monkeypatch):
         assert client.delete("/api/announcement").json() == {"announcement": None}
         assert client.get("/api/player/config").json()["announcement"] is None
         endless = client.put("/api/announcement", json={"text": "Bitte Handys aus", "minutes": None}).json()
-        assert endless["announcement"]["until"] is None and endless["announcement"]["style"] == "banner"
+        assert endless["announcement"]["until"] is None and endless["announcement"]["style"] == "top"
 
-    set_announcement("Kurz", "banner", 1)
+    set_announcement("Kurz", "bottom", 1)
     assert local_announcement(datetime.now(UTC) + timedelta(minutes=2)) is None
 
 
@@ -80,7 +82,7 @@ def test_display_shows_announcement_from_controller(tmp_path: Path, monkeypatch)
     set_setting("device_role", "display")
     monkeypatch.setattr(live, "_controller_state", lambda: {
         "announcement": live._clean_announcement({"text": "Hallo", "style": "seltsam", "until": 5})})
-    assert player_announcement() == {"text": "Hallo", "style": "banner", "until": None, "created_at": None}
+    assert player_announcement() == {"text": "Hallo", "style": "top", "until": None, "created_at": None}
     assert live._clean_announcement({"text": " "}) is None and live._clean_announcement("x") is None
 
 

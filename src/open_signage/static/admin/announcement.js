@@ -12,7 +12,7 @@ function renderAnnouncement(item) {
     const until = item.until
       ? `bis ${new Date(item.until).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} Uhr`
       : "bis zum Zurücknehmen";
-    current.textContent = `„${item.text}“ – ${item.style === "fullscreen" ? "Vollbild" : "Laufband"}, ${until}`;
+    current.textContent = `„${item.text}“ – ${{ fullscreen: "Vollbild", bottom: "Laufband unten" }[item.style] || "Laufband oben"}, ${until}`;
   }
   document.querySelector("#announcement-clear").hidden = !item;
 }

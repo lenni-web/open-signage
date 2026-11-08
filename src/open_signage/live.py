@@ -294,8 +294,8 @@ def local_state(now: datetime | None = None) -> dict:
 def _clean_announcement(value) -> dict | None:
     if not isinstance(value, dict) or not isinstance(value.get("text"), str) or not value["text"].strip():
         return None
-    return {"text": value["text"][:500], "style": value.get("style") if value.get("style") in {"banner", "fullscreen"}
-            else "banner", "until": value.get("until") if isinstance(value.get("until"), str) else None,
+    return {"text": value["text"][:500], "style": value.get("style") if value.get("style") in {"top", "bottom", "fullscreen"}
+            else "top", "until": value.get("until") if isinstance(value.get("until"), str) else None,
             "created_at": value.get("created_at") if isinstance(value.get("created_at"), str) else None}
 
 

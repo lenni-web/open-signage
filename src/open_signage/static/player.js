@@ -499,7 +499,8 @@ function showAnnouncement(item) {
   const active = Boolean(item?.text) && !(item.until && new Date(item.until) <= new Date());
   box.hidden = !active;
   if (!active) return;
-  box.className = `announcement announcement-${item.style === "fullscreen" ? "fullscreen" : "banner"}`;
+  const style = ["bottom", "fullscreen"].includes(item.style) ? item.style : "top";
+  box.className = `announcement announcement-${style}${style === "fullscreen" ? "" : " announcement-banner"}`;
   const text = box.querySelector("p");
   if (text.textContent !== item.text) text.textContent = item.text;
 }

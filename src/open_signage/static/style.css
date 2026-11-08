@@ -384,7 +384,9 @@ button:disabled { cursor: default; opacity: .35; }
 .announcement { position: fixed; z-index: 20; display: grid; place-items: center; color: #fff; pointer-events: none; }
 .announcement[hidden] { display: none; }
 .announcement p { margin: 0; white-space: pre-line; overflow-wrap: anywhere; text-align: center; font-weight: 700; line-height: 1.25; }
-.announcement-banner { left: 0; right: 0; bottom: 0; padding: 2.2vh 4vw; background: rgba(170, 20, 20, .92); box-shadow: 0 -1vh 4vh rgba(0, 0, 0, .45); }
+.announcement-banner { left: 0; right: 0; padding: 2.2vh 4vw; background: rgba(170, 20, 20, .92); }
+.announcement-top { top: 0; box-shadow: 0 1vh 4vh rgba(0, 0, 0, .45); }
+.announcement-bottom { bottom: 0; box-shadow: 0 -1vh 4vh rgba(0, 0, 0, .45); }
 .announcement-banner p { font-size: clamp(22px, 4.2vh, 64px); }
 .announcement-fullscreen { inset: 0; padding: 8vh 8vw; background: rgba(10, 12, 16, .94); }
 .announcement-fullscreen p { font-size: clamp(32px, 8vh, 140px); }

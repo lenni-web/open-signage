@@ -190,8 +190,8 @@ gekoppelt werden.
 Unter **Inhalte → Sofortmeldung** erscheint ein kurzer Text sofort auf allen
 Playern über dem laufenden Inhalt – auch während einer Live-Übertragung, etwa
 „Der Gottesdienst beginnt heute erst um 10:30 Uhr“. Wählbar sind ein Laufband
-am unteren Rand oder Vollbild sowie eine Dauer von 15 Minuten bis 4 Stunden oder
-„bis zum Zurücknehmen“. Displays übernehmen die Meldung innerhalb weniger
+oben (Standard) oder unten oder Vollbild sowie eine Dauer von 1 Minute bis
+4 Stunden oder „bis zum Zurücknehmen“. Displays übernehmen die Meldung innerhalb weniger
 Sekunden vom Controller.
 
 Nach einem Anwendungsupdate lädt sich der Player selbst neu, sobald der Server

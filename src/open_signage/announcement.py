@@ -7,7 +7,8 @@ from datetime import UTC, datetime, timedelta
 
 from .auth import device_mode, get_setting, set_setting
 
-STYLES = {"banner", "fullscreen"}
+# top/bottom: Laufband oben (Standard) bzw. unten; fullscreen: Vollbild.
+STYLES = {"top", "bottom", "fullscreen"}
 MAX_TEXT = 500
 
 
@@ -32,7 +33,7 @@ def local_announcement(now: datetime | None = None) -> dict | None:
 
 def set_announcement(text: str, style: str, minutes: int | None) -> dict:
     now = datetime.now(UTC)
-    item = {"text": text.strip()[:MAX_TEXT], "style": style if style in STYLES else "banner",
+    item = {"text": text.strip()[:MAX_TEXT], "style": style if style in STYLES else "top",
             "until": (now + timedelta(minutes=minutes)).isoformat() if minutes else None,
             "created_at": now.isoformat()}
     set_setting("announcement", json.dumps(item, ensure_ascii=False))
