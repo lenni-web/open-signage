@@ -48,6 +48,7 @@ def main() -> int:
         return fail(f"Kiosk-Benutzer {KIOSK_USER} wurde nicht gefunden.")
     runtime = Path(f"/run/user/{account.pw_uid}")
     sockets = sorted(path.name for path in runtime.glob("wayland-*") if not path.name.endswith(".lock"))
+    errors = []
     for socket in sockets:
         result = subprocess.run(
             [runuser, "-u", KIOSK_USER, "--", "env", f"HOME={account.pw_dir}", f"XDG_RUNTIME_DIR={runtime}",
@@ -61,7 +62,13 @@ def main() -> int:
             temporary.replace(TARGET)
             ERROR.unlink(missing_ok=True)
             return 0
-    return fail("Keine aktive Wayland-Sitzung gefunden." if not sockets else "grim konnte kein Bildschirmfoto erstellen.")
+        detail = result.stderr.decode("utf-8", "replace").strip() or f"Exit-Code {result.returncode}"
+        if result.returncode == 0:
+            detail = "keine gültige JPEG-Ausgabe" if len(result.stdout) <= MAX_BYTES else "Bild zu groß"
+        errors.append(f"{socket}: {detail}")
+    if not sockets:
+        return fail("Keine aktive Wayland-Sitzung gefunden.")
+    return fail("grim konnte kein Bildschirmfoto erstellen – " + "; ".join(errors)[:250])
 
 
 if __name__ == "__main__":

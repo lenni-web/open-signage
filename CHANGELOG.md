@@ -8,6 +8,11 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Geändert
+
+- Schlägt ein Bildschirmfoto fehl, zeigt die Display-Übersicht die genaue
+  Fehlermeldung von `grim` statt nur eines allgemeinen Hinweises.
+
 ## [0.25.1] – 2026-11-08
 
 ### Geändert
