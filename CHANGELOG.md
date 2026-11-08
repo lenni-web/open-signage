@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.24.1] – 2026-11-08
+
 ### Behoben
 
 - Der Player konnte dauerhaft auf einer Folie stehen bleiben, wenn der Browser
