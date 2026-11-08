@@ -8,6 +8,12 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Behoben
+
+- Bildschirmfotos schlugen auf Raspberry Pi OS fehl („jpeg support disabled“),
+  weil dessen `grim` ohne JPEG-Unterstützung gebaut ist. Das Foto wird dann
+  als PNG aufgenommen und mit `ffmpeg` nach JPEG umgewandelt.
+
 ### Geändert
 
 - Schlägt ein Bildschirmfoto fehl, zeigt die Display-Übersicht die genaue

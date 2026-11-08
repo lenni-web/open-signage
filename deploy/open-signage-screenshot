@@ -19,7 +19,7 @@ ERROR = DATA_DIR / "screenshot-error"
 KIOSK_USER = "@@KIOSK_USER@@"
 # 1920×1080 wird auf 480×270 verkleinert: ein paar Dutzend Kilobyte, auf dem Pi in Sekundenbruchteilen.
 SCALE = "0.25"
-QUALITY = "70"
+QUALITY = "70"  # nur für grim mit JPEG-Unterstützung
 MAX_BYTES = 1024 * 1024
 
 
@@ -37,6 +37,37 @@ def fail(message: str) -> int:
     return 1
 
 
+def _stderr(result: subprocess.CompletedProcess) -> str:
+    return result.stderr.decode("utf-8", "replace").strip() or f"Exit-Code {result.returncode}"
+
+
+def capture(grim: list[str]) -> tuple[bytes | None, str]:
+    """Nimmt den Bildschirm verkleinert als JPEG auf.
+
+    Der grim von Raspberry Pi OS ist ohne JPEG-Unterstützung gebaut; dann wird als PNG
+    aufgenommen und mit ffmpeg nach JPEG umgewandelt.
+    """
+    direct = subprocess.run(grim + ["-t", "jpeg", "-q", QUALITY, "-s", SCALE, "-"],
+                            capture_output=True, timeout=15, check=False)
+    if direct.returncode == 0 and direct.stdout.startswith(b"\xff\xd8"):
+        return (direct.stdout, "") if len(direct.stdout) <= MAX_BYTES else (None, "Bild zu groß")
+    png = subprocess.run(grim + ["-t", "png", "-l", "1", "-s", SCALE, "-"],
+                         capture_output=True, timeout=15, check=False)
+    if png.returncode != 0 or not png.stdout.startswith(b"\x89PNG"):
+        return None, _stderr(png)
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return None, "ffmpeg fehlt für die Umwandlung nach JPEG."
+    jpeg = subprocess.run(
+        [ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "png_pipe", "-i", "pipe:0", "-frames:v", "1",
+         "-q:v", "5", "-f", "image2pipe", "-vcodec", "mjpeg", "pipe:1"],
+        input=png.stdout, capture_output=True, timeout=15, check=False,
+    )
+    if jpeg.returncode != 0 or not jpeg.stdout.startswith(b"\xff\xd8"):
+        return None, _stderr(jpeg)
+    return (jpeg.stdout, "") if len(jpeg.stdout) <= MAX_BYTES else (None, "Bild zu groß")
+
+
 def main() -> int:
     REQUEST.unlink(missing_ok=True)
     grim, runuser = shutil.which("grim"), shutil.which("runuser")
@@ -48,23 +79,17 @@ def main() -> int:
         return fail(f"Kiosk-Benutzer {KIOSK_USER} wurde nicht gefunden.")
     runtime = Path(f"/run/user/{account.pw_uid}")
     sockets = sorted(path.name for path in runtime.glob("wayland-*") if not path.name.endswith(".lock"))
+    environment = [runuser, "-u", KIOSK_USER, "--", "env", f"HOME={account.pw_dir}", f"XDG_RUNTIME_DIR={runtime}"]
     errors = []
     for socket in sockets:
-        result = subprocess.run(
-            [runuser, "-u", KIOSK_USER, "--", "env", f"HOME={account.pw_dir}", f"XDG_RUNTIME_DIR={runtime}",
-             f"WAYLAND_DISPLAY={socket}", grim, "-t", "jpeg", "-q", QUALITY, "-s", SCALE, "-"],
-            capture_output=True, timeout=15, check=False,
-        )
-        if result.returncode == 0 and result.stdout.startswith(b"\xff\xd8") and len(result.stdout) <= MAX_BYTES:
+        image, detail = capture(environment + [f"WAYLAND_DISPLAY={socket}", grim])
+        if image:
             temporary = TARGET.with_suffix(".tmp")
-            temporary.write_bytes(result.stdout)
+            temporary.write_bytes(image)
             hand_over(temporary)
             temporary.replace(TARGET)
             ERROR.unlink(missing_ok=True)
             return 0
-        detail = result.stderr.decode("utf-8", "replace").strip() or f"Exit-Code {result.returncode}"
-        if result.returncode == 0:
-            detail = "keine gültige JPEG-Ausgabe" if len(result.stdout) <= MAX_BYTES else "Bild zu groß"
         errors.append(f"{socket}: {detail}")
     if not sockets:
         return fail("Keine aktive Wayland-Sitzung gefunden.")

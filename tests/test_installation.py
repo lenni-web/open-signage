@@ -375,3 +375,35 @@ def test_kiosk_installs_screenshot_helper():
     assert "PathExists=/var/lib/open-signage/screenshot-request" in \
         (PROJECT_ROOT / "deploy/open-signage-screenshot.path").read_text(encoding="utf-8")
     assert "grim" in (PROJECT_ROOT / "scripts/install.sh").read_text(encoding="utf-8")
+
+
+def _load_screenshot_helper():
+    import importlib.machinery
+    import importlib.util
+    loader = importlib.machinery.SourceFileLoader("screenshot_helper", str(PROJECT_ROOT / "deploy/open-signage-screenshot"))
+    spec = importlib.util.spec_from_loader("screenshot_helper", loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def test_screenshot_falls_back_to_png_when_grim_lacks_jpeg(tmp_path: Path, monkeypatch):
+    # grim 1.4.0 aus Raspberry Pi OS: "jpeg support disabled", PNG funktioniert.
+    grim = tmp_path / "grim"
+    grim.write_text(
+        "#!/bin/sh\n"
+        'case "$*" in *"-t jpeg"*) echo "jpeg support disabled" >&2; exit 1;; esac\n'
+        "printf '\\211PNG\\r\\n\\032\\nDATA'\n", encoding="utf-8")
+    ffmpeg = tmp_path / "ffmpeg"
+    ffmpeg.write_text("#!/bin/sh\ncat >/dev/null\nprintf '\\377\\330\\377\\340JPEG'\n", encoding="utf-8")
+    for tool in (grim, ffmpeg):
+        tool.chmod(0o755)
+    helper = _load_screenshot_helper()
+    monkeypatch.setattr(helper.shutil, "which", lambda name: str(ffmpeg) if name == "ffmpeg" and ffmpeg.exists() else None)
+    image, detail = helper.capture([str(grim)])
+    assert image == b"\xff\xd8\xff\xe0JPEG" and detail == ""
+
+    ffmpeg.unlink()
+    assert helper.capture([str(grim)]) == (None, "ffmpeg fehlt für die Umwandlung nach JPEG.")
+    grim.write_text("#!/bin/sh\necho 'compositor does not support screencopy' >&2\nexit 1\n", encoding="utf-8")
+    assert helper.capture([str(grim)]) == (None, "compositor does not support screencopy")
