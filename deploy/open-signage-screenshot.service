@@ -1,0 +1,7 @@
+[Unit]
+Description=Open Signage display screenshot
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/open-signage-screenshot
+TimeoutStartSec=30

@@ -107,6 +107,7 @@ def delete_playlist(playlist_id: int, _: None = Depends(require_system_login)):
             "SELECT source, media_id, kind FROM content WHERE playlist_id = ?", (playlist_id,)
         ).fetchall()
         connection.execute("DELETE FROM playlists WHERE id = ?", (playlist_id,))
+        connection.execute("UPDATE registered_devices SET playlist_id = NULL WHERE playlist_id = ?", (playlist_id,))
     for media in media_rows:
         if media["media_id"] is None and media["kind"] in {"image", "video", "pdf", "text"}:
             (media_dir() / Path(media["source"]).name).unlink(missing_ok=True)

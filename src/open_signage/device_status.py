@@ -36,6 +36,15 @@ def _last_remote_command() -> dict | None:
     return value if isinstance(value, dict) else None
 
 
+def _screenshot_status() -> dict:
+    from .sync import screenshot_supported
+    try:
+        error = (data_dir() / "screenshot-error").read_text(encoding="utf-8").strip()[:300] or None
+    except OSError:
+        error = None
+    return {"supported": screenshot_supported(), "error": error}
+
+
 def local_device_status() -> dict:
     disk = shutil.disk_usage(data_dir())
     player = player_status()
@@ -53,5 +62,6 @@ def local_device_status() -> dict:
                  "last_error": get_setting("sync_last_error") or None},
         "application_update": {key: update.get(key) for key in ("status", "message", "started_at", "finished_at")},
         "remote_command": _last_remote_command(),
+        "screenshot": _screenshot_status(),
         "reported_at": datetime.now(UTC).isoformat(),
     }

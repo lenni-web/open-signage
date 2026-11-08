@@ -150,7 +150,7 @@ def test_update_service_is_installed_without_sudo_access():
     assert application_script.index("open-signage-post-update") < application_script.index("set +e")
     assert application_script.index("set +e") < application_script.index("systemctl stop open-signage.service")
     assert "systemctl daemon-reload" in post_update
-    assert "cec-utils locales wlr-randr wlopm wtype" in post_update
+    assert "cec-utils grim locales wlr-randr wlopm wtype" in post_update
     assert '@@KIOSK_USER@@|${KIOSK_USER}' in post_update
     assert "open-signage-system-action setup_live" in post_update
     assert "set -euo pipefail" in post_update
@@ -363,3 +363,15 @@ def test_uninstall_knows_every_installed_unit():
     installed = {path.name for path in (PROJECT_ROOT / "deploy").iterdir()
                  if path.suffix in {".service", ".path", ".timer"}} | {"open-signage-mediamtx.service"}
     assert installed <= set(units.split())
+
+
+def test_kiosk_installs_screenshot_helper():
+    post_update = (PROJECT_ROOT / "deploy/open-signage-post-update").read_text(encoding="utf-8")
+    kiosk = post_update[post_update.index('if [[ "${PROFILE}" == "kiosk" ]]; then\n  sed "s|@@KIOSK_USER@@'):]
+    kiosk = kiosk[:kiosk.index("for unit in")]
+    assert "/usr/local/sbin/open-signage-screenshot" in kiosk and "open-signage-screenshot.path)" in kiosk
+    helper = (PROJECT_ROOT / "deploy/open-signage-screenshot").read_text(encoding="utf-8")
+    assert '"-s", SCALE' in helper and 'KIOSK_USER = "@@KIOSK_USER@@"' in helper
+    assert "PathExists=/var/lib/open-signage/screenshot-request" in \
+        (PROJECT_ROOT / "deploy/open-signage-screenshot.path").read_text(encoding="utf-8")
+    assert "grim" in (PROJECT_ROOT / "scripts/install.sh").read_text(encoding="utf-8")

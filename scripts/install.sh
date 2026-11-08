@@ -137,6 +137,7 @@ if [[ "${PROFILE}" == "kiosk" ]]; then
     ffmpeg \
     fonts-dejavu-core \
     fonts-liberation \
+    grim \
     iw \
     locales \
     python3 \

@@ -222,9 +222,12 @@ def initialize() -> None:
             if name not in media_columns:
                 connection.execute(f"ALTER TABLE media_library ADD COLUMN {name} {definition}")
         device_columns = {row["name"] for row in connection.execute("PRAGMA table_info(registered_devices)")}
-        for name in ("status_json", "status_at", "pending_command", "pending_command_at"):
+        for name in ("status_json", "status_at", "pending_command", "pending_command_at", "screenshot_at"):
             if name not in device_columns:
                 connection.execute(f"ALTER TABLE registered_devices ADD COLUMN {name} TEXT")
+        if "playlist_id" not in device_columns:
+            # NULL: Das Display folgt der aktiven Playlist des Controllers samt Zeitplänen.
+            connection.execute("ALTER TABLE registered_devices ADD COLUMN playlist_id INTEGER")
         playlist_columns = {row["name"] for row in connection.execute("PRAGMA table_info(playlists)")}
         for name, definition in {
             "schedule_enabled": "INTEGER NOT NULL DEFAULT 0", "schedule_start": "TEXT",

@@ -7,6 +7,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .. import live
@@ -19,7 +20,8 @@ from ..database import connect, data_dir
 from ..device_status import local_device_status, player_status
 from ..display_control import (display_config, display_status, request_display_action,
                                save_display_config, schedule_analysis)
-from ..sync import pairing_token, queue_device_command, safe_sync_from_controller
+from ..sync import (pairing_token, queue_device_command, request_screenshots, safe_sync_from_controller,
+                    screenshot_path)
 from ..system_info import collect_system_info, local_ipv4_addresses
 from ..system_update import request_update, update_status
 from ..version import __version__
@@ -99,11 +101,14 @@ def display_overview(_: None = Depends(require_system_login)):
     if device_mode() != "controller":
         return {"enabled": False, "controller": None, "displays": []}
     now = datetime.now(UTC)
+    # Solange jemand die Übersicht offen hat, schicken die Displays Bildschirmfotos.
+    request_screenshots()
     with connect() as connection:
         rows = connection.execute(
-            "SELECT device_id, name, last_seen, status_json, status_at, pending_command, pending_command_at "
-            "FROM registered_devices ORDER BY name"
+            "SELECT device_id, name, last_seen, status_json, status_at, pending_command, pending_command_at, "
+            "playlist_id, screenshot_at FROM registered_devices ORDER BY name"
         ).fetchall()
+        playlists = [dict(row) for row in connection.execute("SELECT id, name FROM playlists ORDER BY name COLLATE NOCASE")]
     displays = []
     for row in rows:
         try:
@@ -116,9 +121,51 @@ def display_overview(_: None = Depends(require_system_login)):
             "status": status, "status_at": row["status_at"],
             "online": age is not None and age < DISPLAY_ONLINE_SECONDS,
             "pending_command": row["pending_command"], "pending_command_at": row["pending_command_at"],
+            "playlist_id": row["playlist_id"] if any(item["id"] == row["playlist_id"] for item in playlists) else None,
+            "screenshot_at": row["screenshot_at"],
         })
     return {"enabled": True, "controller": local_device_status(), "controller_addresses": local_ipv4_addresses(),
-            "live": live.player_state(), "displays": displays}
+            "live": live.player_state(), "playlists": playlists, "displays": displays}
+
+
+@router.get("/api/system/displays/{device_id}/screenshot")
+def display_screenshot(device_id: str, _: None = Depends(require_system_login)):
+    path = screenshot_path(device_id)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Noch kein Bildschirmfoto")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, no-store"})
+
+
+@router.delete("/api/system/displays/{device_id}", status_code=204)
+def remove_display(device_id: str, _: None = Depends(require_system_login)):
+    """Entfernt ein gekoppeltes Display; sein Geräte-Token wird damit ungültig."""
+    if device_mode() != "controller":
+        raise HTTPException(status_code=409, detail="Nur ein Controller verwaltet Displays")
+    with connect() as connection:
+        removed = connection.execute("DELETE FROM registered_devices WHERE device_id = ?", (device_id,)).rowcount
+    if not removed:
+        raise HTTPException(status_code=404, detail="Unbekanntes Display")
+    screenshot_path(device_id).unlink(missing_ok=True)
+
+
+class DisplayPlaylist(BaseModel):
+    playlist_id: int | None = None
+
+
+@router.put("/api/system/displays/{device_id}/playlist")
+def assign_display_playlist(device_id: str, payload: DisplayPlaylist, _: None = Depends(require_system_login)):
+    """Weist einem Display eine feste Playlist zu; ohne Angabe folgt es wieder dem Controller."""
+    if device_mode() != "controller":
+        raise HTTPException(status_code=409, detail="Nur ein Controller kann Displays Playlists zuweisen")
+    with connect() as connection:
+        if payload.playlist_id is not None and not connection.execute(
+                "SELECT 1 FROM playlists WHERE id = ?", (payload.playlist_id,)).fetchone():
+            raise HTTPException(status_code=404, detail="Playlist nicht gefunden")
+        changed = connection.execute("UPDATE registered_devices SET playlist_id = ? WHERE device_id = ?",
+                                     (payload.playlist_id, device_id)).rowcount
+    if not changed:
+        raise HTTPException(status_code=404, detail="Unbekanntes Display")
+    return {"device_id": device_id, "playlist_id": payload.playlist_id}
 
 
 class DisplayCommand(BaseModel):

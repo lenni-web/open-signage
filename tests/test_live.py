@@ -111,7 +111,8 @@ def test_controller_shares_live_state_and_read_access_with_displays(tmp_path: Pa
         assert client.get("/api/sync/live").status_code == 401
         client.post("/api/live/takeover", json={"active": True})
         shared = client.get("/api/sync/live", headers={"Authorization": f"Bearer {token}"}).json()
-        assert shared == {"server_running": True, "available": True, "takeover": True, "sound": True}
+        assert shared == {"server_running": True, "available": True, "takeover": True, "sound": True,
+                          "announcement": None}
         controller_data = sync_snapshot()
     assert controller_data["live"]["read_password"] == get_setting("live_read_password")
 

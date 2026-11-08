@@ -493,6 +493,17 @@ function checkStalledPlayback() {
   }
 }
 
+// Sofortmeldung des Controllers über allen Inhalten, auch über einer Live-Übertragung.
+function showAnnouncement(item) {
+  const box = document.querySelector("#announcement");
+  const active = Boolean(item?.text) && !(item.until && new Date(item.until) <= new Date());
+  box.hidden = !active;
+  if (!active) return;
+  box.className = `announcement announcement-${item.style === "fullscreen" ? "fullscreen" : "banner"}`;
+  const text = box.querySelector("p");
+  if (text.textContent !== item.text) text.textContent = item.text;
+}
+
 function applyLiveState(nextState) {
   liveState = nextState;
   if (liveState.takeover && !liveTakeoverActive) {
@@ -554,6 +565,7 @@ async function refreshPlayerConfig() {
       transitionMs = config.transition_ms;
     }
     if (config.live) applyLiveState(config.live);
+    showAnnouncement(config.announcement);
     reloadForNewVersion(config.version);
   } catch (_) {}
 }

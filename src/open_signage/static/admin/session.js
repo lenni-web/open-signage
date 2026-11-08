@@ -84,7 +84,7 @@ async function boot() {
     }
     showApplication(session);
     const loaders = [loadVersion()];
-    if (session.device_mode !== "display") loaders.push(load(), loadLibrary(), loadPlaylists(), loadLive());
+    if (session.device_mode !== "display") loaders.push(load(), loadLibrary(), loadPlaylists(), loadLive(), loadAnnouncement());
     await Promise.all(loaders);
   } catch (_) {
     showLogin();
@@ -120,7 +120,7 @@ document.querySelectorAll(".nav-button").forEach((button) => {
     } else if (button.dataset.page === "library-page") {
       await loadLibrary();
     } else if (button.dataset.page === "content-page") {
-      await Promise.all([load(), loadLive()]);
+      await Promise.all([load(), loadLive(), loadAnnouncement()]);
     }
   });
 });
@@ -136,7 +136,7 @@ document.querySelector("#login-form").addEventListener("submit", async (event) =
     });
     event.target.reset();
     showApplication(session);
-    await Promise.all([loadVersion(), load(), loadLibrary(), loadPlaylists(), loadLive()]);
+    await Promise.all([loadVersion(), load(), loadLibrary(), loadPlaylists(), loadLive(), loadAnnouncement()]);
     notify("Anmeldung erfolgreich");
   } catch (error) { notify(error.message, true); }
 });

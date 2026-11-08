@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""Erstellt ein verkleinertes Bildschirmfoto des Kiosks für die Display-Übersicht des Controllers.
+
+Läuft als root über open-signage-screenshot.path, sobald Open Signage eine Anfrage ablegt, und
+ruft grim in der Wayland-Sitzung des Kioskbenutzers auf.
+"""
+from __future__ import annotations
+
+import os
+import pwd
+import shutil
+import subprocess
+from pathlib import Path
+
+DATA_DIR = Path("/var/lib/open-signage")
+REQUEST = DATA_DIR / "screenshot-request"
+TARGET = DATA_DIR / "screenshot.jpg"
+ERROR = DATA_DIR / "screenshot-error"
+KIOSK_USER = "@@KIOSK_USER@@"
+# 1920×1080 wird auf 480×270 verkleinert: ein paar Dutzend Kilobyte, auf dem Pi in Sekundenbruchteilen.
+SCALE = "0.25"
+QUALITY = "70"
+MAX_BYTES = 1024 * 1024
+
+
+def hand_over(path: Path) -> None:
+    os.chmod(path, 0o640)
+    try:
+        shutil.chown(path, user="open-signage", group="open-signage")
+    except LookupError:
+        pass
+
+
+def fail(message: str) -> int:
+    ERROR.write_text(message, encoding="utf-8")
+    hand_over(ERROR)
+    return 1
+
+
+def main() -> int:
+    REQUEST.unlink(missing_ok=True)
+    grim, runuser = shutil.which("grim"), shutil.which("runuser")
+    if not grim or not runuser:
+        return fail("grim ist nicht installiert.")
+    try:
+        account = pwd.getpwnam(KIOSK_USER)
+    except KeyError:
+        return fail(f"Kiosk-Benutzer {KIOSK_USER} wurde nicht gefunden.")
+    runtime = Path(f"/run/user/{account.pw_uid}")
+    sockets = sorted(path.name for path in runtime.glob("wayland-*") if not path.name.endswith(".lock"))
+    for socket in sockets:
+        result = subprocess.run(
+            [runuser, "-u", KIOSK_USER, "--", "env", f"HOME={account.pw_dir}", f"XDG_RUNTIME_DIR={runtime}",
+             f"WAYLAND_DISPLAY={socket}", grim, "-t", "jpeg", "-q", QUALITY, "-s", SCALE, "-"],
+            capture_output=True, timeout=15, check=False,
+        )
+        if result.returncode == 0 and result.stdout.startswith(b"\xff\xd8") and len(result.stdout) <= MAX_BYTES:
+            temporary = TARGET.with_suffix(".tmp")
+            temporary.write_bytes(result.stdout)
+            hand_over(temporary)
+            temporary.replace(TARGET)
+            ERROR.unlink(missing_ok=True)
+            return 0
+    return fail("Keine aktive Wayland-Sitzung gefunden." if not sockets else "grim konnte kein Bildschirmfoto erstellen.")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

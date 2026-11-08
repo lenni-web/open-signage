@@ -10,6 +10,18 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ### Hinzugefügt
 
+- Jedem Display lässt sich in der Display-Übersicht eine feste Playlist
+  zuweisen; ohne Zuweisung folgt es wie bisher dem Controller samt
+  Playlist-Zeitplänen.
+- Sofortmeldung: Ein Hinweistext erscheint auf allen Playern über dem
+  laufenden Inhalt, als Laufband oder Vollbild, für eine gewählte Dauer oder
+  bis zum Zurücknehmen.
+- Die Display-Übersicht zeigt ein Bildschirmfoto jedes Displays. Displays
+  senden Fotos nur, solange die Übersicht geöffnet ist (etwa alle 10–20
+  Sekunden, 480 × 270 Pixel). Dafür installiert das Update auf Displays `grim`
+  und den Dienst `open-signage-screenshot`.
+- Gekoppelte Displays lassen sich in der Übersicht entfernen.
+- Die Übersicht aktualisiert sich bei geöffneter Systemseite alle 15 Sekunden.
 - Die Display-Übersicht zeigt die IP-Adresse und den Hostnamen jedes Displays
   sowie die IP-Adressen des Controllers selbst. Die Display-Adresse ermittelt
   der Controller aus der Statusmeldung, daher erscheint sie auch bei Displays

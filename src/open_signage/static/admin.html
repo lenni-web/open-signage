@@ -65,6 +65,38 @@
       </form>
     </details>
   </section>
+  <section id="announcement-card" class="card announcement-card">
+    <div class="section-heading">
+      <div><span class="eyebrow">Alle Displays</span><h2>Sofortmeldung</h2></div>
+      <span id="announcement-state" class="live-signal">Keine Meldung</span>
+    </div>
+    <p id="announcement-current" class="schedule-note" hidden></p>
+    <form id="announcement-form" class="announcement-form">
+      <label>Meldung
+        <textarea name="text" maxlength="500" required placeholder="z. B. Der Gottesdienst beginnt heute erst um 10:30 Uhr."></textarea>
+      </label>
+      <label>Darstellung
+        <select name="style">
+          <option value="banner">Laufband unten</option>
+          <option value="fullscreen">Vollbild</option>
+        </select>
+      </label>
+      <label>Dauer
+        <select name="minutes">
+          <option value="15">15 Minuten</option>
+          <option value="30" selected>30 Minuten</option>
+          <option value="60">1 Stunde</option>
+          <option value="120">2 Stunden</option>
+          <option value="240">4 Stunden</option>
+          <option value="">Bis zum Zurücknehmen</option>
+        </select>
+      </label>
+      <div class="announcement-actions">
+        <button>Jetzt anzeigen</button>
+        <button id="announcement-clear" class="danger" type="button" hidden>Zurücknehmen</button>
+      </div>
+    </form>
+  </section>
   <section id="live-card" class="card live-card">
     <div class="section-heading">
       <div>
@@ -840,6 +872,7 @@
   <script src="/static/admin/playlists.js?v=@@VERSION@@"></script>
   <script src="/static/whep.js?v=@@VERSION@@"></script>
   <script src="/static/admin/live.js?v=@@VERSION@@"></script>
+  <script src="/static/admin/announcement.js?v=@@VERSION@@"></script>
   <script src="/static/admin/forwarding.js?v=@@VERSION@@"></script>
   <script src="/static/admin/display.js?v=@@VERSION@@"></script>
   <script src="/static/admin/system.js?v=@@VERSION@@"></script>

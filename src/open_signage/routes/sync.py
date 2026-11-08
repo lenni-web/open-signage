@@ -10,10 +10,12 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .. import live
+from ..announcement import local_announcement
 from ..auth import device_mode
 from ..database import media_dir
-from ..sync import (authenticate_device, device_for_token, register_device, snapshot as sync_snapshot,
-                    store_device_status, take_device_command)
+from ..sync import (MAX_SCREENSHOT_BYTES, authenticate_device, device_for_token, register_device,
+                    screenshots_wanted, snapshot as sync_snapshot, store_device_screenshot, store_device_status,
+                    take_device_command)
 
 router = APIRouter()
 
@@ -43,16 +45,17 @@ def sync_register(payload: SyncRegistration):
 
 
 @router.get("/api/sync/snapshot")
-def get_sync_snapshot(_: None = Depends(require_sync_device)):
+def get_sync_snapshot(request: Request, _: None = Depends(require_sync_device)):
     if device_mode() != "controller": raise HTTPException(status_code=409, detail="Gerät ist kein Controller")
-    return sync_snapshot()
+    return sync_snapshot(_device_id(request))
 
 
 @router.get("/api/sync/live")
 def get_sync_live(_: None = Depends(require_sync_device)):
     if device_mode() != "controller": raise HTTPException(status_code=409, detail="Gerät ist kein Controller")
     state = live.local_state()
-    return {key: state[key] for key in ("server_running", "available", "takeover", "sound")}
+    return {**{key: state[key] for key in ("server_running", "available", "takeover", "sound")},
+            "announcement": local_announcement()}
 
 
 def _device_id(request: Request) -> str:
@@ -65,7 +68,19 @@ def _device_id(request: Request) -> str:
 @router.get("/api/sync/commands")
 def get_device_command(request: Request):
     if device_mode() != "controller": raise HTTPException(status_code=409, detail="Gerät ist kein Controller")
-    return {"command": take_device_command(_device_id(request))}
+    return {"command": take_device_command(_device_id(request)), "screenshot": screenshots_wanted()}
+
+
+@router.post("/api/sync/screenshot", status_code=204)
+async def receive_device_screenshot(request: Request):
+    if device_mode() != "controller": raise HTTPException(status_code=409, detail="Gerät ist kein Controller")
+    device_id = _device_id(request)
+    image = await request.body()
+    if len(image) > MAX_SCREENSHOT_BYTES:
+        raise HTTPException(status_code=413, detail="Bildschirmfoto ist zu groß")
+    if not image.startswith(b"\xff\xd8\xff"):
+        raise HTTPException(status_code=415, detail="Bildschirmfoto muss ein JPEG sein")
+    store_device_screenshot(device_id, image)
 
 
 @router.post("/api/sync/status", status_code=204)

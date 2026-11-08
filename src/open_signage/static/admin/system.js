@@ -178,7 +178,51 @@ function displayWarnings(display, controllerVersion) {
   return warnings;
 }
 
-function renderDisplayTile(display, controllerVersion) {
+function renderDisplayScreenshot(display) {
+  const box = document.createElement("div");
+  const support = display.status?.screenshot;
+  if (display.screenshot_at) {
+    box.className = "display-screenshot";
+    const image = document.createElement("img");
+    image.alt = `Bildschirmfoto von ${display.name}`;
+    image.loading = "lazy";
+    image.src = `/api/system/displays/${encodeURIComponent(display.device_id)}/screenshot?t=${encodeURIComponent(display.screenshot_at)}`;
+    const stamp = document.createElement("span");
+    stamp.textContent = `Stand ${new Date(display.screenshot_at).toLocaleTimeString("de-DE")}`;
+    box.append(image, stamp);
+  } else {
+    box.className = "display-screenshot empty";
+    box.textContent = !display.online ? "Kein Bildschirmfoto – Display offline"
+      : support?.error ? `Kein Bildschirmfoto: ${support.error}`
+      : !support ? "Bildschirmfotos gibt es, sobald das Display aktualisiert ist"
+      : support.supported === false ? "Bildschirmfotos sind auf diesem Display nicht verfügbar"
+      : "Bildschirmfoto wird erstellt …";
+  }
+  return box;
+}
+
+function renderDisplayPlaylist(display, playlists) {
+  const label = document.createElement("label");
+  label.className = "display-playlist";
+  label.textContent = "Playlist";
+  const select = document.createElement("select");
+  select.append(new Option("Wie Controller (inkl. Zeitpläne)", ""));
+  playlists.forEach(item => select.append(new Option(item.name, item.id)));
+  select.value = display.playlist_id ?? "";
+  select.addEventListener("change", async () => {
+    try {
+      await api(`/api/system/displays/${encodeURIComponent(display.device_id)}/playlist`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playlist_id: select.value ? Number(select.value) : null }),
+      });
+      notify(`${display.name}: Playlist gespeichert – wird beim nächsten Abgleich (spätestens 1 Minute) übernommen`, false, 6000);
+    } catch (error) { notify(error.message, true); select.value = display.playlist_id ?? ""; }
+  });
+  label.append(select);
+  return label;
+}
+
+function renderDisplayTile(display, controllerVersion, playlists = []) {
   const status = display.status || {};
   const warnings = displayWarnings(display, controllerVersion);
   const tile = document.createElement("article");
@@ -202,8 +246,18 @@ function renderDisplayTile(display, controllerVersion) {
       <button type="button" class="secondary" data-command="reboot">Neu starten</button>
       <button type="button" class="secondary" data-command="display_on">Bildschirm an</button>
       <button type="button" class="secondary" data-command="display_off">Bildschirm aus</button>
+      <button type="button" class="danger" data-remove-display>Entfernen</button>
     </div>
   `;
+  tile.querySelector("header").after(renderDisplayScreenshot(display), renderDisplayPlaylist(display, playlists));
+  tile.querySelector("[data-remove-display]").addEventListener("click", async () => {
+    if (!window.confirm(`Display „${display.name}“ entfernen? Es muss danach neu gekoppelt werden, um wieder Inhalte zu erhalten.`)) return;
+    try {
+      await api(`/api/system/displays/${encodeURIComponent(display.device_id)}`, { method: "DELETE" });
+      notify("Display entfernt");
+      await loadDisplayOverview();
+    } catch (error) { notify(error.message, true); }
+  });
   tile.querySelector("strong").textContent = display.name;
   const pill = tile.querySelector(".live-signal");
   pill.textContent = display.online ? (warnings.length ? "Online · Hinweis" : "Online") : "Offline";
@@ -248,7 +302,7 @@ async function loadDisplayOverview() {
     card.hidden = !overview.enabled;
     if (!overview.enabled) return;
     const version = overview.controller.version;
-    const tiles = overview.displays.map(display => renderDisplayTile(display, version));
+    const tiles = overview.displays.map(display => renderDisplayTile(display, version, overview.playlists || []));
     const online = overview.displays.filter(display => display.online).length;
     const withWarnings = overview.displays.filter(display => displayWarnings(display, version).length).length;
     document.querySelector("#display-overview-summary").textContent = overview.displays.length
@@ -409,6 +463,13 @@ document.querySelector("#system-refresh").addEventListener("click", () => {
 });
 document.querySelector("#monitoring-refresh").addEventListener("click", loadMonitoring);
 document.querySelector("#display-overview-refresh").addEventListener("click", loadDisplayOverview);
+// Bei geöffneter Übersicht regelmäßig aktualisieren – nicht, während eine Auswahl bedient wird.
+window.setInterval(() => {
+  const list = document.querySelector("#display-overview-list");
+  if (document.querySelector("#system-page").hidden || document.querySelector("#admin-app").hidden ||
+      document.querySelector("#display-overview").hidden || list.contains(document.activeElement)) return;
+  loadDisplayOverview();
+}, 15000);
 document.querySelectorAll("[data-display-command]").forEach(button => {
   button.addEventListener("click", () => sendDisplayCommand(button.dataset.displayCommand));
 });

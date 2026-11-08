@@ -11,7 +11,7 @@ from . import forwarding, live
 from .auth import device_mode, get_setting, set_setting
 from .backup import automatic_backup_if_due
 from .database import initialize, integrity_check_if_due
-from .routes import (content, forwarding as forwarding_routes, live as live_routes, media_library, pages,
+from .routes import (announcement, content, forwarding as forwarding_routes, live as live_routes, media_library, pages,
                      player, playlists, session, storage, sync, system)
 from .routes.common import STATIC_DIR
 from .sync import poll_controller_command, report_status_to_controller, safe_sync_from_controller
@@ -65,5 +65,5 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Open Signage", version=__version__, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 for module in (pages, player, system, sync, storage, session, playlists, content, media_library, live_routes,
-               forwarding_routes):
+               forwarding_routes, announcement):
     app.include_router(module.router)

@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch Open Signage screenshot requests
+
+[Path]
+PathExists=/var/lib/open-signage/screenshot-request
+Unit=open-signage-screenshot.service
+
+[Install]
+WantedBy=multi-user.target

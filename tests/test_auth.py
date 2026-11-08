@@ -51,7 +51,7 @@ def test_player_endpoints_require_device_token(tmp_path: Path, monkeypatch):
         assert client.get("/api/player/content", headers=headers).status_code == 200
         assert client.get("/api/player/config", headers=headers).json() == {
             "transition_ms": 4000, "live": {"available": False, "takeover": False, "sound": True},
-            "version": __version__}
+            "announcement": None, "version": __version__}
         assert client.post(
             "/api/player/heartbeat", json={"state": "idle"}, headers=headers
         ).status_code == 204

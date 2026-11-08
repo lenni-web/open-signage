@@ -29,10 +29,10 @@ fi
 if [[ "${PROFILE}" == "kiosk" ]]; then
   if ! command -v cec-client >/dev/null 2>&1 || ! command -v wlopm >/dev/null 2>&1 || \
      ! command -v wlr-randr >/dev/null 2>&1 || \
-     ! command -v wtype >/dev/null 2>&1 || \
+     ! command -v wtype >/dev/null 2>&1 || ! command -v grim >/dev/null 2>&1 || \
      ! dpkg-query -W -f='${Status}' locales 2>/dev/null | grep -q 'install ok installed'; then
     apt-get update
-    apt-get install --no-install-recommends -y cec-utils locales wlr-randr wlopm wtype
+    apt-get install --no-install-recommends -y cec-utils grim locales wlr-randr wlopm wtype
   fi
   if ! locale -a | grep -qi '^de_DE\.utf8$'; then
     sed -i 's/^# *\(de_DE.UTF-8 UTF-8\)/\1/' /etc/locale.gen
@@ -62,11 +62,15 @@ if [[ "${PROFILE}" == "kiosk" ]]; then
   sed "s|@@KIOSK_USER@@|${KIOSK_USER}|g" \
     "${RELEASE_DIR}/deploy/open-signage-display-control" >/usr/local/sbin/open-signage-display-control
   chmod 0755 /usr/local/sbin/open-signage-display-control
+  sed "s|@@KIOSK_USER@@|${KIOSK_USER}|g" \
+    "${RELEASE_DIR}/deploy/open-signage-screenshot" >/usr/local/sbin/open-signage-screenshot
+  chmod 0755 /usr/local/sbin/open-signage-screenshot
   UNITS+=(
     open-signage-display-control.service open-signage-display-control.path
     open-signage-display-schedule.service open-signage-display-schedule.timer
+    open-signage-screenshot.service open-signage-screenshot.path
   )
-  ENABLED_UNITS+=(open-signage-display-control.path open-signage-display-schedule.timer)
+  ENABLED_UNITS+=(open-signage-display-control.path open-signage-display-schedule.timer open-signage-screenshot.path)
 fi
 for unit in "${UNITS[@]}"; do
   install -o root -g root -m 0644 "${RELEASE_DIR}/deploy/${unit}" "/etc/systemd/system/${unit}"

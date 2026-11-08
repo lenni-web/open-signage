@@ -291,13 +291,26 @@ def local_state(now: datetime | None = None) -> dict:
     }
 
 
+def _clean_announcement(value) -> dict | None:
+    if not isinstance(value, dict) or not isinstance(value.get("text"), str) or not value["text"].strip():
+        return None
+    return {"text": value["text"][:500], "style": value.get("style") if value.get("style") in {"banner", "fullscreen"}
+            else "banner", "until": value.get("until") if isinstance(value.get("until"), str) else None,
+            "created_at": value.get("created_at") if isinstance(value.get("created_at"), str) else None}
+
+
+def controller_state() -> dict:
+    """Zustand des Controllers, wie ihn ein Display sieht (kurz zwischengespeichert)."""
+    return _controller_state()
+
+
 def _controller_state() -> dict:
     with _controller_lock:
         if _controller_cache["state"] is not None and time.monotonic() - _controller_cache["at"] < CONTROLLER_STATE_TTL:
             return _controller_cache["state"]
     controller = (get_setting("controller_url") or get_setting("master_url") or "").rstrip("/") + "/"
     token = get_setting("sync_device_token") or ""
-    state = {"server_running": False, "available": False, "takeover": False, "sound": True}
+    state = {"server_running": False, "available": False, "takeover": False, "sound": True, "announcement": None}
     if controller.startswith(("http://", "https://")) and token:
         request = urllib.request.Request(urljoin(controller, "api/sync/live"),
                                          headers={"Authorization": f"Bearer {token}"})
@@ -307,7 +320,8 @@ def _controller_state() -> dict:
             state = {"server_running": bool(remote.get("server_running")),
                      "available": bool(remote.get("available")),
                      "takeover": bool(remote.get("takeover")),
-                     "sound": bool(remote.get("sound", True))}
+                     "sound": bool(remote.get("sound", True)),
+                     "announcement": _clean_announcement(remote.get("announcement"))}
         except (OSError, ValueError):
             pass
     with _controller_lock:

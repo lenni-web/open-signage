@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from .. import live
+from ..announcement import player_announcement
 from ..auth import (automatic_player_client, clear_login_failures, ensure_login_allowed, player_token,
                     record_login_failure, require_player, set_player_cookie, verify_password)
 from ..database import connect
@@ -75,4 +76,4 @@ def player_content(_: None = Depends(require_player)):
 @router.get("/api/player/config")
 def player_config(_: None = Depends(require_player)):
     return {"transition_ms": display_config().get("transition_ms", 4000), "live": live.player_state(),
-            "version": __version__}
+            "announcement": player_announcement(), "version": __version__}

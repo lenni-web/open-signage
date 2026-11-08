@@ -165,6 +165,35 @@ und Update-Fortschritt erscheinen anschließend in der Übersicht. Displays
 verstehen diese Befehle ab Version 0.22.0 und müssen dafür einmal von Hand
 aktualisiert werden.
 
+**Playlist pro Display:** In jeder Kachel der Display-Übersicht lässt sich eine
+feste Playlist wählen, etwa „Termine“ für das Foyer. Ein Display mit fester
+Playlist zeigt nur diese; Playlist-Zeitpläne gelten für dieses Display dann
+nicht, Zeitpläne einzelner Inhalte und Live-Übertragungen schon. Mit „Wie
+Controller“ folgt es wieder der aktiven Playlist des Controllers samt
+Zeitplänen. Die Änderung kommt mit dem nächsten Abgleich an, spätestens nach
+einer Minute.
+
+**Bildschirmfotos:** Solange jemand die Display-Übersicht geöffnet hat, schickt
+jedes Display etwa alle 10–20 Sekunden ein verkleinertes Bildschirmfoto
+(480 × 270 Pixel, wenige Dutzend Kilobyte). Es wird mit `grim` in der
+Wayland-Sitzung des Kiosks aufgenommen und kostet den Pi nur Sekundenbruchteile.
+Ist die Übersicht 90 Sekunden lang nicht mehr geöffnet, hören die Displays damit
+auf; im Normalbetrieb entsteht also keine Last. Fotos gibt es ab Version 0.25.0
+des Displays.
+
+**Display entfernen:** „Entfernen“ in der Kachel löscht ein gekoppeltes
+Display samt Geräte-Token, etwa nach einer Neuinstallation. Es muss danach neu
+gekoppelt werden.
+
+### Sofortmeldung
+
+Unter **Inhalte → Sofortmeldung** erscheint ein kurzer Text sofort auf allen
+Playern über dem laufenden Inhalt – auch während einer Live-Übertragung, etwa
+„Der Gottesdienst beginnt heute erst um 10:30 Uhr“. Wählbar sind ein Laufband
+am unteren Rand oder Vollbild sowie eine Dauer von 15 Minuten bis 4 Stunden oder
+„bis zum Zurücknehmen“. Displays übernehmen die Meldung innerhalb weniger
+Sekunden vom Controller.
+
 Nach einem Anwendungsupdate lädt sich der Player selbst neu, sobald der Server
 die neue Version meldet – während einer Live-Übernahme erst nach deren Ende.
 Ein Neustart des Geräts ist dafür nicht mehr nötig.

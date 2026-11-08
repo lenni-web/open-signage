@@ -4,21 +4,26 @@ import hashlib
 import json
 import secrets
 import sqlite3
+import time
 import urllib.error
 import urllib.request
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urljoin
 
 from . import live
 from .application_update import request_update as request_application_update
-from .auth import get_setting, screen_name, set_setting
+from .auth import get_setting, headless, screen_name, set_setting
 from .database import connect, data_dir, media_dir
 from .device_status import local_device_status
 from .display_control import display_config, request_display_action, save_display_config
 from .media_files import file_sha256, referenced_media_files, remember_sha256
 
 SYNCED_TABLES = ("playlists", "media_library", "content")
+SCREENSHOT_HELPER = Path("/usr/local/sbin/open-signage-screenshot")
+SCREENSHOT_WANTED_FOR = timedelta(seconds=90)
+SCREENSHOT_MIN_INTERVAL = 10
+MAX_SCREENSHOT_BYTES = 1024 * 1024
 
 
 def pairing_token() -> str:
@@ -122,6 +127,56 @@ def execute_remote_command(action: str) -> str:
     return f"Unbekannter Befehl: {action}"
 
 
+def screenshots_wanted() -> bool:
+    """Der Controller wünscht Bildschirmfotos, solange jemand die Display-Übersicht geöffnet hat."""
+    until = get_setting("screenshots_wanted_until")
+    return bool(until and datetime.fromisoformat(until) > datetime.now(UTC))
+
+
+def request_screenshots() -> None:
+    set_setting("screenshots_wanted_until", (datetime.now(UTC) + SCREENSHOT_WANTED_FOR).isoformat())
+
+
+def screenshot_path(device_id: str) -> Path:
+    return data_dir() / "screenshots" / f"{hashlib.sha256(device_id.encode()).hexdigest()[:24]}.jpg"
+
+
+def store_device_screenshot(device_id: str, image: bytes) -> None:
+    target = screenshot_path(device_id)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_suffix(".tmp")
+    temporary.write_bytes(image)
+    temporary.replace(target)
+    with connect() as connection:
+        connection.execute("UPDATE registered_devices SET screenshot_at = ? WHERE device_id = ?",
+                           (datetime.now(UTC).isoformat(), device_id))
+
+
+def screenshot_supported() -> bool:
+    return not headless() and SCREENSHOT_HELPER.is_file()
+
+
+def _send_screenshot(controller: str, token: str) -> None:
+    """Lädt ein neues Bildschirmfoto hoch und fordert gleich das nächste an."""
+    if not screenshot_supported():
+        return
+    image = data_dir() / "screenshot.jpg"
+    request_file = data_dir() / "screenshot-request"
+    try:
+        mtime = image.stat().st_mtime if image.is_file() else None
+        if mtime and str(mtime) != get_setting("screenshot_uploaded_mtime"):
+            request = urllib.request.Request(
+                urljoin(controller, "api/sync/screenshot"), data=image.read_bytes(), method="POST",
+                headers={"Content-Type": "image/jpeg", "Authorization": f"Bearer {token}"})
+            with urllib.request.urlopen(request, timeout=15):
+                pass
+            set_setting("screenshot_uploaded_mtime", str(mtime))
+        if not request_file.exists() and (not mtime or time.time() - mtime >= SCREENSHOT_MIN_INTERVAL):
+            request_file.write_text("1", encoding="utf-8")
+    except (OSError, urllib.error.URLError):
+        pass
+
+
 def poll_controller_command() -> dict | None:
     """Holt einen ausstehenden Befehl vom Controller und führt ihn aus."""
     controller = (get_setting("controller_url") or get_setting("master_url") or "").rstrip("/") + "/"
@@ -129,9 +184,12 @@ def poll_controller_command() -> dict | None:
     if not controller.startswith(("http://", "https://")) or not token:
         return None
     try:
-        command = _request_json(urljoin(controller, "api/sync/commands"), token=token).get("command")
+        response = _request_json(urljoin(controller, "api/sync/commands"), token=token)
     except (OSError, ValueError, urllib.error.URLError):
         return None
+    if response.get("screenshot") is True:
+        _send_screenshot(controller, token)
+    command = response.get("command")
     if not command or not isinstance(command, dict):
         return None
     action = str(command.get("action", ""))
@@ -154,9 +212,26 @@ def report_status_to_controller() -> bool:
     return True
 
 
-def snapshot() -> dict:
+def assigned_playlist_id(connection: sqlite3.Connection, device_id: str | None) -> int | None:
+    if not device_id:
+        return None
+    row = connection.execute(
+        """SELECT playlists.id FROM registered_devices
+           JOIN playlists ON playlists.id = registered_devices.playlist_id
+           WHERE registered_devices.device_id = ?""", (device_id,),
+    ).fetchone()
+    return row["id"] if row else None
+
+
+def snapshot(device_id: str | None = None) -> dict:
     with connect() as connection:
         playlists = [dict(row) for row in connection.execute("SELECT * FROM playlists ORDER BY id")]
+        assigned = assigned_playlist_id(connection, device_id)
+        if assigned is not None:
+            # Feste Playlist für dieses Display: nur sie ist aktiv, Playlist-Zeitpläne gelten nicht.
+            for playlist in playlists:
+                playlist["active"] = int(playlist["id"] == assigned)
+                playlist["schedule_enabled"] = 0
         media = [dict(row) for row in connection.execute("SELECT * FROM media_library ORDER BY id")]
         content = [dict(row) for row in connection.execute("SELECT * FROM content ORDER BY id")]
         referenced = referenced_media_files(connection)

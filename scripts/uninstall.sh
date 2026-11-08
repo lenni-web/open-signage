@@ -23,6 +23,7 @@ readonly UNITS=(
   open-signage-system-action.service open-signage-system-action.path
   open-signage-display-control.service open-signage-display-control.path
   open-signage-display-schedule.service open-signage-display-schedule.timer
+  open-signage-screenshot.service open-signage-screenshot.path
 )
 
 KEEP_DATA=0
