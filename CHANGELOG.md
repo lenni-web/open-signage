@@ -8,6 +8,13 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Geändert
+
+- Solange die Display-Übersicht geöffnet ist, melden Displays ihren Zustand
+  alle 10 statt alle 60 Sekunden. „Läuft gerade“ ist damit höchstens etwa
+  25 Sekunden alt und passt zum Bildschirmfoto; bei geschlossener Übersicht
+  bleibt es bei einer Meldung pro Minute.
+
 ## [0.25.0] – 2026-11-08
 
 ### Hinzugefügt

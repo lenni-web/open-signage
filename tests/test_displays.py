@@ -156,3 +156,29 @@ def test_display_uploads_new_screenshots_and_requests_the_next(tmp_path: Path, m
     request_file.unlink()
     sync.poll_controller_command()
     assert not request_file.exists()
+
+
+def test_display_reports_status_every_poll_while_overview_is_open(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPEN_SIGNAGE_DATA_DIR", str(tmp_path))
+    initialize()
+    set_setting("controller_url", "http://controller.local:8080")
+    set_setting("sync_device_token", "device-token")
+    monkeypatch.setattr(sync, "SCREENSHOT_HELPER", tmp_path / "fehlt")
+    wanted = {"value": False}
+    requested = []
+
+    class Response:
+        def __enter__(self): return self
+        def __exit__(self, *_): return False
+        def read(self): return b'{"command": null, "screenshot": %s}' % (b"true" if wanted["value"] else b"false")
+
+    def fake_urlopen(request, timeout):
+        requested.append(request.full_url.rsplit("/api/", 1)[1])
+        return Response()
+
+    monkeypatch.setattr(sync.urllib.request, "urlopen", fake_urlopen)
+    sync.poll_controller_command()
+    assert requested == ["sync/commands"]
+    wanted["value"] = True
+    sync.poll_controller_command()
+    assert requested == ["sync/commands", "sync/commands", "sync/status"]

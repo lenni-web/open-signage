@@ -188,6 +188,9 @@ def poll_controller_command() -> dict | None:
     except (OSError, ValueError, urllib.error.URLError):
         return None
     if response.get("screenshot") is True:
+        # Die Display-Übersicht ist geöffnet: Status und Bildschirmfoto im 10-Sekunden-Takt
+        # statt nur minütlich, damit „Läuft gerade“ zum Foto passt.
+        report_status_to_controller()
         _send_screenshot(controller, token)
     command = response.get("command")
     if not command or not isinstance(command, dict):

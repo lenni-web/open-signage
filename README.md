@@ -152,8 +152,8 @@ von `master` auf `controller` und von `slave` auf `display` migriert.
 Auf dem Controller zeigt **System → Display-Übersicht** alle gekoppelten
 Displays auf einen Blick: aktueller Inhalt, Erreichbarkeit, Version,
 Temperatur, freier Speicher, Uhrzeit und Synchronisationsstatus. Displays
-melden ihren Zustand minütlich; nach drei Minuten ohne Meldung gelten sie als
-offline. Hinweise wie eine veraltete Version oder eine nicht synchronisierte
+melden ihren Zustand minütlich, bei geöffneter Übersicht alle 10 Sekunden;
+nach drei Minuten ohne Meldung gelten sie als offline. Hinweise wie eine veraltete Version oder eine nicht synchronisierte
 Uhr werden hervorgehoben.
 
 In der Display-Übersicht lassen sich Displays auch steuern: **Aktualisieren**,
