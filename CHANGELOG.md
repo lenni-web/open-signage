@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.25.2] – 2026-11-08
+
 ### Behoben
 
 - Bildschirmfotos schlugen auf Raspberry Pi OS fehl („jpeg support disabled“),
