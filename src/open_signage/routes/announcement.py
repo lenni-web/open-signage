@@ -14,7 +14,7 @@ router = APIRouter()
 class AnnouncementCreate(BaseModel):
     text: str = Field(min_length=1, max_length=500, pattern=r"\S")
     style: str = Field(default="top", pattern=r"^(top|bottom|fullscreen)$")
-    minutes: int | None = Field(default=30, ge=1, le=24 * 60)
+    minutes: int | None = Field(default=5, ge=1, le=24 * 60)
 
 
 @router.get("/api/announcement")
