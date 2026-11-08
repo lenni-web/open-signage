@@ -13,6 +13,7 @@ function showApplication(settings) {
   document.body.dataset.profile = settings.headless ? "server" : "kiosk";
   document.querySelector("#monitoring-title").textContent = settings.headless ? "Server-Monitoring" : "Player-Monitoring";
   applyDeviceMode(settings.device_mode || "standalone");
+  restorePageFromHash();
   if (settings.password_change_required) {
     notify("Bitte ändere jetzt das Initialpasswort unter Einstellungen.", true, 10000);
     document.querySelector('[data-page="settings-page"]')?.click();
@@ -90,12 +91,26 @@ async function boot() {
   }
 }
 
+// Die geöffnete Seite steht im Adressanker (z. B. #system), damit ein Neuladen
+// der Verwaltung auf derselben Seite bleibt.
+function pageButton(name) {
+  const button = document.querySelector(`.nav-button[data-page="${CSS.escape(name)}-page"]`);
+  return button && !button.hidden && button.offsetParent !== null ? button : null;
+}
+
+function restorePageFromHash() {
+  const name = window.location.hash.slice(1);
+  const button = name && pageButton(name);
+  if (button && !button.classList.contains("active")) button.click();
+}
+
 document.querySelectorAll(".nav-button").forEach((button) => {
   button.addEventListener("click", async () => {
     document.querySelectorAll(".nav-button").forEach(item => item.classList.remove("active"));
     document.querySelectorAll(".page").forEach(page => { page.hidden = true; });
     button.classList.add("active");
     document.querySelector(`#${button.dataset.page}`).hidden = false;
+    window.history.replaceState(null, "", `#${button.dataset.page.replace(/-page$/, "")}`);
     if (button.dataset.page === "system-page") {
       await openSystemPage();
     } else if (button.dataset.page === "settings-page") {

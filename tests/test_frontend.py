@@ -132,3 +132,12 @@ def test_player_never_waits_forever_for_the_next_slide():
     # … und ein Wächter schaltet weiter, falls eine Folie dennoch hängen bleibt.
     assert "window.setInterval(checkStalledPlayback, 5000)" in player
     assert "lastAdvanceAt = Date.now();\n  if (liveTakeoverActive) return;" in player
+
+
+def test_admin_keeps_the_open_page_across_reloads():
+    session = (PROJECT_ROOT / "src/open_signage/static/admin/session.js").read_text(encoding="utf-8")
+    assert 'window.history.replaceState(null, "", `#${button.dataset.page.replace(/-page$/, "")}`)' in session
+    show_application = session[session.index("function showApplication"):session.index("function applyDeviceMode")]
+    # Erst nach dem Gerätemodus wiederherstellen, damit ausgeblendete Seiten nicht geöffnet werden.
+    assert show_application.index("applyDeviceMode(") < show_application.index("restorePageFromHash();")
+    assert "!button.hidden && button.offsetParent !== null" in session

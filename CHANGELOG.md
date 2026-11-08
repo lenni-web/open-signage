@@ -8,6 +8,12 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Geändert
+
+- Die Verwaltung merkt sich die geöffnete Seite in der Adresse (z. B. `#system`)
+  und bleibt nach einem Neuladen dort, statt auf „Inhalte“ zurückzuspringen.
+  Die Adresse lässt sich auch als Lesezeichen für eine bestimmte Seite nutzen.
+
 ## [0.24.1] – 2026-11-08
 
 ### Behoben
