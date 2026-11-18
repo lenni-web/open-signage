@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.26.0] – 2026-11-18
+
 ### Hinzugefügt
 
 - Jede Live-Übertragung aus OBS wird auf dem Controller automatisch und
