@@ -33,6 +33,7 @@ setup_live() {
     install -o root -g root -m 0755 "${work}/mediamtx" "${MEDIAMTX_DIR}/mediamtx"
     printf '%s\n' "${MEDIAMTX_VERSION}" >"${MEDIAMTX_DIR}/mediamtx.version"
   fi
+  install -d -o open-signage -g open-signage -m 0750 /var/lib/open-signage/recordings
   cat >"${MEDIAMTX_UNIT}" <<'UNIT'
 [Unit]
 Description=Open Signage live server (MediaMTX)
@@ -50,6 +51,8 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
+# Aufnahmen der Live-Übertragungen
+ReadWritePaths=-/var/lib/open-signage/recordings
 
 [Install]
 WantedBy=multi-user.target

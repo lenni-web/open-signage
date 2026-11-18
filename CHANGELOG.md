@@ -8,6 +8,20 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- Jede Live-Übertragung aus OBS wird auf dem Controller automatisch und
+  unverändert aufgenommen; die letzten 10 Aufnahmen bleiben erhalten. Unter
+  **Livestream → Aufnahmen** lassen sich Aufnahmen herunterladen – wahlweise mit
+  nach AAC umgewandeltem Ton – und löschen; die Aufnahme lässt sich abschalten.
+
+### Geändert
+
+- Der Menüpunkt „Weiterleitung“ heißt jetzt „Livestream“ und enthält neben der
+  Weiterleitung auch die Aufnahmen.
+- Der Live-Server-Dienst darf nach `/var/lib/open-signage/recordings`
+  schreiben; das Update richtet ihn entsprechend neu ein.
+
 ## [0.25.2] – 2026-11-08
 
 ### Behoben

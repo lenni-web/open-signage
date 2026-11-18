@@ -243,6 +243,13 @@ button:disabled { cursor: default; opacity: .35; }
 .forwarding-target header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; width: auto; margin: 0; }
 .forwarding-target small { display: block; color: var(--muted); overflow-wrap: anywhere; }
 .forwarding-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.recordings-card { width: min(1100px, 100%); margin: 18px auto 0; display: grid; gap: 12px; }
+.recordings-card h2, .recordings-card p { margin: 0; }
+.recordings-list { display: grid; gap: 8px; }
+.recording-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; }
+.recording-row.active { border-color: var(--danger); }
+.recording-row small { display: block; color: var(--muted); }
+.recording-row .forwarding-actions a, .recording-row .forwarding-actions button { padding: 6px 10px; font-size: .9rem; }
 .forwarding-error { margin: 0; color: var(--danger); overflow-wrap: anywhere; }
 .forwarding-checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .forwarding-checks li { display: flex; gap: 8px; }

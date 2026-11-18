@@ -116,7 +116,7 @@ document.querySelectorAll(".nav-button").forEach((button) => {
     } else if (button.dataset.page === "settings-page") {
       await openSettingsPage();
     } else if (button.dataset.page === "forwarding-page") {
-      await loadForwarding().catch(error => notify(error.message, true));
+      await Promise.all([loadForwarding(), loadRecordings()]).catch(error => notify(error.message, true));
     } else if (button.dataset.page === "library-page") {
       await loadLibrary();
     } else if (button.dataset.page === "content-page") {

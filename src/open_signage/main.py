@@ -7,15 +7,23 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from . import forwarding, live
+from . import forwarding, live, recordings
 from .auth import device_mode, get_setting, set_setting
 from .backup import automatic_backup_if_due
 from .database import initialize, integrity_check_if_due
-from .routes import (announcement, content, forwarding as forwarding_routes, live as live_routes, media_library, pages,
-                     player, playlists, session, storage, sync, system)
+from .routes import (announcement, content, forwarding as forwarding_routes, live as live_routes, media_library,
+                     pages, player, playlists, recordings as recording_routes, session, storage, sync, system)
 from .routes.common import STATIC_DIR
 from .sync import poll_controller_command, report_status_to_controller, safe_sync_from_controller
 from .version import __version__
+
+
+def cleanup_recordings() -> None:
+    """Behält die letzten Aufnahmen; Dateifehler dürfen die Wartung nicht beenden."""
+    try:
+        recordings.cleanup()
+    except OSError:
+        pass
 
 
 @asynccontextmanager
@@ -39,6 +47,8 @@ async def lifespan(app: FastAPI):
             if device_mode() == "display":
                 await asyncio.to_thread(safe_sync_from_controller)
                 await asyncio.to_thread(report_status_to_controller)
+            else:
+                await asyncio.to_thread(cleanup_recordings)
             if ticks >= 24 * 60:
                 ticks = 0
                 await asyncio.to_thread(integrity_check_if_due)
@@ -65,5 +75,5 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Open Signage", version=__version__, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 for module in (pages, player, system, sync, storage, session, playlists, content, media_library, live_routes,
-               forwarding_routes, announcement):
+               forwarding_routes, announcement, recording_routes):
     app.include_router(module.router)

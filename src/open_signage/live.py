@@ -121,7 +121,26 @@ def render_config() -> str:
         ]
     else:
         lines.append("    source: publisher")
+    if not display:
+        # Jede Übertragung wird unverändert mitgeschnitten (eine Datei pro Sendung);
+        # Open Signage behält selbst die letzten Aufnahmen, MediaMTX löscht nichts.
+        lines += [
+            f"    record: {'yes' if recording_enabled() else 'no'}",
+            f"    recordPath: {q(str(data_dir() / 'recordings' / '%path' / '%Y-%m-%d_%H-%M-%S-%f'))}",
+            "    recordFormat: fmp4",
+            "    recordSegmentDuration: 24h",
+            "    recordDeleteAfter: 0s",
+        ]
     return "\n".join(lines) + "\n"
+
+
+def recording_enabled() -> bool:
+    return _flag("recording_enabled", True)
+
+
+def set_recording_enabled(enabled: bool) -> None:
+    set_setting("recording_enabled", "1" if enabled else "0")
+    write_config()
 
 
 def write_config() -> bool:

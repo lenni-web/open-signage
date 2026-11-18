@@ -493,9 +493,30 @@ Einrichtung nach dem Neustart selbst an; alternativ steht in der Verwaltung
 Signage unter `/var/lib/open-signage/mediamtx.yml`. Abspielen dürfen nur der
 lokale Server und berechtigte Player; Senden erfordert das OBS-Token.
 
+## Aufnahmen der Live-Übertragungen
+
+Der Controller (bzw. ein Einzelgerät) nimmt jede Übertragung aus OBS
+automatisch auf. MediaMTX schreibt den Stream dabei unverändert – ohne neu zu
+codieren – als MP4 nach `/var/lib/open-signage/recordings/live/`, eine Datei pro
+Sendung. Unter **Livestream → Aufnahmen** lässt sich die Aufnahme abschalten;
+vorhandene Aufnahmen bleiben dann erhalten.
+
+- Behalten werden die **letzten 10 Aufnahmen**; ältere löscht Open Signage
+  automatisch. Wird der Speicher knapp, weichen auch frühere – nie die
+  laufende Aufnahme.
+- **Herunterladen** liefert das Original (Bild H.264, Ton Opus). Es spielt in
+  VLC und Browsern. **Download mit AAC-Ton** wandelt vorher nur den Ton nach AAC
+  um, für Programme ohne Opus-Unterstützung wie den Windows-Mediaplayer oder
+  manche Schnittprogramme. Das Bild wird dabei kopiert, die Umwandlung dauert
+  daher auch bei langen Aufnahmen nur kurz; die Kopie bleibt bis zum Löschen
+  der Aufnahme erhalten.
+- Speicherbedarf bei 1080p30 und etwa 6 Mbit/s aus OBS: rund 2,7 GB pro Stunde,
+  für zehn Gottesdienste à 1,5 Stunden also etwa 40 GB.
+- Displays nehmen nicht auf.
+
 ## Stream-Weiterleitung an RTMP-Ziele
 
-Die Seite **Weiterleitung** sendet den OBS-Stream, der an diesem Controller
+Die Seite **Livestream** sendet den OBS-Stream, der an diesem Controller
 oder Einzelgerät ankommt, zusätzlich an RTMP-Ziele wie einen Owncast-Server
 oder eine Streaming-Plattform. OBS braucht dafür nur **einen** Ausgang: Es
 sendet per WHIP an Open Signage, die gekoppelten Displays holen sich das Bild

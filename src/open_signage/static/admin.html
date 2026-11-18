@@ -38,7 +38,7 @@
   <nav class="admin-nav" aria-label="Verwaltung">
     <button class="nav-button active" data-page="content-page">Inhalte</button>
     <button class="nav-button" data-page="library-page">Mediathek</button>
-    <button class="nav-button" data-page="forwarding-page">Weiterleitung</button>
+    <button class="nav-button" data-page="forwarding-page">Livestream</button>
     <button class="nav-button" data-page="settings-page">Einstellungen</button>
     <button class="nav-button" data-page="system-page">System</button>
   </nav>
@@ -455,7 +455,7 @@
   </section>
 
   <section id="forwarding-page" class="page" hidden>
-    <h2 class="page-title">Stream-Weiterleitung</h2>
+    <h2 class="page-title">Livestream</h2>
     <section class="card forwarding-intro">
       <div class="section-heading">
         <div>
@@ -474,6 +474,18 @@
     </section>
     <div id="forwarding-targets" class="forwarding-targets"></div>
     <p id="forwarding-empty" class="schedule-note" hidden>Noch keine Ziele. Füge z. B. deinen Owncast-Server hinzu.</p>
+    <section id="recordings-card" class="card recordings-card" hidden>
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Mitschnitt</span>
+          <h2>Aufnahmen</h2>
+        </div>
+        <label class="inline-check"><input id="recordings-enabled" type="checkbox"><span>Übertragungen automatisch aufnehmen</span></label>
+      </div>
+      <p id="recordings-note" class="schedule-note"></p>
+      <div id="recordings-list" class="recordings-list"></div>
+      <p id="recordings-empty" class="schedule-note" hidden>Noch keine Aufnahmen. Die nächste Übertragung aus OBS wird automatisch aufgenommen.</p>
+    </section>
   </section>
 
   <section id="settings-page" class="page" hidden>
@@ -880,6 +892,7 @@
   <script src="/static/admin/live.js?v=@@VERSION@@"></script>
   <script src="/static/admin/announcement.js?v=@@VERSION@@"></script>
   <script src="/static/admin/forwarding.js?v=@@VERSION@@"></script>
+  <script src="/static/admin/recordings.js?v=@@VERSION@@"></script>
   <script src="/static/admin/display.js?v=@@VERSION@@"></script>
   <script src="/static/admin/system.js?v=@@VERSION@@"></script>
   <script src="/static/admin/session.js?v=@@VERSION@@"></script>
