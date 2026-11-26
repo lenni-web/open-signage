@@ -559,5 +559,5 @@ Kiosk auf dem Raspberry Pi startet Chromium mit
 abgespielt wird.
 
 HLS-Wiedergabe in Chromium erfolgt mit der lokal mitgelieferten Bibliothek
-HLS.js 1.6.16. Deren Lizenz liegt unter
+HLS.js 1.6.19. Deren Lizenz liegt unter
 `src/open_signage/static/vendor/HLS-LICENSE`.

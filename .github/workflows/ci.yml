@@ -19,8 +19,8 @@ jobs:
         # 3.11: Raspberry Pi OS Bookworm, 3.13: Raspberry Pi OS Trixie.
         python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -35,7 +35,7 @@ jobs:
     name: Shell-Skripte
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Syntax und ShellCheck
         run: |
           mapfile -t scripts < <(grep -l -E '^#!(/usr/bin/env bash|/bin/bash|/bin/sh)' deploy/* scripts/*)
@@ -47,7 +47,7 @@ jobs:
     name: Version und Changelog
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Version ist im Changelog dokumentiert
         run: |
           version="$(python3 -c 'import re,pathlib; print(re.search(r"__version__ = \"(.+)\"", pathlib.Path("src/open_signage/version.py").read_text()).group(1))')"

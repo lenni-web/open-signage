@@ -8,6 +8,16 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Geändert
+
+- Live-Server MediaMTX auf v1.21.4 aktualisiert (Fehlerbehebungen, u. a. für
+  UDP-Pakete beim Verbindungsende und das Protokoll). Das Update lädt die neue
+  Version geprüft herunter und startet den Live-Server einmal neu.
+- HLS.js für eingebundene HLS-Livestreams auf 1.6.19 aktualisiert
+  (Fehlerbehebungen).
+- CI nutzt `actions/checkout@v7` und `actions/setup-python@v7`; die Tests
+  erlauben pytest 9.
+
 ## [0.26.0] – 2026-11-18
 
 ### Hinzugefügt
