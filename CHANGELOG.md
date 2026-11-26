@@ -8,6 +8,8 @@ Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.26.1] – 2026-11-26
+
 ### Geändert
 
 - Live-Server MediaMTX auf v1.21.4 aktualisiert (Fehlerbehebungen, u. a. für
